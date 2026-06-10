@@ -1,0 +1,12 @@
+<svg width="260" height="86" viewBox="0 0 260 86" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="18" y="14" width="58" height="58" rx="18" fill="url(#g)"/>
+  <text x="47" y="55" text-anchor="middle" font-family="Inter, Arial, Helvetica, sans-serif" font-weight="900" font-size="34" fill="#061B35">D</text>
+  <text x="92" y="43" font-family="Inter, Arial, Helvetica, sans-serif" font-weight="850" font-size="30" fill="white">Daleth</text>
+  <text x="92" y="67" font-family="Inter, Arial, Helvetica, sans-serif" font-weight="650" font-size="20" fill="#B7D5EA">Sales Hub</text>
+  <defs>
+    <linearGradient id="g" x1="18" y1="14" x2="76" y2="72" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00A0D1"/>
+      <stop offset="1" stop-color="#E4F7FF"/>
+    </linearGradient>
+  </defs>
+</svg>
