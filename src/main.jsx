@@ -17,9 +17,9 @@ const initialContacts = [
   { id: 2, companyId: 3, name: 'Contato Comercial', role: 'Parcerias', email: '', phone: '', whatsapp: '', type: 'Influenciador', linkedin: '', notes: '' },
 ];
 const initialDeals = [
-  { id: 1, title: 'SAC+ para rede de franquias', companyId: 1, contactId: 1, product: 'SAC+', value: 18900, setup: 0, stage: 'Proposta Enviada', owner: 'Sergio', probability: 60, closeDate: '2026-07-15', description: 'Proposta para atendimento multicanal da rede.', nextStep: 'Follow-up sobre proposta enviada.', priority: 'Alta' },
-  { id: 2, title: 'Atendimento ANAC 24/7', companyId: 2, contactId: '', product: 'Atendimento ANAC 24/7', value: 45000, setup: 0, stage: 'Levantamento', owner: 'Oyas', probability: 40, closeDate: '2026-08-01', description: 'Discovery para operação de companhia aérea internacional.', nextStep: 'Mapear volumes e canais obrigatórios.', priority: 'Alta' },
-  { id: 3, title: 'Parceria Franquear', companyId: 3, contactId: 2, product: 'Parceria Comercial', value: 12000, setup: 0, stage: 'Negociação', owner: 'Sergio', probability: 70, closeDate: '2026-06-30', description: 'Modelo de indicação para redes de franquias.', nextStep: 'Formalizar contrato de parceria.', priority: 'Média' },
+  { id: 1, title: 'SAC+ para rede de franquias', companyId: 1, contactId: 1, product: 'SAC+', value: 18900, setup: 0, contractMonths: 12, stage: 'Proposta Enviada', owner: 'Sergio', probability: 60, closeDate: '2026-07-15', description: 'Proposta para atendimento multicanal da rede.', nextStep: 'Follow-up sobre proposta enviada.', priority: 'Alta' },
+  { id: 2, title: 'Atendimento ANAC 24/7', companyId: 2, contactId: '', product: 'Atendimento ANAC 24/7', value: 45000, setup: 60000, contractMonths: 36, stage: 'Levantamento', owner: 'Oyas', probability: 40, closeDate: '2026-08-01', description: 'Discovery para operação de companhia aérea internacional.', nextStep: 'Mapear volumes e canais obrigatórios.', priority: 'Alta' },
+  { id: 3, title: 'Parceria Franquear', companyId: 3, contactId: 2, product: 'Parceria Comercial', value: 12000, setup: 0, contractMonths: 24, stage: 'Negociação', owner: 'Sergio', probability: 70, closeDate: '2026-06-30', description: 'Modelo de indicação para redes de franquias.', nextStep: 'Formalizar contrato de parceria.', priority: 'Média' },
 ];
 const initialActivities = [
   { id: 1, dealId: 1, type: 'Follow-up', title: 'Ligar para Michele', dueDate: '2026-06-15', owner: 'Sergio', status: 'Pendente', notes: 'Confirmar se a proposta foi avaliada.' },
@@ -38,7 +38,21 @@ function useStore(key, initial){
   return [value, save];
 }
 function money(v){ return Number(v||0).toLocaleString('pt-BR',{ style:'currency', currency:'BRL' }); }
+function moneyShort(v){
+  const n = Number(v || 0);
+  const abs = Math.abs(n);
+  if (abs >= 1000000) return `R$ ${(n/1000000).toLocaleString('pt-BR',{ minimumFractionDigits: 2, maximumFractionDigits: 2 })} mi`;
+  if (abs >= 1000) return `R$ ${(n/1000).toLocaleString('pt-BR',{ minimumFractionDigits: 1, maximumFractionDigits: 1 })} mil`;
+  return money(n);
+}
 function today(){ return new Date().toISOString().slice(0,10); }
+function dealMrr(d){ return Number(d?.value || 0); }
+function dealSetup(d){ return Number(d?.setup || 0); }
+function dealMonths(d){ return Math.max(1, Number(d?.contractMonths || 12)); }
+function dealTcv(d){ return (dealMrr(d) * dealMonths(d)) + dealSetup(d); }
+function dealArr(d){ return dealMrr(d) * 12; }
+function dealWeightedTcv(d){ return dealTcv(d) * (Number(d?.probability || 0) / 100); }
+function dealSegment(d, companies){ return companies.find(c=>c.id===Number(d.companyId))?.segment || 'Sem segmento'; }
 
 function App(){
   const [page,setPage] = useState('dashboard');
@@ -75,67 +89,131 @@ function Dashboard({deals,companies,contacts,activities,setSelectedDealId}){
   const open = deals.filter(d => !['Ganho','Perdido'].includes(d.stage));
   const won = deals.filter(d => d.stage==='Ganho');
   const pending = activities.filter(a => a.status !== 'Concluída');
-  const weighted = open.reduce((s,d)=>s + Number(d.value||0)*(Number(d.probability||0)/100),0);
-  const monthlyForecast = [
-    ['Junho', open.reduce((s,d)=>s + (d.closeDate?.startsWith('2026-06') ? Number(d.value||0) : 0),0) || 75900],
-    ['Julho', open.reduce((s,d)=>s + (d.closeDate?.startsWith('2026-07') ? Number(d.value||0) : 0),0) || 122000],
-    ['Agosto', open.reduce((s,d)=>s + (d.closeDate?.startsWith('2026-08') ? Number(d.value||0) : 0),0) || 210000],
-  ];
-  const conversions = [['Lead → Reunião','42%'],['Reunião → Proposta','78%'],['Proposta → Fechamento','31%']];
+  const openMrr = open.reduce((s,d)=>s + dealMrr(d),0);
+  const openSetup = open.reduce((s,d)=>s + dealSetup(d),0);
+  const openTcv = open.reduce((s,d)=>s + dealTcv(d),0);
+  const openArr = open.reduce((s,d)=>s + dealArr(d),0);
+  const weightedTcv = open.reduce((s,d)=>s + dealWeightedTcv(d),0);
+  const wonMrr = won.reduce((s,d)=>s + dealMrr(d),0);
+  const wonTcv = won.reduce((s,d)=>s + dealTcv(d),0);
+  const thisMonth = today().slice(0,7);
+  const next90 = new Date();
+  next90.setDate(next90.getDate()+90);
+  const forecast30 = open.reduce((s,d)=>s + (d.closeDate?.startsWith(thisMonth) ? dealWeightedTcv(d) : 0),0);
+  const forecast90 = open.reduce((s,d)=>{
+    if(!d.closeDate) return s;
+    const date = new Date(d.closeDate + 'T00:00:00');
+    return date <= next90 ? s + dealWeightedTcv(d) : s;
+  },0);
+
+  const stageRows = STAGES.map(stage => {
+    const stageDeals = open.filter(d=>d.stage===stage);
+    return {
+      label: stage,
+      count: stageDeals.length,
+      total: stageDeals.reduce((s,d)=>s+dealTcv(d),0)
+    };
+  });
+
+  const segmentRows = Object.entries(open.reduce((acc,d)=>{
+    const seg = dealSegment(d, companies);
+    if(!acc[seg]) acc[seg] = {label: seg, count: 0, total: 0};
+    acc[seg].count += 1;
+    acc[seg].total += dealTcv(d);
+    return acc;
+  },{})).map(([,row])=>row).sort((a,b)=>b.total-a.total);
+
+  const topDeals = [...open].sort((a,b)=>dealTcv(b)-dealTcv(a)).slice(0,5);
+  const overdueActivities = pending
+    .filter(a => a.dueDate && a.dueDate < today())
+    .sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)))
+    .slice(0,5);
+
   return <>
     <section className="cards">
-      <Kpi icon={BriefcaseBusiness} label="Oportunidades abertas" value={open.length}/>
-      <Kpi icon={CircleDollarSign} label="Pipeline bruto" value={money(open.reduce((s,d)=>s+Number(d.value||0),0))}/>
-      <Kpi icon={CheckCircle2} label="Previsão ponderada" value={money(weighted)}/>
-      <Kpi icon={Clock3} label="Atividades pendentes" value={pending.length}/>
+      <Kpi icon={CircleDollarSign} label="MRR potencial" value={moneyShort(openMrr)}/>
+      <Kpi icon={BriefcaseBusiness} label="TCV pipeline" value={moneyShort(openTcv)}/>
+      <Kpi icon={TrendingUp} label="ARR potencial" value={moneyShort(openArr)}/>
+      <Kpi icon={CheckCircle2} label="Forecast ponderado" value={moneyShort(weightedTcv)}/>
     </section>
+    <section className="cards">
+      <Kpi icon={Clock3} label="Forecast 30 dias" value={moneyShort(forecast30)}/>
+      <Kpi icon={CalendarDays} label="Forecast 90 dias" value={moneyShort(forecast90)}/>
+      <Kpi icon={CheckCircle2} label="MRR contratado" value={moneyShort(wonMrr)}/>
+      <Kpi icon={BriefcaseBusiness} label="Atividades pendentes" value={pending.length}/>
+    </section>
+
     <section className="grid2">
-      <Panel title="Pipeline por etapa">{STAGES.slice(0,6).map(stage => { const count = deals.filter(d=>d.stage===stage).length; return <div className="bar" key={stage}><span>{stage}</span><b style={{width: `${Math.max(5,count*22)}%`}}></b><em>{count}</em></div>})}</Panel>
-      <Panel title="Próximas ações">{pending.slice(0,6).map(a => { const deal = deals.find(d=>d.id===Number(a.dealId)); return <div className="activityRow" key={a.id}><CalendarDays size={17}/><div><b>{a.title}</b><span>{a.dueDate} · {a.owner} · {deal?.title}</span></div></div>})}</Panel>
+      <Panel title="Pipeline por etapa">
+        <DashboardTable headers={['Etapa','Oportunidades','TCV (R$)']}>
+          {stageRows.map(row=><tr key={row.label}><td>{row.label}</td><td>{row.count}</td><td><b>{moneyShort(row.total)}</b></td></tr>)}
+          <tr className="totalRow"><td>Total</td><td>{open.length}</td><td>{moneyShort(openTcv)}</td></tr>
+        </DashboardTable>
+      </Panel>
+
+      <Panel title="Pipeline por segmento">
+        <DashboardTable headers={['Segmento','Oportunidades','TCV (R$)']}>
+          {segmentRows.length ? segmentRows.map(row=><tr key={row.label}><td>{row.label}</td><td>{row.count}</td><td><b>{moneyShort(row.total)}</b></td></tr>) : <tr><td>Nenhum segmento</td><td>0</td><td>{moneyShort(0)}</td></tr>}
+          <tr className="totalRow"><td>Total</td><td>{open.length}</td><td>{moneyShort(openTcv)}</td></tr>
+        </DashboardTable>
+      </Panel>
     </section>
+
     <section className="grid2 compact">
-      <Panel title="Receita prevista"><div className="forecastList">{monthlyForecast.map(([month,value])=><div className="forecastItem" key={month}><span>{month}</span><b>{money(value)}</b></div>)}</div></Panel>
-      <Panel title="Conversão do funil"><div className="conversionList">{conversions.map(([label,value])=><div className="conversionItem" key={label}><span><TrendingUp size={16}/>{label}</span><b>{value}</b></div>)}</div></Panel>
+      <Panel title="Top oportunidades">
+        <DashboardTable headers={['Cliente','Etapa','TCV (R$)','Fechamento']}>
+          {topDeals.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)}><td><b>{companies.find(c=>c.id===Number(d.companyId))?.name || d.title}</b><span>{d.title}</span></td><td>{d.stage}</td><td>{moneyShort(dealTcv(d))}</td><td>{d.closeDate || '-'}</td></tr>)}
+        </DashboardTable>
+      </Panel>
+
+      <Panel title="Atividades vencidas">
+        <DashboardTable headers={['Atividade','Oportunidade','Vencimento','Responsável']}>
+          {overdueActivities.length ? overdueActivities.map(a=>{
+            const deal = deals.find(d=>d.id===Number(a.dealId));
+            return <tr key={a.id}><td><b>{a.title}</b><span>{a.type}</span></td><td>{deal?.title || '-'}</td><td><b style={{color:'#dc2626'}}>{a.dueDate}</b></td><td>{a.owner}</td></tr>
+          }) : <tr><td>Nenhuma atividade vencida</td><td>-</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
     </section>
-    <Panel title="Oportunidades prioritárias"><div className="tableWrap"><table><tbody>{open.sort((a,b)=>Number(b.value)-Number(a.value)).slice(0,7).map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)}><td><b>{d.title}</b><span>{companies.find(c=>c.id===Number(d.companyId))?.name}</span></td><td>{d.stage}</td><td>{d.owner}</td><td>{money(d.value)}</td><td>{d.probability}%</td></tr>)}</tbody></table></div></Panel>
   </>;
 }
 function Kpi({icon:Icon,label,value}){ return <div className="kpi"><Icon size={24}/><span>{label}</span><strong>{value}</strong></div>; }
 function Panel({title,children}){ return <section className="panel"><h2>{title}</h2>{children}</section>; }
+function DashboardTable({headers,children}){ return <div className="tableWrap dashboardTable"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
 
 function Pipeline({stages,setStages,deals,setDeals,companies,setSelectedDealId}){
   const [newStage,setNewStage] = useState('');
   const move = (deal, stage) => setDeals(deals.map(d => d.id===deal.id ? {...d, stage} : d));
   return <>
     <div className="toolbar"><input placeholder="Nova etapa customizável" value={newStage} onChange={e=>setNewStage(e.target.value)}/><button onClick={()=>{ if(newStage.trim()){ setStages([...stages,newStage.trim()]); setNewStage(''); }}}><Plus size={16}/>Adicionar etapa</button></div>
-    <section className="kanban">{stages.map(stage => <div className="column" key={stage}><h3>{stage}<small>{deals.filter(d=>d.stage===stage).length}</small></h3>{deals.filter(d=>d.stage===stage).map(d => <article className="dealCard" key={d.id}><div onClick={()=>setSelectedDealId(d.id)}><b>{d.title}</b><span>{companies.find(c=>c.id===Number(d.companyId))?.name || 'Sem empresa'}</span><strong>{money(d.value)}</strong></div><select value={d.stage} onChange={e=>move(d,e.target.value)}>{stages.map(s=><option key={s}>{s}</option>)}</select></article>)}</div>)}</section>
+    <section className="kanban">{stages.map(stage => <div className="column" key={stage}><h3>{stage}<small>{deals.filter(d=>d.stage===stage).length}</small></h3>{deals.filter(d=>d.stage===stage).map(d => <article className="dealCard" key={d.id}><div onClick={()=>setSelectedDealId(d.id)}><b>{d.title}</b><span>{companies.find(c=>c.id===Number(d.companyId))?.name || 'Sem empresa'}</span><strong>{money(dealTcv(d))}</strong></div><select value={d.stage} onChange={e=>move(d,e.target.value)}>{stages.map(s=><option key={s}>{s}</option>)}</select></article>)}</div>)}</section>
   </>;
 }
 
 function Deals({deals,setDeals,companies,contacts,stages,setSelectedDealId,query}){
-  const empty = { title:'', companyId:companies[0]?.id||'', contactId:'', product:'SAC+', value:0, setup:0, stage:stages[0], owner:'Sergio', probability:30, closeDate:'', description:'', nextStep:'', priority:'Média' };
+  const empty = { title:'', companyId:companies[0]?.id||'', contactId:'', product:'SAC+', value:0, setup:0, contractMonths:12, stage:stages[0], owner:'Sergio', probability:30, closeDate:'', description:'', nextStep:'', priority:'Média' };
   const [form,setForm] = useState(empty);
   const list = deals.filter(d => (d.title+d.product+d.owner+d.stage).toLowerCase().includes(query.toLowerCase()));
-  const add = () => { if(!form.title.trim()) return; setDeals([{...form,id:Date.now(),value:Number(form.value),setup:Number(form.setup)},...deals]); setForm(empty); };
+  const add = () => { if(!form.title.trim()) return; setDeals([{...form,id:Date.now(),value:Number(form.value),setup:Number(form.setup),contractMonths:Number(form.contractMonths||12),probability:Number(form.probability||30)},...deals]); setForm(empty); };
   const removeDeal = (id) => { if(!window.confirm('Deseja realmente excluir esta oportunidade?')) return; setDeals(deals.filter(d => d.id !== id)); };
   return <>
-    <Panel title="Nova oportunidade"><div className="formGrid"><Input label="Título" field="title" form={form} setForm={setForm}/><Select label="Empresa" field="companyId" form={form} setForm={setForm} options={companies.map(c=>[c.id,c.name])}/><Select label="Contato" field="contactId" form={form} setForm={setForm} options={[['','Sem contato'],...contacts.map(c=>[c.id,c.name])]}/><Select label="Produto" field="product" form={form} setForm={setForm} options={PRODUCTS.map(p=>[p,p])}/><Input label="Valor mensal" field="value" form={form} setForm={setForm} type="number"/><Select label="Etapa" field="stage" form={form} setForm={setForm} options={stages.map(s=>[s,s])}/><Select label="Responsável" field="owner" form={form} setForm={setForm} options={USERS.map(u=>[u,u])}/><Input label="Fechamento previsto" field="closeDate" form={form} setForm={setForm} type="date"/><button className="saveBtn" onClick={add}><Plus size={16}/>Criar oportunidade</button></div></Panel>
-    <Panel title="Oportunidades"><Table headers={['Oportunidade','Empresa','Produto','Valor','Etapa','Responsável','Ações']}>{list.map(d=><tr key={d.id}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{companies.find(c=>c.id===Number(d.companyId))?.name}</td><td>{d.product}</td><td>{money(d.value)}</td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={()=>setSelectedDealId(d.id)}><Edit3 size={15}/>Abrir</button><button className="mini" onClick={()=>removeDeal(d.id)}><Trash2 size={15}/>Excluir</button></div></td></tr>)}</Table></Panel>
+    <Panel title="Nova oportunidade"><div className="formGrid"><Input label="Título" field="title" form={form} setForm={setForm}/><Select label="Empresa" field="companyId" form={form} setForm={setForm} options={companies.map(c=>[c.id,c.name])}/><Select label="Contato" field="contactId" form={form} setForm={setForm} options={[["","Sem contato"],...contacts.map(c=>[c.id,c.name])]}/><Select label="Produto" field="product" form={form} setForm={setForm} options={PRODUCTS.map(p=>[p,p])}/><Input label="MRR / Receita mensal" field="value" form={form} setForm={setForm} type="number"/><Input label="Setup" field="setup" form={form} setForm={setForm} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/><Input label="Probabilidade %" field="probability" form={form} setForm={setForm} type="number"/><Select label="Etapa" field="stage" form={form} setForm={setForm} options={stages.map(s=>[s,s])}/><Select label="Responsável" field="owner" form={form} setForm={setForm} options={USERS.map(u=>[u,u])}/><Input label="Fechamento previsto" field="closeDate" form={form} setForm={setForm} type="date"/><label><span>TCV calculado</span><input value={money(dealTcv(form))} readOnly/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Criar oportunidade</button></div></Panel>
+    <Panel title="Oportunidades"><Table headers={['Oportunidade','Empresa','Produto','MRR','Prazo','TCV','Etapa','Responsável','Ações']}>{list.map(d=><tr key={d.id}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{companies.find(c=>c.id===Number(d.companyId))?.name}</td><td>{d.product}</td><td>{money(dealMrr(d))}</td><td>{dealMonths(d)} meses</td><td><b>{money(dealTcv(d))}</b></td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={()=>setSelectedDealId(d.id)}><Edit3 size={15}/>Abrir</button><button className="mini" onClick={()=>removeDeal(d.id)}><Trash2 size={15}/>Excluir</button></div></td></tr>)}</Table></Panel>
   </>;
 }
 
 function DealModal({deal,onClose,companies,contacts,deals,setDeals,activities,setActivities,notes,setNotes,stages}){
   const [tab,setTab] = useState('geral');
-  const [draft,setDraft] = useState({...deal});
+  const [draft,setDraft] = useState({contractMonths:12, setup:0, probability:30, ...deal});
   const [note,setNote] = useState('');
   const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),owner:deal.owner,status:'Pendente',notes:''});
-  const save = () => { setDeals(deals.map(d=>d.id===deal.id ? {...draft,value:Number(draft.value),setup:Number(draft.setup)} : d)); };
+  const save = () => { setDeals(deals.map(d=>d.id===deal.id ? {...draft,value:Number(draft.value),setup:Number(draft.setup),contractMonths:Number(draft.contractMonths||12),probability:Number(draft.probability||30)} : d)); };
   const addNote = () => { if(!note.trim()) return; setNotes([{id:Date.now(),dealId:deal.id,user:'Sergio',date:today(),text:note},...notes]); setNote(''); };
   const addActivity = () => { if(!activity.title.trim()) return; setActivities([{...activity,id:Date.now(),dealId:deal.id},...activities]); setActivity({...activity,title:'',notes:''}); };
   const dealNotes = notes.filter(n=>n.dealId===deal.id);
   const dealActivities = activities.filter(a=>a.dealId===deal.id);
-  return <div className="modalBackdrop"><div className="modal"><div className="modalHead"><div><h2>{deal.title}</h2><span>{companies.find(c=>c.id===Number(deal.companyId))?.name} · {money(deal.value)}</span></div><button className="iconBtn" onClick={onClose}><X/></button></div><div className="tabs">{['geral','timeline','atividades','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t}</button>)}</div>
-    {tab==='geral' && <div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={stages.map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={PRODUCTS.map(p=>[p,p])}/><Input label="Valor mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Probabilidade %" field="probability" form={draft} setForm={setDraft} type="number"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/><button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button></div>}
+  return <div className="modalBackdrop"><div className="modal"><div className="modalHead"><div><h2>{deal.title}</h2><span>{companies.find(c=>c.id===Number(deal.companyId))?.name} · MRR {money(dealMrr(deal))} · TCV {money(dealTcv(deal))}</span></div><button className="iconBtn" onClick={onClose}><X/></button></div><div className="tabs">{['geral','timeline','atividades','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t}</button>)}</div>
+    {tab==='geral' && <div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={stages.map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={PRODUCTS.map(p=>[p,p])}/><Input label="MRR / Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Setup" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><Input label="Probabilidade %" field="probability" form={draft} setForm={setDraft} type="number"/><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><label><span>TCV calculado</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>ARR calculado</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/><button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button></div>}
     {tab==='timeline' && <div><div className="noteBox"><textarea placeholder="Adicionar comentário, registro de reunião, ligação, WhatsApp..." value={note} onChange={e=>setNote(e.target.value)}></textarea><button onClick={addNote}><MessageSquare size={16}/>Adicionar comentário</button></div><div className="timeline">{dealNotes.map(n=><div className="timelineItem" key={n.id}><b>{n.user}</b><span>{n.date}</span><p>{n.text}</p></div>)}</div></div>}
     {tab==='atividades' && <div><div className="formGrid"><Select label="Tipo" field="type" form={activity} setForm={setActivity} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={activity} setForm={setActivity}/><Input label="Data" field="dueDate" form={activity} setForm={setActivity} type="date"/><Select label="Responsável" field="owner" form={activity} setForm={setActivity} options={USERS.map(u=>[u,u])}/><button className="saveBtn" onClick={addActivity}><Plus size={16}/>Criar atividade</button></div><div className="timeline">{dealActivities.map(a=><div className="timelineItem" key={a.id}><b>{a.type}: {a.title}</b><span>{a.dueDate} · {a.owner} · {a.status}</span><p>{a.notes}</p></div>)}</div></div>}
     {tab==='matriz' && <SolutionSuggestions deal={draft} companies={companies}/>}  
@@ -165,7 +243,7 @@ function Contacts({contacts,setContacts,companies,query}){
   const removeContact = (id) => { if(!window.confirm('Deseja realmente excluir este contato?')) return; setContacts(contacts.filter(c => c.id !== id)); };
   return <><Panel title="Novo contato"><div className="formGrid"><Input label="Nome" field="name" form={form} setForm={setForm}/><Select label="Empresa" field="companyId" form={form} setForm={setForm} options={companies.map(c=>[c.id,c.name])}/><Input label="Cargo" field="role" form={form} setForm={setForm}/><Input label="E-mail" field="email" form={form} setForm={setForm}/><Input label="Telefone" field="phone" form={form} setForm={setForm}/><button className="saveBtn" onClick={add}><Plus size={16}/>Salvar contato</button></div></Panel><Panel title="Contatos"><Table headers={['Contato','Empresa','Cargo','E-mail','Telefone','Tipo','Ações']}>{list.map(c=><tr key={c.id}><td><b>{c.name}</b></td><td>{companies.find(x=>x.id===Number(c.companyId))?.name}</td><td>{c.role}</td><td>{c.email}</td><td>{c.phone}</td><td>{c.type}</td><td><button className="mini" onClick={()=>removeContact(c.id)}><Trash2 size={15}/>Excluir</button></td></tr>)}</Table></Panel></>;
 }
-function Matrix({deals,companies}){ return <Panel title="Matriz de Soluções Daleth"><p className="muted">Sugestões automáticas por segmento. Esta será a base para gerar propostas e apresentações futuramente.</p>{deals.map(d=><div className="matrixCard" key={d.id}><h3>{d.title}</h3><SolutionSuggestions deal={d} companies={companies}/></div>)}</Panel>; }
+function Matrix({deals,companies}){ return <Panel title="Matriz de Soluções Daleth"><p className="muted">Sugestões automáticas por segmento. Esta será a base para gerar propostas e apresentações futuramente.</p>{deals.map(d=><div className="matrixCard" key={d.id}><h3>{d.title}</h3><p className="muted">MRR {money(dealMrr(d))} · Prazo {dealMonths(d)} meses · TCV {money(dealTcv(d))}</p><SolutionSuggestions deal={d} companies={companies}/></div>)}</Panel>; }
 function SolutionSuggestions({deal,companies}){
   const company = companies.find(c=>c.id===Number(deal.companyId));
   const seg = (company?.segment || '').toLowerCase();
