@@ -166,7 +166,50 @@ function useProducts(){
     }
   };
 
-  return [products, setProducts];
+  return [products, setProducts]; 
+}
+function useCompanies(){
+  const [companies, saveCompaniesToCrmState] = useStore('dsh-v1-companies', initialCompanies);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCompanies(){
+      try {
+        const { data, error } = await supabase
+          .from('companies')
+          .select('id,name,segment,cnpj,site,website,status,phone,email,notes,legacy_id')
+          .order('name');
+
+        if(error) throw error;
+
+        const mapped = (data || []).map(c => ({
+          id: c.legacy_id || c.id,
+          supabaseId: c.id,
+          name: c.name || '',
+          segment: c.segment || '',
+          cnpj: c.cnpj || '',
+          site: c.site || c.website || '',
+          status: c.status || '',
+          phone: c.phone || '',
+          email: c.email || '',
+          notes: c.notes || ''
+        }));
+
+        if(!cancelled && mapped.length){
+          saveCompaniesToCrmState(mapped);
+        }
+      } catch (error) {
+        console.warn('Falha ao carregar empresas relacionais:', error);
+      }
+    }
+
+    loadCompanies();
+
+    return () => { cancelled = true; };
+  }, []);
+
+  return [companies, saveCompaniesToCrmState];
 }
 function money(v){ return Number(v||0).toLocaleString('pt-BR',{ style:'currency', currency:'BRL' }); }
 function moneyShort(v){
@@ -393,7 +436,7 @@ function App(){
   const [page,setPage] = useState('dashboard');
   const [query,setQuery] = useState('');
   const [currentUser,setCurrentUser] = useStore('dsh-v1-current-user', null);
-  const [companies,setCompanies] = useStore('dsh-v1-companies', initialCompanies);
+  const [companies,setCompanies] = useCompanies();
   const [contacts,setContacts] = useStore('dsh-v1-contacts', initialContacts);
   const [deals,setDeals] = useStore('dsh-v1-deals', initialDeals);
   const [activities,setActivities] = useStore('dsh-v1-activities', initialActivities);
@@ -993,7 +1036,7 @@ function Activities({activities,setActivities,deals,query,setSelectedActivityId}
 function Companies({companies,setCompanies,query,setSelectedCompanyId}){
   const empty = { name:'', segment:'', cnpj:'', site:'', status:'Prospect', phone:'', email:'', notes:'' };
   const [form,setForm] = useState(empty);
-  const list = companies.filter(c => (c.name+c.segment+c.site+c.status).toLowerCase().includes(query.toLowerCase()));
+  const list = companies.filter(c => (c.name+c.segment+c.site+c.status).toLowerCase().includes(query.toLowerCase())).sort((a,b)=>String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'));;
   const add = () => { if(!form.name.trim()) return; setCompanies([{...form,id:Date.now()},...companies]); setForm(empty); };
   const removeCompany = (id) => { if(!window.confirm('Deseja realmente excluir esta empresa?')) return; setCompanies(companies.filter(c => !sameId(c.id,id))); };
   return <><Panel title="Nova empresa"><div className="formGrid"><Input label="Nome fantasia" field="name" form={form} setForm={setForm}/><Input label="Segmento" field="segment" form={form} setForm={setForm}/><Input label="Site" field="site" form={form} setForm={setForm}/><Input label="CNPJ" field="cnpj" form={form} setForm={setForm}/><button className="saveBtn" onClick={add}><Plus size={16}/>Salvar empresa</button></div></Panel><Panel title="Empresas"><Table headers={['Empresa','Segmento','Site','Status','Ações']}>{list.map(c=><tr key={c.id} onClick={()=>setSelectedCompanyId(c.id)} style={{cursor:'pointer'}}><td><b>{c.name}</b><span>{c.notes}</span></td><td>{c.segment}</td><td>{c.site}</td><td><span className="pill">{c.status}</span></td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedCompanyId(c.id)}}><Edit3 size={15}/>Abrir</button><button className="mini" onClick={(e)=>{e.stopPropagation(); removeCompany(c.id)}}><Trash2 size={15}/>Excluir</button></div></td></tr>)}</Table></Panel></>;
