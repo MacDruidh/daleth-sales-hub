@@ -211,6 +211,66 @@ function useCompanies(){
 
   return [companies, saveCompaniesToCrmState];
 }
+function useContacts(){
+  const [contacts, saveContactsToCrmState] = useStore('dsh-v1-contacts', initialContacts);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadContacts(){
+      try {
+        const { data, error } = await supabase
+          .from('contacts')
+          .select(`
+            id,
+            company_id,
+            name,
+            role,
+            email,
+            phone,
+            whatsapp,
+            linkedin,
+            type,
+            contact_type,
+            notes,
+            legacy_id,
+            companies:company_id (
+              legacy_id
+            )
+          `)
+          .order('name');
+
+        if(error) throw error;
+
+        const mapped = (data || []).map(c => ({
+          id: c.legacy_id || c.id,
+          supabaseId: c.id,
+          companyId: c.companies?.legacy_id || c.company_id,
+          name: c.name || '',
+          role: c.role || '',
+          email: c.email || '',
+          phone: c.phone || '',
+          whatsapp: c.whatsapp || '',
+          type: c.contact_type || c.type || '',
+          linkedin: c.linkedin || '',
+          notes: c.notes || ''
+        }));
+
+        if(!cancelled && mapped.length){
+          saveContactsToCrmState(mapped);
+        }
+      } catch (error) {
+        console.warn('Falha ao carregar contatos relacionais:', error);
+      }
+    }
+
+    loadContacts();
+
+    return () => { cancelled = true; };
+  }, []);
+
+  return [contacts, saveContactsToCrmState];
+}
 function money(v){ return Number(v||0).toLocaleString('pt-BR',{ style:'currency', currency:'BRL' }); }
 function moneyShort(v){
   const n = Number(v || 0);
@@ -437,7 +497,7 @@ function App(){
   const [query,setQuery] = useState('');
   const [currentUser,setCurrentUser] = useStore('dsh-v1-current-user', null);
   const [companies,setCompanies] = useCompanies();
-  const [contacts,setContacts] = useStore('dsh-v1-contacts', initialContacts);
+  const [contacts,setContacts] = useContacts();
   const [deals,setDeals] = useStore('dsh-v1-deals', initialDeals);
   const [activities,setActivities] = useStore('dsh-v1-activities', initialActivities);
   const [notes,setNotes] = useStore('dsh-v1-notes', initialNotes);
@@ -1044,7 +1104,7 @@ function Companies({companies,setCompanies,query,setSelectedCompanyId}){
 function Contacts({contacts,setContacts,companies,query,setSelectedContactId}){
   const empty = { companyId:companies[0]?.id||'', name:'', role:'', email:'', phone:'', whatsapp:'', type:'Decisor', linkedin:'', notes:'' };
   const [form,setForm] = useState(empty);
-  const list = contacts.filter(c => (c.name+c.role+c.email+c.phone).toLowerCase().includes(query.toLowerCase()));
+  const list = contacts.filter(c => (c.name+c.role+c.email+c.phone+c.whatsapp).toLowerCase().includes(query.toLowerCase())).sort((a,b)=>String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'));
   const add = () => { if(!form.name.trim()) return; setContacts([{...form,id:Date.now()},...contacts]); setForm(empty); };
   const removeContact = (id) => { if(!window.confirm('Deseja realmente excluir este contato?')) return; setContacts(contacts.filter(c => !sameId(c.id,id))); };
   return <><Panel title="Novo contato"><div className="formGrid"><Input label="Nome" field="name" form={form} setForm={setForm}/><Select label="Empresa" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Input label="Cargo" field="role" form={form} setForm={setForm}/><Input label="E-mail" field="email" form={form} setForm={setForm}/><Input label="Telefone" field="phone" form={form} setForm={setForm}/><button className="saveBtn" onClick={add}><Plus size={16}/>Salvar contato</button></div></Panel><Panel title="Contatos"><Table headers={['Contato','Empresa','Cargo','E-mail','Telefone','Tipo','Ações']}>{list.map(c=><tr key={c.id} onClick={()=>setSelectedContactId(c.id)} style={{cursor:'pointer'}}><td><b>{c.name}</b></td><td>{byId(companies,c.companyId)?.name}</td><td>{c.role}</td><td>{c.email}</td><td>{c.phone}</td><td>{c.type}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedContactId(c.id)}}><Edit3 size={15}/>Abrir</button><button className="mini" onClick={(e)=>{e.stopPropagation(); removeContact(c.id)}}><Trash2 size={15}/>Excluir</button></div></td></tr>)}</Table></Panel></>;
