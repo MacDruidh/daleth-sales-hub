@@ -411,6 +411,58 @@ function useActivities(){
 
   return [activities, saveActivitiesToCrmState];
 }
+function useNotes(){
+  const [notes, saveNotesToCrmState] = useStore('dsh-v1-notes', initialNotes);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadNotes(){
+      try {
+        const { data, error } = await supabase
+          .from('notes')
+          .select(`
+            id,
+            opportunity_id,
+            user_name,
+            note_date,
+            content,
+            created_at,
+            legacy_id,
+            opportunities:opportunity_id (
+              legacy_id
+            )
+          `)
+          .order('note_date', { ascending: false });
+
+        if(error) throw error;
+
+        const mapped = (data || []).map(n => ({
+          id: n.legacy_id || n.id,
+          supabaseId: n.id,
+          dealId: n.opportunities?.legacy_id || n.opportunity_id,
+          user: n.user_name || '',
+          date: n.note_date || '',
+          text: n.content || ''
+        }));
+
+        if(!cancelled && mapped.length){
+          saveNotesToCrmState(mapped);
+        }
+      } catch (error) {
+        console.error('Falha ao carregar notas relacionais:', error);
+      }
+    }
+
+    loadNotes();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return [notes, saveNotesToCrmState];
+}
 function money(v){ return Number(v||0).toLocaleString('pt-BR',{ style:'currency', currency:'BRL' }); }
 function moneyShort(v){
   const n = Number(v || 0);
@@ -640,7 +692,7 @@ function App(){
   const [contacts,setContacts] = useContacts();
   const [deals,setDeals] = useDeals();
   const [activities,setActivities] = useActivities();
-  const [notes,setNotes] = useStore('dsh-v1-notes', initialNotes);
+  const [notes,setNotes] = useNotes();
   const [interactions,setInteractions] = useStore('dsh-v1-interactions', initialInteractions);
   const [contracts,setContracts] = useStore('dsh-v1-contracts', initialContracts);
   const [products,setProducts] = useProducts();
