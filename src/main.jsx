@@ -271,6 +271,84 @@ function useContacts(){
 
   return [contacts, saveContactsToCrmState];
 }
+function useDeals(){
+  const [deals, saveDealsToCrmState] = useStore('dsh-v1-deals', initialDeals);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDeals(){
+      try {
+        const { data, error } = await supabase
+          .from('opportunities')
+          .select(`
+            id,
+            company_id,
+            contact_id,
+            title,
+            product,
+            value,
+            setup_value,
+            contract_months,
+            probability,
+            expected_close_date,
+            status,
+            legacy_id,
+            stage,
+            description,
+            next_step,
+            priority,
+            companies:company_id (
+              legacy_id
+            ),
+            contacts:contact_id (
+              legacy_id
+            )
+          `)
+          .order('created_at', { ascending: false });
+
+        if(error) throw error;
+
+        console.log('SUPABASE DEALS:', data);
+
+        const mapped = (data || []).map(d => ({
+          id: d.legacy_id || d.id,
+          supabaseId: d.id,
+          companyId: d.companies?.legacy_id || d.company_id,
+          contactId: d.contacts?.legacy_id || d.contact_id || '',
+          title: d.title || '',
+          product: d.product || '',
+          value: Number(d.value || 0),
+          setup: Number(d.setup_value || 0),
+          contractMonths: Number(d.contract_months || 12),
+          stage: d.stage || 'Lead Captado',
+          owner: '',
+          probability: Number(d.probability || 0),
+          closeDate: d.expected_close_date || '',
+          description: d.description || '',
+          nextStep: d.next_step || '',
+          priority: d.priority || 'Média'
+        }));
+
+        console.log('MAPPED DEALS:', mapped);
+
+        if(!cancelled && mapped.length){
+          saveDealsToCrmState(mapped);
+        }
+      } catch (error) {
+        console.error('Falha ao carregar oportunidades relacionais:', error);
+      }
+    }
+
+    loadDeals();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return [deals, saveDealsToCrmState];
+}
 function money(v){ return Number(v||0).toLocaleString('pt-BR',{ style:'currency', currency:'BRL' }); }
 function moneyShort(v){
   const n = Number(v || 0);
@@ -498,7 +576,7 @@ function App(){
   const [currentUser,setCurrentUser] = useStore('dsh-v1-current-user', null);
   const [companies,setCompanies] = useCompanies();
   const [contacts,setContacts] = useContacts();
-  const [deals,setDeals] = useStore('dsh-v1-deals', initialDeals);
+  const [deals,setDeals] = useDeals();
   const [activities,setActivities] = useStore('dsh-v1-activities', initialActivities);
   const [notes,setNotes] = useStore('dsh-v1-notes', initialNotes);
   const [interactions,setInteractions] = useStore('dsh-v1-interactions', initialInteractions);
