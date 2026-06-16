@@ -349,6 +349,68 @@ function useDeals(){
 
   return [deals, saveDealsToCrmState];
 }
+function useActivities(){
+  const [activities, saveActivitiesToCrmState] = useStore('dsh-v1-activities', initialActivities);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadActivities(){
+      try {
+        const { data, error } = await supabase
+          .from('activities')
+          .select(`
+            id,
+            opportunity_id,
+            title,
+            due_date,
+            status,
+            notes,
+            owner,
+            legacy_id,
+            activity_type,
+            created_at,
+            opportunities:opportunity_id (
+              legacy_id
+            )
+          `)
+          .order('created_at', { ascending: false });
+
+        if(error) throw error;
+
+        console.log('SUPABASE ACTIVITIES:', data);
+
+        const mapped = (data || []).map(a => ({
+          id: a.legacy_id || a.id,
+          supabaseId: a.id,
+          dealId: a.opportunities?.legacy_id || a.opportunity_id,
+          type: a.activity_type || 'Ligação',
+          title: a.title || '',
+          dueDate: a.due_date || '',
+          status: a.status || 'Pendente',
+          owner: a.owner || '',
+          notes: a.notes || ''
+        }));
+
+        console.log('MAPPED ACTIVITIES:', mapped);
+
+        if(!cancelled && mapped.length){
+          saveActivitiesToCrmState(mapped);
+        }
+      } catch (error) {
+        console.error('Falha ao carregar atividades relacionais:', error);
+      }
+    }
+
+    loadActivities();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return [activities, saveActivitiesToCrmState];
+}
 function money(v){ return Number(v||0).toLocaleString('pt-BR',{ style:'currency', currency:'BRL' }); }
 function moneyShort(v){
   const n = Number(v || 0);
@@ -577,7 +639,7 @@ function App(){
   const [companies,setCompanies] = useCompanies();
   const [contacts,setContacts] = useContacts();
   const [deals,setDeals] = useDeals();
-  const [activities,setActivities] = useStore('dsh-v1-activities', initialActivities);
+  const [activities,setActivities] = useActivities();
   const [notes,setNotes] = useStore('dsh-v1-notes', initialNotes);
   const [interactions,setInteractions] = useStore('dsh-v1-interactions', initialInteractions);
   const [contracts,setContracts] = useStore('dsh-v1-contracts', initialContracts);
