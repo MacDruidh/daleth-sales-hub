@@ -870,14 +870,25 @@ function fallbackUserFromEmail(email){
   return { name: email?.split('@')[0] || 'Usuário', role: 'Reserva', canViewDashboard: false, email };
 }
 
+function withTimeout(promise, ms, message){
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms))
+  ]);
+}
+
 async function loadUserProfile(authUser){
   if(!authUser?.id) return null;
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('full_name, role, can_view_dashboard')
-    .eq('id', authUser.id)
-    .maybeSingle();
+  const { data, error } = await withTimeout(
+    supabase
+      .from('profiles')
+      .select('full_name, role, can_view_dashboard')
+      .eq('id', authUser.id)
+      .maybeSingle(),
+    8000,
+    'Tempo excedido ao carregar perfil.'
+  );
 
   if(error) throw error;
 
@@ -986,10 +997,14 @@ function LoginScreen({onLogin}){
     setMessage('');
 
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password
-      });
+      const { data, error: signInError } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password
+        }),
+        10000,
+        'Tempo excedido ao entrar.'
+      );
 
       if(signInError) throw signInError;
 
@@ -997,7 +1012,7 @@ function LoginScreen({onLogin}){
       onLogin(profile);
     } catch (err) {
       console.warn('Falha no login Supabase:', err);
-      setError('Não foi possível entrar. Confira e-mail e senha.');
+      setError(err?.message?.includes('Tempo excedido') ? 'O login demorou demais. Tente novamente em alguns segundos.' : 'Não foi possível entrar. Confira e-mail e senha.');
     } finally {
       setLoading(false);
     }
@@ -1016,9 +1031,13 @@ function LoginScreen({onLogin}){
     setResetLoading(true);
 
     try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: window.location.origin
-      });
+      const { error: resetError } = await withTimeout(
+        supabase.auth.resetPasswordForEmail(cleanEmail, {
+          redirectTo: window.location.origin
+        }),
+        10000,
+        'Tempo excedido ao enviar redefinição.'
+      );
 
       if(resetError) throw resetError;
       setMessage('Enviamos um link de redefinição para este e-mail.');
