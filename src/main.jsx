@@ -13,7 +13,7 @@ const ACCESS_USERS = [
   { name: 'Katia', role: 'Comercial', canViewDashboard: false },
   { name: 'Paulo', role: 'Comercial', canViewDashboard: false },
   { name: 'Oyas', role: 'Comercial', canViewDashboard: false },
-  { name: 'Reserva', role: 'Leitura', canViewDashboard: false },
+  { name: 'Reserva', role: 'Reserva', canViewDashboard: false },
 ];
 
 const initialCompanies = [
@@ -168,6 +168,61 @@ function useProducts(){
 
   return [products, setProducts]; 
 }
+
+function mapCompanyFromDb(c){
+  return {
+    id: c.legacy_id || c.id,
+    supabaseId: c.id,
+    name: c.name || '',
+    segment: c.segment || '',
+    cnpj: c.cnpj || '',
+    site: c.site || c.website || '',
+    status: c.status || '',
+    phone: c.phone || '',
+    email: c.email || '',
+    notes: c.notes || ''
+  };
+}
+
+function companyToDb(company){
+  return {
+    legacy_id: company.legacy_id || company.legacyId || (company.pipedriveId ? String(company.id) : null),
+    name: company.name || '',
+    segment: company.segment || null,
+    cnpj: company.cnpj || null,
+    site: company.site || null,
+    website: company.site || null,
+    status: company.status || 'Prospect',
+    phone: company.phone || null,
+    email: company.email || null,
+    notes: company.notes || null
+  };
+}
+
+async function saveCompanyToSupabase(company){
+  const payload = companyToDb(company);
+  const query = company.supabaseId
+    ? supabase.from('companies').update(payload).eq('id', company.supabaseId)
+    : supabase.from('companies').insert(payload);
+
+  const { data, error } = await query.select('id,name,segment,cnpj,site,website,status,phone,email,notes,legacy_id').single();
+
+  if(error) throw error;
+  return mapCompanyFromDb(data);
+}
+
+async function deleteCompanyFromSupabase(company){
+  const dbId = company?.supabaseId;
+  if(!dbId) return;
+
+  const { error } = await supabase
+    .from('companies')
+    .delete()
+    .eq('id', dbId);
+
+  if(error) throw error;
+}
+
 function useCompanies(){
   const [companies, saveCompaniesToCrmState] = useStore('dsh-v1-companies', initialCompanies);
 
@@ -183,18 +238,7 @@ function useCompanies(){
 
         if(error) throw error;
 
-        const mapped = (data || []).map(c => ({
-          id: c.legacy_id || c.id,
-          supabaseId: c.id,
-          name: c.name || '',
-          segment: c.segment || '',
-          cnpj: c.cnpj || '',
-          site: c.site || c.website || '',
-          status: c.status || '',
-          phone: c.phone || '',
-          email: c.email || '',
-          notes: c.notes || ''
-        }));
+        const mapped = (data || []).map(mapCompanyFromDb);
 
         if(!cancelled && mapped.length){
           saveCompaniesToCrmState(mapped);
@@ -211,6 +255,86 @@ function useCompanies(){
 
   return [companies, saveCompaniesToCrmState];
 }
+
+function companyDbIdFromUiId(companies, companyId){
+  const company = safeArray(companies).find(c => sameId(c.id, companyId));
+  return company?.supabaseId || (company ? company.id : companyId) || null;
+}
+
+function mapContactFromDb(c){
+  return {
+    id: c.legacy_id || c.id,
+    supabaseId: c.id,
+    companyId: c.companies?.legacy_id || c.company_id,
+    name: c.name || '',
+    role: c.role || '',
+    email: c.email || '',
+    phone: c.phone || '',
+    whatsapp: c.whatsapp || '',
+    type: c.contact_type || c.type || '',
+    linkedin: c.linkedin || '',
+    notes: c.notes || ''
+  };
+}
+
+function contactToDb(contact, companies){
+  const companyId = companyDbIdFromUiId(companies, contact.companyId);
+
+  return {
+    legacy_id: contact.legacy_id || contact.legacyId || (contact.pipedriveId ? String(contact.id) : null),
+    company_id: companyId || null,
+    name: contact.name || '',
+    role: contact.role || null,
+    email: contact.email || null,
+    phone: contact.phone || null,
+    whatsapp: contact.whatsapp || null,
+    linkedin: contact.linkedin || null,
+    type: contact.type || null,
+    contact_type: contact.type || null,
+    notes: contact.notes || null
+  };
+}
+
+async function saveContactToSupabase(contact, companies){
+  const payload = contactToDb(contact, companies);
+  const query = contact.supabaseId
+    ? supabase.from('contacts').update(payload).eq('id', contact.supabaseId)
+    : supabase.from('contacts').insert(payload);
+
+  const { data, error } = await query.select(`
+    id,
+    company_id,
+    name,
+    role,
+    email,
+    phone,
+    whatsapp,
+    linkedin,
+    type,
+    contact_type,
+    notes,
+    legacy_id,
+    companies:company_id (
+      legacy_id
+    )
+  `).single();
+
+  if(error) throw error;
+  return mapContactFromDb(data);
+}
+
+async function deleteContactFromSupabase(contact){
+  const dbId = contact?.supabaseId;
+  if(!dbId) return;
+
+  const { error } = await supabase
+    .from('contacts')
+    .delete()
+    .eq('id', dbId);
+
+  if(error) throw error;
+}
+
 function useContacts(){
   const [contacts, saveContactsToCrmState] = useStore('dsh-v1-contacts', initialContacts);
 
@@ -242,19 +366,7 @@ function useContacts(){
 
         if(error) throw error;
 
-        const mapped = (data || []).map(c => ({
-          id: c.legacy_id || c.id,
-          supabaseId: c.id,
-          companyId: c.companies?.legacy_id || c.company_id,
-          name: c.name || '',
-          role: c.role || '',
-          email: c.email || '',
-          phone: c.phone || '',
-          whatsapp: c.whatsapp || '',
-          type: c.contact_type || c.type || '',
-          linkedin: c.linkedin || '',
-          notes: c.notes || ''
-        }));
+        const mapped = (data || []).map(mapContactFromDb);
 
         if(!cancelled && mapped.length){
           saveContactsToCrmState(mapped);
@@ -271,6 +383,105 @@ function useContacts(){
 
   return [contacts, saveContactsToCrmState];
 }
+
+function contactDbIdFromUiId(contacts, contactId){
+  if(!contactId) return null;
+  const contact = safeArray(contacts).find(c => sameId(c.id, contactId));
+  return contact?.supabaseId || (contact ? contact.id : contactId) || null;
+}
+
+function mapDealFromDb(d){
+  return {
+    id: d.legacy_id || d.id,
+    supabaseId: d.id,
+    companyId: d.companies?.legacy_id || d.company_id,
+    contactId: d.contacts?.legacy_id || d.contact_id || '',
+    title: d.title || '',
+    product: d.product || '',
+    value: Number(d.value || 0),
+    setup: Number(d.setup_value || 0),
+    contractMonths: Number(d.contract_months || 12),
+    stage: d.stage || 'Lead Captado',
+    owner: d.owner || '',
+    probability: Number(d.probability || 0),
+    closeDate: d.expected_close_date || '',
+    description: d.description || '',
+    nextStep: d.next_step || '',
+    priority: d.priority || 'Média'
+  };
+}
+
+function dealToDb(deal, companies, contacts){
+  return {
+    legacy_id: deal.legacy_id || deal.legacyId || (deal.pipedriveId ? String(deal.id) : null),
+    company_id: companyDbIdFromUiId(companies, deal.companyId),
+    contact_id: contactDbIdFromUiId(contacts, deal.contactId),
+    title: deal.title || '',
+    product: deal.product || null,
+    value: Number(deal.value || 0),
+    setup_value: Number(deal.setup || 0),
+    contract_months: Number(deal.contractMonths || 12),
+    probability: Number(deal.probability || 30),
+    expected_close_date: deal.closeDate || null,
+    status: deal.status || null,
+    stage: deal.stage || 'Lead Captado',
+    description: deal.description || null,
+    next_step: deal.nextStep || null,
+    priority: deal.priority || 'Média',
+    owner: deal.owner || null
+  };
+}
+
+const DEAL_SELECT = `
+  id,
+  company_id,
+  contact_id,
+  title,
+  product,
+  value,
+  setup_value,
+  contract_months,
+  probability,
+  expected_close_date,
+  status,
+  legacy_id,
+  stage,
+  description,
+  next_step,
+  priority,
+  owner,
+  companies:company_id (
+    legacy_id
+  ),
+  contacts:contact_id (
+    legacy_id
+  )
+`;
+
+async function saveDealToSupabase(deal, companies, contacts){
+  const payload = dealToDb(deal, companies, contacts);
+  const query = deal.supabaseId
+    ? supabase.from('opportunities').update(payload).eq('id', deal.supabaseId)
+    : supabase.from('opportunities').insert(payload);
+
+  const { data, error } = await query.select(DEAL_SELECT).single();
+
+  if(error) throw error;
+  return mapDealFromDb(data);
+}
+
+async function deleteDealFromSupabase(deal){
+  const dbId = deal?.supabaseId;
+  if(!dbId) return;
+
+  const { error } = await supabase
+    .from('opportunities')
+    .delete()
+    .eq('id', dbId);
+
+  if(error) throw error;
+}
+
 function useDeals(){
   const [deals, saveDealsToCrmState] = useStore('dsh-v1-deals', initialDeals);
 
@@ -281,56 +492,12 @@ function useDeals(){
       try {
         const { data, error } = await supabase
           .from('opportunities')
-          .select(`
-            id,
-            company_id,
-            contact_id,
-            title,
-            product,
-            value,
-            setup_value,
-            contract_months,
-            probability,
-            expected_close_date,
-            status,
-            legacy_id,
-            stage,
-            description,
-            next_step,
-            priority,
-            companies:company_id (
-              legacy_id
-            ),
-            contacts:contact_id (
-              legacy_id
-            )
-          `)
+          .select(DEAL_SELECT)
           .order('created_at', { ascending: false });
 
         if(error) throw error;
 
-        console.log('SUPABASE DEALS:', data);
-
-        const mapped = (data || []).map(d => ({
-          id: d.legacy_id || d.id,
-          supabaseId: d.id,
-          companyId: d.companies?.legacy_id || d.company_id,
-          contactId: d.contacts?.legacy_id || d.contact_id || '',
-          title: d.title || '',
-          product: d.product || '',
-          value: Number(d.value || 0),
-          setup: Number(d.setup_value || 0),
-          contractMonths: Number(d.contract_months || 12),
-          stage: d.stage || 'Lead Captado',
-          owner: '',
-          probability: Number(d.probability || 0),
-          closeDate: d.expected_close_date || '',
-          description: d.description || '',
-          nextStep: d.next_step || '',
-          priority: d.priority || 'Média'
-        }));
-
-        console.log('MAPPED DEALS:', mapped);
+        const mapped = (data || []).map(mapDealFromDb);
 
         if(!cancelled && mapped.length){
           saveDealsToCrmState(mapped);
@@ -349,6 +516,126 @@ function useDeals(){
 
   return [deals, saveDealsToCrmState];
 }
+
+function dealDbIdFromUiId(deals, dealId){
+  if(!dealId) return null;
+  const deal = safeArray(deals).find(d => sameId(d.id, dealId));
+  return deal?.supabaseId || (deal ? deal.id : dealId) || null;
+}
+
+function mapActivityFromDb(a){
+  return {
+    id: a.legacy_id || a.id,
+    supabaseId: a.id,
+    dealId: a.opportunities?.legacy_id || a.opportunity_id,
+    type: a.activity_type || 'Ligação',
+    title: a.title || '',
+    dueDate: a.due_date || '',
+    status: a.status || 'Pendente',
+    owner: a.owner || '',
+    notes: a.notes || ''
+  };
+}
+
+function activityToDb(activity, deals){
+  return {
+    legacy_id: activity.legacy_id || activity.legacyId || (activity.pipedriveId ? String(activity.id) : null),
+    opportunity_id: dealDbIdFromUiId(deals, activity.dealId),
+    title: activity.title || '',
+    due_date: activity.dueDate || null,
+    status: activity.status || 'Pendente',
+    notes: activity.notes || null,
+    owner: activity.owner || null,
+    activity_type: activity.type || 'Follow-up'
+  };
+}
+
+const ACTIVITY_SELECT = `
+  id,
+  opportunity_id,
+  title,
+  due_date,
+  status,
+  notes,
+  owner,
+  legacy_id,
+  activity_type,
+  created_at,
+  opportunities:opportunity_id (
+    legacy_id
+  )
+`;
+
+async function saveActivityToSupabase(activity, deals){
+  const payload = activityToDb(activity, deals);
+  const query = activity.supabaseId
+    ? supabase.from('activities').update(payload).eq('id', activity.supabaseId)
+    : supabase.from('activities').insert(payload);
+
+  const { data, error } = await query.select(ACTIVITY_SELECT).single();
+
+  if(error) throw error;
+  return mapActivityFromDb(data);
+}
+
+async function deleteActivityFromSupabase(activity){
+  const dbId = activity?.supabaseId;
+  if(!dbId) return;
+
+  const { error } = await supabase
+    .from('activities')
+    .delete()
+    .eq('id', dbId);
+
+  if(error) throw error;
+}
+
+function mapNoteFromDb(n){
+  return {
+    id: n.legacy_id || n.id,
+    supabaseId: n.id,
+    dealId: n.opportunities?.legacy_id || n.opportunity_id,
+    user: n.user_name || '',
+    date: n.note_date || '',
+    text: n.content || ''
+  };
+}
+
+function noteToDb(note, deals){
+  return {
+    legacy_id: note.legacy_id || note.legacyId || (note.pipedriveId ? String(note.id) : null),
+    opportunity_id: dealDbIdFromUiId(deals, note.dealId),
+    user_name: note.user || note.userName || note.user_name || 'Daleth',
+    note_date: note.date || note.noteDate || note.note_date || today(),
+    content: note.text || note.note || note.content || ''
+  };
+}
+
+const NOTE_SELECT = `
+  id,
+  opportunity_id,
+  user_name,
+  note_date,
+  content,
+  created_at,
+  legacy_id,
+  opportunities:opportunity_id (
+    legacy_id
+  )
+`;
+
+async function saveNoteToSupabase(note, deals){
+  const payload = noteToDb(note, deals);
+  const query = note.supabaseId
+    ? supabase.from('notes').update(payload).eq('id', note.supabaseId)
+    : supabase.from('notes').insert(payload);
+
+  const { data, error } = await query.select(NOTE_SELECT).single();
+
+  if(error) throw error;
+  return mapNoteFromDb(data);
+}
+
 function useActivities(){
   const [activities, saveActivitiesToCrmState] = useStore('dsh-v1-activities', initialActivities);
 
@@ -359,40 +646,12 @@ function useActivities(){
       try {
         const { data, error } = await supabase
           .from('activities')
-          .select(`
-            id,
-            opportunity_id,
-            title,
-            due_date,
-            status,
-            notes,
-            owner,
-            legacy_id,
-            activity_type,
-            created_at,
-            opportunities:opportunity_id (
-              legacy_id
-            )
-          `)
+          .select(ACTIVITY_SELECT)
           .order('created_at', { ascending: false });
 
         if(error) throw error;
 
-        console.log('SUPABASE ACTIVITIES:', data);
-
-        const mapped = (data || []).map(a => ({
-          id: a.legacy_id || a.id,
-          supabaseId: a.id,
-          dealId: a.opportunities?.legacy_id || a.opportunity_id,
-          type: a.activity_type || 'Ligação',
-          title: a.title || '',
-          dueDate: a.due_date || '',
-          status: a.status || 'Pendente',
-          owner: a.owner || '',
-          notes: a.notes || ''
-        }));
-
-        console.log('MAPPED ACTIVITIES:', mapped);
+        const mapped = (data || []).map(mapActivityFromDb);
 
         if(!cancelled && mapped.length){
           saveActivitiesToCrmState(mapped);
@@ -421,30 +680,12 @@ function useNotes(){
       try {
         const { data, error } = await supabase
           .from('notes')
-          .select(`
-            id,
-            opportunity_id,
-            user_name,
-            note_date,
-            content,
-            created_at,
-            legacy_id,
-            opportunities:opportunity_id (
-              legacy_id
-            )
-          `)
+          .select(NOTE_SELECT)
           .order('note_date', { ascending: false });
 
         if(error) throw error;
 
-        const mapped = (data || []).map(n => ({
-          id: n.legacy_id || n.id,
-          supabaseId: n.id,
-          dealId: n.opportunities?.legacy_id || n.opportunity_id,
-          user: n.user_name || '',
-          date: n.note_date || '',
-          text: n.content || ''
-        }));
+        const mapped = (data || []).map(mapNoteFromDb);
 
         if(!cancelled && mapped.length){
           saveNotesToCrmState(mapped);
@@ -462,6 +703,108 @@ function useNotes(){
   }, []);
 
   return [notes, saveNotesToCrmState];
+}
+
+function mapContractFromDb(c){
+  return {
+    id: c.legacy_id || c.id,
+    supabaseId: c.id,
+    companyId: c.companies?.legacy_id || c.company_id,
+    dealId: c.opportunities?.legacy_id || c.opportunity_id || '',
+    product: c.product || '',
+    owner: c.owner || '',
+    mrr: Number(c.mrr || 0),
+    setup: Number(c.setup || 0),
+    contractMonths: Number(c.contract_months || 12),
+    startDate: c.start_date || '',
+    endDate: c.end_date || '',
+    status: c.status || 'Ativo',
+    notes: c.notes || ''
+  };
+}
+
+function contractToDb(contract, companies, deals){
+  return {
+    legacy_id: contract.legacy_id || contract.legacyId || (contract.pipedriveId ? String(contract.id) : null),
+    company_id: companyDbIdFromUiId(companies, contract.companyId),
+    opportunity_id: dealDbIdFromUiId(deals, contract.dealId),
+    product: contract.product || null,
+    owner: contract.owner || null,
+    mrr: Number(contract.mrr || 0),
+    setup: Number(contract.setup || 0),
+    contract_months: Number(contract.contractMonths || 12),
+    start_date: contract.startDate || null,
+    end_date: contract.endDate || null,
+    status: contract.status || 'Ativo',
+    notes: contract.notes || null
+  };
+}
+
+const CONTRACT_SELECT = `
+  *,
+  companies!contracts_company_id_fkey (
+    legacy_id
+  ),
+  opportunities!contracts_opportunity_id_fkey (
+    legacy_id
+  )
+`;
+
+async function saveContractToSupabase(contract, companies, deals){
+  const payload = contractToDb(contract, companies, deals);
+  const query = contract.supabaseId
+    ? supabase.from('contracts').update(payload).eq('id', contract.supabaseId)
+    : supabase.from('contracts').insert(payload);
+
+  const { data, error } = await query.select(CONTRACT_SELECT).single();
+
+  if(error) throw error;
+  return mapContractFromDb(data);
+}
+
+async function deleteContractFromSupabase(contract){
+  const dbId = contract?.supabaseId;
+  if(!dbId) return;
+
+  const { error } = await supabase
+    .from('contracts')
+    .delete()
+    .eq('id', dbId);
+
+  if(error) throw error;
+}
+
+function useContracts(){
+  const [contracts, saveContractsToCrmState] = useStore('dsh-v1-contracts', initialContracts);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadContracts(){
+      try {
+        const { data, error } = await supabase
+        .from('contracts')
+        .select(CONTRACT_SELECT)
+        .order('created_at', { ascending: false });
+
+        if(error) throw error;
+        const mapped = (data || []).map(mapContractFromDb);
+        if(!cancelled){
+          saveContractsToCrmState(mapped);
+        }
+      } catch(error){
+        console.error('Falha ao carregar contratos:', error);
+      }
+    }
+
+    loadContracts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return [contracts, saveContractsToCrmState];
 }
 function money(v){ return Number(v||0).toLocaleString('pt-BR',{ style:'currency', currency:'BRL' }); }
 function moneyShort(v){
@@ -523,10 +866,167 @@ function contractStatus(c){
   return c.status || 'Ativo';
 }
 
+function fallbackUserFromEmail(email){
+  return { name: email?.split('@')[0] || 'Usuário', role: 'Reserva', canViewDashboard: false, email };
+}
+
+async function loadUserProfile(authUser){
+  if(!authUser?.id) return null;
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('full_name, role, can_view_dashboard')
+    .eq('id', authUser.id)
+    .maybeSingle();
+
+  if(error) throw error;
+
+  if(data){
+    return {
+      id: authUser.id,
+      email: authUser.email,
+      name: data.full_name || authUser.email,
+      role: data.role || 'Comercial',
+      canViewDashboard: data.can_view_dashboard === true
+    };
+  }
+
+  return {
+    ...fallbackUserFromEmail(authUser.email),
+    id: authUser.id
+  };
+}
+
+function mapProfileFromDb(profile){
+  return {
+    id: profile.id,
+    name: profile.full_name || '',
+    role: profile.role || 'Comercial',
+    canViewDashboard: profile.can_view_dashboard === true,
+    createdAt: profile.created_at || '',
+    updatedAt: profile.updated_at || ''
+  };
+}
+
+function profileToDb(profile){
+  return {
+    full_name: profile.name || '',
+    role: profile.role || 'Comercial',
+    can_view_dashboard: profile.role === 'CEO' ? true : profile.canViewDashboard === true
+  };
+}
+
+async function saveProfileToSupabase(profile){
+  const { data, error } = await supabase
+    .from('profiles')
+    .update(profileToDb(profile))
+    .eq('id', profile.id)
+    .select('id,full_name,role,can_view_dashboard,created_at,updated_at')
+    .single();
+
+  if(error) throw error;
+  return mapProfileFromDb(data);
+}
+
+function useProfiles(enabled){
+  const [profiles,setProfiles] = useState([]);
+  const [loading,setLoading] = useState(false);
+  const [error,setError] = useState('');
+
+  useEffect(() => {
+    if(!enabled) return;
+    let cancelled = false;
+
+    async function loadProfiles(){
+      setLoading(true);
+      setError('');
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id,full_name,role,can_view_dashboard,created_at,updated_at')
+          .order('full_name');
+
+        if(error) throw error;
+        if(!cancelled) setProfiles((data || []).map(mapProfileFromDb));
+      } catch (err) {
+        console.warn('Falha ao carregar perfis:', err);
+        if(!cancelled) setError('Não foi possível carregar perfis. Confira se o arquivo supabase/schema.sql já foi aplicado no painel do Supabase.');
+      } finally {
+        if(!cancelled) setLoading(false);
+      }
+    }
+
+    loadProfiles();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled]);
+
+  return { profiles, setProfiles, loading, error };
+}
+
 
 function LoginScreen({onLogin}){
-  const [selected,setSelected] = useState('Sergio');
-  const user = ACCESS_USERS.find(u=>u.name===selected) || ACCESS_USERS[0];
+  const [email,setEmail] = useState('');
+  const [password,setPassword] = useState('');
+  const [loading,setLoading] = useState(false);
+  const [resetLoading,setResetLoading] = useState(false);
+  const [error,setError] = useState('');
+  const [message,setMessage] = useState('');
+
+  const signIn = async (event) => {
+    event?.preventDefault?.();
+    if(!email.trim() || !password) return;
+    setLoading(true);
+    setError('');
+    setMessage('');
+
+    try {
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password
+      });
+
+      if(signInError) throw signInError;
+
+      const profile = await loadUserProfile(data.user);
+      onLogin(profile);
+    } catch (err) {
+      console.warn('Falha no login Supabase:', err);
+      setError('Não foi possível entrar. Confira e-mail e senha.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sendPasswordReset = async () => {
+    const cleanEmail = email.trim();
+    setError('');
+    setMessage('');
+
+    if(!cleanEmail){
+      setError('Informe seu e-mail para receber o link de redefinição de senha.');
+      return;
+    }
+
+    setResetLoading(true);
+
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: window.location.origin
+      });
+
+      if(resetError) throw resetError;
+      setMessage('Enviamos um link de redefinição para este e-mail.');
+    } catch (err) {
+      console.warn('Falha ao enviar redefinição de senha:', err);
+      setError('Não foi possível enviar o link de redefinição agora.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   return <div className="app" style={{
     minHeight:'100vh',
     display:'grid',
@@ -548,19 +1048,20 @@ function LoginScreen({onLogin}){
       </div>
 
       <h1 style={{margin:'0 0 10px',fontSize:'40px',lineHeight:1.05,letterSpacing:'-.04em',color:'#061b34',fontWeight:900}}>Daleth Sales Hub</h1>
-      <p style={{margin:'0 0 26px',fontSize:'20px',color:'#65758a'}}>Escolha seu perfil de acesso.</p>
+      <p style={{margin:'0 0 26px',fontSize:'20px',color:'#65758a'}}>Entre com seu acesso Daleth.</p>
       <div style={{height:'1px',background:'#dbe7f3',marginBottom:'24px'}} />
 
-      <label style={{display:'block',marginBottom:'24px'}}>
-        <span style={{display:'block',fontWeight:900,fontSize:'15px',textTransform:'uppercase',letterSpacing:'.06em',color:'#061b34',marginBottom:'12px'}}>Usuário</span>
+      <form onSubmit={signIn}>
+      <label style={{display:'block',marginBottom:'18px'}}>
+        <span style={{display:'block',fontWeight:900,fontSize:'15px',textTransform:'uppercase',letterSpacing:'.06em',color:'#061b34',marginBottom:'12px'}}>E-mail</span>
         <div style={{position:'relative',height:'54px'}}>
-          <UserRound size={21} style={{position:'absolute',left:'18px',top:'50%',transform:'translateY(-50%)',color:'#12345a',pointerEvents:'none',zIndex:2}} />
-          <select value={selected} onChange={e=>setSelected(e.target.value)} style={{
+          <Mail size={21} style={{position:'absolute',left:'18px',top:'50%',transform:'translateY(-50%)',color:'#12345a',pointerEvents:'none',zIndex:2}} />
+          <input value={email} onChange={e=>setEmail(e.target.value)} type="email" autoComplete="email" placeholder="seuemail@daleth.com.br" style={{
             width:'100%',
             height:'54px',
             border:'1px solid #cbd8e6',
             borderRadius:'12px',
-            padding:'0 54px 0 58px',
+            padding:'0 18px 0 58px',
             fontSize:'18px',
             fontWeight:400,
             color:'#061b34',
@@ -571,10 +1072,28 @@ function LoginScreen({onLogin}){
             WebkitAppearance:'none',
             MozAppearance:'none',
             lineHeight:'54px'
-          }}>
-            {ACCESS_USERS.map(u=><option key={u.name} value={u.name}>{u.name} — {u.role}</option>)}
-          </select>
-          <span style={{position:'absolute',right:'18px',top:'50%',transform:'translateY(-50%)',color:'#061b34',fontSize:'24px',lineHeight:1,pointerEvents:'none'}}>⌄</span>
+          }} />
+        </div>
+      </label>
+
+      <label style={{display:'block',marginBottom:'24px'}}>
+        <span style={{display:'block',fontWeight:900,fontSize:'15px',textTransform:'uppercase',letterSpacing:'.06em',color:'#061b34',marginBottom:'12px'}}>Senha</span>
+        <div style={{position:'relative',height:'54px'}}>
+          <Lock size={21} style={{position:'absolute',left:'18px',top:'50%',transform:'translateY(-50%)',color:'#12345a',pointerEvents:'none',zIndex:2}} />
+          <input value={password} onChange={e=>setPassword(e.target.value)} type="password" autoComplete="current-password" placeholder="Sua senha" style={{
+            width:'100%',
+            height:'54px',
+            border:'1px solid #cbd8e6',
+            borderRadius:'12px',
+            padding:'0 18px 0 58px',
+            fontSize:'18px',
+            fontWeight:400,
+            color:'#061b34',
+            background:'#fff',
+            outline:'none',
+            boxShadow:'0 1px 0 rgba(6,27,52,.03)',
+            lineHeight:'54px'
+          }} />
         </div>
       </label>
 
@@ -599,12 +1118,15 @@ function LoginScreen({onLogin}){
           <CheckCircle2 size={30} color="#0b7cff" />
         </div>
         <div>
-          <b style={{display:'block',fontSize:'22px',color:'#061b34',marginBottom:'6px',fontWeight:900}}>{user.role}</b>
-          <span style={{fontSize:'16px',color:'#64748b'}}>{user.canViewDashboard ? 'Acesso completo, incluindo Dashboard executivo.' : 'Acesso operacional, sem Dashboard executivo.'}</span>
+          <b style={{display:'block',fontSize:'22px',color:'#061b34',marginBottom:'6px',fontWeight:900}}>Supabase Auth</b>
+          <span style={{fontSize:'16px',color:'#64748b'}}>Seu perfil e permissões serão carregados da tabela profiles.</span>
         </div>
       </div>
 
-      <button className="saveBtn" onClick={()=>onLogin(user)} style={{
+      {error && <p style={{margin:'0 0 18px',color:'#dc2626',fontWeight:800}}>{error}</p>}
+      {message && <p style={{margin:'0 0 18px',color:'#047857',fontWeight:800}}>{message}</p>}
+
+      <button className="saveBtn" type="submit" disabled={loading} style={{
         width:'100%',
         justifyContent:'center',
         minHeight:'58px',
@@ -613,11 +1135,25 @@ function LoginScreen({onLogin}){
         fontWeight:900,
         background:'linear-gradient(135deg,#0078ff 0%,#005eea 100%)',
         boxShadow:'0 12px 24px rgba(0,110,255,.20)'
-      }}>Entrar →</button>
+      }}>{loading ? 'Entrando...' : 'Entrar'}</button>
+
+      <button type="button" onClick={sendPasswordReset} disabled={resetLoading} style={{
+        width:'100%',
+        marginTop:'14px',
+        minHeight:'44px',
+        border:'1px solid #cbd8e6',
+        borderRadius:'12px',
+        background:'#ffffff',
+        color:'#075fb8',
+        fontSize:'16px',
+        fontWeight:900,
+        cursor:'pointer'
+      }}>{resetLoading ? 'Enviando...' : 'Esqueci minha senha'}</button>
+      </form>
 
       <div style={{height:'1px',background:'#dbe7f3',margin:'28px 0 18px'}} />
       <p style={{display:'flex',alignItems:'center',gap:'14px',fontSize:'15px',color:'#64748b',margin:0}}>
-        <Lock size={19} /> Controle provisório de perfis. A segurança real será feita na etapa Supabase Auth.
+        <Lock size={19} /> Acesso protegido pelo Supabase Auth.
       </p>
     </section>
   </div>;
@@ -694,7 +1230,7 @@ function App(){
   const [activities,setActivities] = useActivities();
   const [notes,setNotes] = useNotes();
   const [interactions,setInteractions] = useStore('dsh-v1-interactions', initialInteractions);
-  const [contracts,setContracts] = useStore('dsh-v1-contracts', initialContracts);
+  const [contracts,setContracts] = useContracts();
   const [products,setProducts] = useProducts();
   const [pipedriveImportMeta,setPipedriveImportMeta] = useStore('dsh-v1-pipedrive-import-meta', null);
   const [stages,setStages] = useStore('dsh-v1-stages', STAGES);
@@ -703,18 +1239,63 @@ function App(){
   const [selectedContactId,setSelectedContactId] = useState(null);
   const [selectedActivityId,setSelectedActivityId] = useState(null);
   const [selectedProductName,setSelectedProductName] = useState(null);
+  const [authReady,setAuthReady] = useState(false);
 
+  useEffect(() => {
+    let active = true;
+
+    async function restoreSession(){
+      try {
+        const { data } = await supabase.auth.getSession();
+        const authUser = data?.session?.user;
+        if(authUser){
+          const profile = await loadUserProfile(authUser);
+          if(active) setCurrentUser(profile);
+        } else if(active) {
+          setCurrentUser(null);
+        }
+      } catch (error) {
+        console.warn('Falha ao restaurar sessão Supabase:', error);
+      } finally {
+        if(active) setAuthReady(true);
+      }
+    }
+
+    restoreSession();
+
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if(!active) return;
+      if(session?.user){
+        try {
+          const profile = await loadUserProfile(session.user);
+          if(active) setCurrentUser(profile);
+        } catch (error) {
+          console.warn('Falha ao carregar perfil Supabase:', error);
+        }
+      } else {
+        setCurrentUser(null);
+      }
+    });
+
+    return () => {
+      active = false;
+      listener?.subscription?.unsubscribe?.();
+    };
+  }, []);
+
+  if(!authReady) return <div className="app" style={{minHeight:'100vh',display:'grid',placeItems:'center',background:'#f6f8fb',color:'#061b34',fontWeight:900}}>Carregando acesso...</div>;
   if(!currentUser) return <LoginScreen onLogin={setCurrentUser}/>;
   const selectedDeal = byId(deals, selectedDealId);
   const selectedCompany = byId(companies, selectedCompanyId);
   const selectedContact = byId(contacts, selectedContactId);
   const selectedActivity = byId(activities, selectedActivityId);
   const isCEO = currentUser?.canViewDashboard === true;
+  const canWrite = ['CEO','Comercial'].includes(currentUser?.role);
   const allMenu = [
     ['dashboard','Dashboard',LayoutDashboard], ['pipeline','Pipeline',KanbanSquare], ['deals','Oportunidades',BriefcaseBusiness],
-    ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['companies','Empresas',Building2], ['contacts','Contatos',Users], ['products','Produtos',Sparkles], ['imports','Importação',Filter], ['matrix','Matriz Daleth',Sparkles]
+    ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['companies','Empresas',Building2], ['contacts','Contatos',Users], ['products','Produtos',Sparkles], ['imports','Importação',Filter], ['profiles','Perfis',Users], ['matrix','Matriz Daleth',Sparkles]
   ];
-  const menu = isCEO ? allMenu : allMenu.filter(([id]) => !['dashboard','imports'].includes(id));
+  const menu = isCEO ? allMenu : allMenu.filter(([id]) => !['dashboard','imports','profiles'].includes(id));
   const activePage = (!isCEO && page === 'dashboard') ? 'deals' : page;
   const pendingActivities = activities.filter(a => a.status !== 'Concluída');
   const overdueCount = pendingActivities.filter(a => a.dueDate && a.dueDate < today()).length;
@@ -725,7 +1306,14 @@ function App(){
   ).length;
   const alertTotal = overdueCount + meetingsTodayCount + proposalsWithoutFollowup;
   const alertText = `${overdueCount} atividades vencidas · ${proposalsWithoutFollowup} propostas sem follow-up · ${meetingsTodayCount} reuniões hoje`;
-  const context = { currentUser, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,contracts,setContracts,products,setProducts,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName,query };
+  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,contracts,setContracts,products,setProducts,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName,query };
+  const logout = async () => {
+    setQuery('');
+    setSelectedDealId(null);
+    setSelectedProductName(null);
+    await supabase.auth.signOut();
+    setCurrentUser(null);
+  };
   const navigate = (id) => {
     setPage(id);
     setQuery('');
@@ -743,14 +1331,14 @@ function App(){
       <div className="sidebarBox"><b>Perfil ativo</b><span>{currentUser.name} · {currentUser.role}</span></div>
     </aside>
     <main className="main">
-      <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresas, contatos e oportunidades..."/></div><div className="notification"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></div><div className="notification" style={{minWidth:'150px'}}><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><button className="mini" onClick={()=>{ setQuery(''); setSelectedDealId(null); setSelectedProductName(null); setCurrentUser(null); }}><X size={15}/>Sair</button></div></header>
+      <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresas, contatos e oportunidades..."/></div><div className="notification"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></div><div className="notification" style={{minWidth:'150px'}}><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><button className="mini" onClick={logout}><X size={15}/>Sair</button></div></header>
       {selectedDeal ? <DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/> : (query.trim() ? <GlobalSearch {...context}/> : <>
-        {activePage==='dashboard' && isCEO && <Dashboard {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='companies' && <Companies {...context}/>} {activePage==='contacts' && <Contacts {...context}/>} {activePage==='products' && <Products {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='matrix' && <Matrix {...context}/>}    
+        {activePage==='dashboard' && isCEO && <Dashboard {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='companies' && <Companies {...context}/>} {activePage==='contacts' && <Contacts {...context}/>} {activePage==='products' && <Products {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>} {activePage==='matrix' && <Matrix {...context}/>}    
       </>)}
     </main>
-    {selectedCompany && <CompanyModal company={selectedCompany} companies={companies} setCompanies={setCompanies} contacts={contacts} setSelectedContactId={setSelectedContactId} onClose={()=>setSelectedCompanyId(null)}/>}
-    {selectedContact && <ContactModal contact={selectedContact} contacts={contacts} setContacts={setContacts} companies={companies} setSelectedCompanyId={setSelectedCompanyId} onClose={()=>setSelectedContactId(null)}/>}
-    {selectedActivity && <ActivityModal activity={selectedActivity} activities={activities} setActivities={setActivities} deals={deals} onClose={()=>setSelectedActivityId(null)}/>}  
+    {selectedCompany && <CompanyModal company={selectedCompany} companies={companies} setCompanies={setCompanies} contacts={contacts} setSelectedContactId={setSelectedContactId} canWrite={canWrite} onClose={()=>setSelectedCompanyId(null)}/>}
+    {selectedContact && <ContactModal contact={selectedContact} contacts={contacts} setContacts={setContacts} companies={companies} setSelectedCompanyId={setSelectedCompanyId} canWrite={canWrite} onClose={()=>setSelectedContactId(null)}/>}
+    {selectedActivity && <ActivityModal activity={selectedActivity} activities={activities} setActivities={setActivities} deals={deals} canWrite={canWrite} onClose={()=>setSelectedActivityId(null)}/>}  
     {selectedProductName && <ProductInfoModal product={selectedProductName} onClose={()=>setSelectedProductName(null)}/>}
   </div>;
 }
@@ -1057,14 +1645,25 @@ function MiniMetric({icon:Icon,label,value,onClick,active=false}){
 function Panel({title,children}){ return <section className="panel"><h2>{title}</h2>{children}</section>; }
 function DashboardTable({headers,children}){ return <div className="tableWrap dashboardTable"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
 
-function Pipeline({stages,setStages,deals,setDeals,companies,setSelectedDealId}){
+function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelectedDealId,canWrite}){
   const [newStage,setNewStage] = useState('');
   const [selectedStage,setSelectedStage] = useState(null);
-  const move = (deal, stage) => setDeals(deals.map(d => sameId(d.id,deal.id) ? {...d, stage} : d));
+  const move = async (deal, stage) => {
+    if(!canWrite) return;
+    const nextDeal = {...deal, stage};
+    setDeals(deals.map(d => sameId(d.id,deal.id) ? nextDeal : d));
+    try {
+      const saved = await saveDealToSupabase(nextDeal, companies, contacts);
+      setDeals(deals.map(d => sameId(d.id,deal.id) ? saved : d));
+    } catch (error) {
+      console.warn('Falha ao atualizar etapa no Supabase:', error);
+      window.alert('Etapa alterada localmente. O Supabase não aceitou a atualização agora.');
+    }
+  };
   const stageDeals = selectedStage ? deals.filter(d=>d.stage===selectedStage) : [];
   return <>
-    <div className="toolbar"><input placeholder="Nova etapa customizável" value={newStage} onChange={e=>setNewStage(e.target.value)}/><button onClick={()=>{ if(newStage.trim()){ setStages([...stages,newStage.trim()]); setNewStage(''); }}}><Plus size={16}/>Adicionar etapa</button></div>
-    <section className="kanban">{stages.map(stage => <div className="column" key={stage}><h3 onClick={()=>setSelectedStage(stage)} style={{cursor:'pointer'}} title="Clique para listar as oportunidades desta etapa">{stage}<small>{deals.filter(d=>d.stage===stage).length}</small></h3>{deals.filter(d=>d.stage===stage).map(d => <article className="dealCard" key={d.id}><div onClick={()=>setSelectedDealId(d.id)}><b>{d.title}</b><span>{byId(companies,d.companyId)?.name || 'Sem empresa'}</span><strong>{money(dealTcv(d))}</strong></div><select value={d.stage} onChange={e=>move(d,e.target.value)}>{stages.map(s=><option key={s}>{s}</option>)}</select></article>)}</div>)}</section>
+    {canWrite && <div className="toolbar"><input placeholder="Nova etapa customizável" value={newStage} onChange={e=>setNewStage(e.target.value)}/><button onClick={()=>{ if(newStage.trim()){ setStages([...stages,newStage.trim()]); setNewStage(''); }}}><Plus size={16}/>Adicionar etapa</button></div>}
+    <section className="kanban">{stages.map(stage => <div className="column" key={stage}><h3 onClick={()=>setSelectedStage(stage)} style={{cursor:'pointer'}} title="Clique para listar as oportunidades desta etapa">{stage}<small>{deals.filter(d=>d.stage===stage).length}</small></h3>{deals.filter(d=>d.stage===stage).map(d => <article className="dealCard" key={d.id}><div onClick={()=>setSelectedDealId(d.id)}><b>{d.title}</b><span>{byId(companies,d.companyId)?.name || 'Sem empresa'}</span><strong>{money(dealTcv(d))}</strong></div><select value={d.stage} onChange={e=>move(d,e.target.value)} disabled={!canWrite}>{stages.map(s=><option key={s}>{s}</option>)}</select></article>)}</div>)}</section>
     {selectedStage && <Panel title={`Oportunidades em ${selectedStage}`}>
       <DashboardTable headers={['Oportunidade','Empresa','Responsável','Valor total','Ações']}>
         {stageDeals.length ? stageDeals.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{byId(companies,d.companyId)?.name || '-'}</td><td>{d.owner || '-'}</td><td>{moneyShort(dealTcv(d))}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade nesta etapa</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
@@ -1074,7 +1673,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,setSelectedDealId})
   </>;
 }
 
-function Deals({deals,setDeals,companies,contacts,products,stages,setSelectedDealId,query}){
+function Deals({deals,setDeals,companies,contacts,products,stages,setSelectedDealId,query,canWrite}){
   const empty = { title:'', companyId:companies[0]?.id||'', contactId:'', product:'SAC+', value:0, setup:0, contractMonths:12, stage:stages[0], owner:'Sergio', probability:30, closeDate:'', description:'', nextStep:'', priority:'Média' };
   const [form,setFormBase] = useState(empty);
   const [filters,setFilters] = useState({ companyId:'', product:'', stage:'', owner:'' });
@@ -1096,11 +1695,41 @@ function Deals({deals,setDeals,companies,contacts,products,stages,setSelectedDea
     const matchesOwner = !filters.owner || d.owner === filters.owner;
     return matchesQuery && matchesCompany && matchesProduct && matchesStage && matchesOwner;
   });
-  const add = () => { if(!form.title.trim()) return; setDeals([{...form,id:Date.now(),value:Number(form.value),setup:Number(form.setup),contractMonths:Number(form.contractMonths||12),probability:Number(form.probability||30)},...deals]); setFormBase(empty); };
-  const removeDeal = (id) => { if(!window.confirm('Deseja realmente excluir esta oportunidade?')) return; setDeals(deals.filter(d => !sameId(d.id,id))); };
+  const add = async () => {
+    if(!canWrite) return;
+    if(!form.title.trim()) return;
+    const nextDeal = {
+      ...form,
+      value: Number(form.value),
+      setup: Number(form.setup),
+      contractMonths: Number(form.contractMonths || 12),
+      probability: Number(form.probability || 30)
+    };
+    try {
+      const saved = await saveDealToSupabase(nextDeal, companies, contacts);
+      setDeals([saved,...deals]);
+      setFormBase(empty);
+    } catch (error) {
+      console.warn('Falha ao salvar oportunidade no Supabase:', error);
+      setDeals([{...nextDeal,id:Date.now()},...deals]);
+      setFormBase(empty);
+      window.alert('Oportunidade salva localmente. O Supabase não aceitou a gravação agora.');
+    }
+  };
+  const removeDeal = async (deal) => {
+    if(!canWrite) return;
+    if(!window.confirm('Deseja realmente excluir esta oportunidade?')) return;
+    try {
+      await deleteDealFromSupabase(deal);
+      setDeals(deals.filter(d => !sameId(d.id,deal.id)));
+    } catch (error) {
+      console.warn('Falha ao excluir oportunidade no Supabase:', error);
+      window.alert('Não foi possível excluir esta oportunidade no Supabase agora.');
+    }
+  };
   const clearFilters = () => setFilters({ companyId:'', product:'', stage:'', owner:'' });
   return <>
-    <Panel title="Nova oportunidade"><div className="formGrid"><Input label="Título" field="title" form={form} setForm={setForm}/><Select label="Empresa" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Contato" field="contactId" form={form} setForm={setForm} options={[["", availableContacts.length ? "Selecione" : "Sem contatos desta empresa"],...availableContacts.map(c=>[c.id,c.name])]}/><Select label="Produto" field="product" form={form} setForm={setForm} options={safeArray(products).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={form} setForm={setForm} type="number"/><Input label="Implantação" field="setup" form={form} setForm={setForm} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/><Input label="Probabilidade %" field="probability" form={form} setForm={setForm} type="number"/><Select label="Etapa" field="stage" form={form} setForm={setForm} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={form} setForm={setForm} options={USERS.map(u=>[u,u])}/><Input label="Fechamento previsto" field="closeDate" form={form} setForm={setForm} type="date"/><label><span>Valor total do contrato</span><input value={money(dealTcv(form))} readOnly/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Criar oportunidade</button></div></Panel>
+    {canWrite && <Panel title="Nova oportunidade"><div className="formGrid"><Input label="Título" field="title" form={form} setForm={setForm}/><Select label="Empresa" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Contato" field="contactId" form={form} setForm={setForm} options={[["", availableContacts.length ? "Selecione" : "Sem contatos desta empresa"],...availableContacts.map(c=>[c.id,c.name])]}/><Select label="Produto" field="product" form={form} setForm={setForm} options={safeArray(products).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={form} setForm={setForm} type="number"/><Input label="Implantação" field="setup" form={form} setForm={setForm} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/><Input label="Probabilidade %" field="probability" form={form} setForm={setForm} type="number"/><Select label="Etapa" field="stage" form={form} setForm={setForm} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={form} setForm={setForm} options={USERS.map(u=>[u,u])}/><Input label="Fechamento previsto" field="closeDate" form={form} setForm={setForm} type="date"/><label><span>Valor total do contrato</span><input value={money(dealTcv(form))} readOnly/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Criar oportunidade</button></div></Panel>}
     <Panel title="Filtros de oportunidades"><div className="formGrid">
       <Select label="Empresa" field="companyId" form={filters} setForm={setFilters} options={[["","Todas"],...safeArray(companies).map(c=>[c.id,c.name])]}/>
       <Select label="Produto" field="product" form={filters} setForm={setFilters} options={[["","Todos"],...safeArray(products).map(p=>[p,p])]}/>
@@ -1108,11 +1737,11 @@ function Deals({deals,setDeals,companies,contacts,products,stages,setSelectedDea
       <Select label="Responsável" field="owner" form={filters} setForm={setFilters} options={[["","Todos"],...USERS.map(u=>[u,u])]}/>
       <button className="saveBtn" onClick={clearFilters}><Filter size={16}/>Limpar filtros</button>
     </div></Panel>
-    <Panel title={`Oportunidades (${list.length})`}><Table headers={['Oportunidade','Empresa','Produto','Receita mensal','Prazo','Valor total','Etapa','Responsável','Ações']}>{list.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{byId(companies,d.companyId)?.name}</td><td>{d.product}</td><td>{money(dealMrr(d))}</td><td>{dealMonths(d)} meses</td><td><b>{money(dealTcv(d))}</b></td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button><button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d.id)}}><Trash2 size={15}/>Excluir</button></div></td></tr>)}</Table></Panel>
+    <Panel title={`Oportunidades (${list.length})`}><Table headers={['Oportunidade','Empresa','Produto','Receita mensal','Prazo','Valor total','Etapa','Responsável','Ações']}>{list.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{byId(companies,d.companyId)?.name}</td><td>{d.product}</td><td>{money(dealMrr(d))}</td><td>{dealMonths(d)} meses</td><td><b>{money(dealTcv(d))}</b></td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table></Panel>
   </>;
 }
 
-function DealDetailPage({deal,onBack,currentUser,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,setSelectedCompanyId,setSelectedContactId,setSelectedProductName}){
+function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,setSelectedCompanyId,setSelectedContactId,setSelectedProductName}){
   const [tab,setTab] = useState('dados');
   const [draft,setDraft] = useState({contractMonths:12, setup:0, probability:30, ...deal});
   const [note,setNote] = useState('');
@@ -1161,13 +1790,59 @@ function DealDetailPage({deal,onBack,currentUser,companies=[],contacts=[],deals=
   const latest = timeline[0];
   const latestNext = timeline.find(t=>t.nextAction);
 
-  const save = () => {
-    setDeals(deals.map(d=>sameId(d.id,deal.id) ? {...draft,value:Number(draft.value),setup:Number(draft.setup),contractMonths:Number(draft.contractMonths||12),probability:Number(draft.probability||30)} : d));
-    window.alert('Alterações salvas.');
+  const save = async () => {
+    if(!canWrite) return;
+    const nextDeal = {
+      ...draft,
+      value: Number(draft.value),
+      setup: Number(draft.setup),
+      contractMonths: Number(draft.contractMonths || 12),
+      probability: Number(draft.probability || 30)
+    };
+    try {
+      const saved = await saveDealToSupabase(nextDeal, companies, contacts);
+      setDeals(deals.map(d=>sameId(d.id,deal.id) ? saved : d));
+      setDraft(saved);
+      window.alert('Alterações salvas.');
+    } catch (error) {
+      console.warn('Falha ao atualizar oportunidade no Supabase:', error);
+      setDeals(deals.map(d=>sameId(d.id,deal.id) ? nextDeal : d));
+      setDraft(nextDeal);
+      window.alert('Alterações salvas localmente. O Supabase não aceitou a atualização agora.');
+    }
   };
-  const addNote = () => { if(!note.trim()) return; setNotes([{id:Date.now(),dealId:deal.id,user:currentUser?.name || 'Sergio',date:today(),text:note},...notes]); setNote(''); };
-  const addActivity = () => { if(!activity.title.trim()) return; setActivities([{...activity,id:Date.now(),dealId:deal.id},...activities]); setActivity({...activity,title:'',notes:''}); };
+  const addNote = async () => {
+    if(!canWrite) return;
+    if(!note.trim()) return;
+    const nextNote = {dealId:deal.id,user:currentUser?.name || 'Sergio',date:today(),text:note};
+    try {
+      const saved = await saveNoteToSupabase(nextNote, deals);
+      setNotes([saved,...notes]);
+      setNote('');
+    } catch (error) {
+      console.warn('Falha ao salvar nota no Supabase:', error);
+      setNotes([{...nextNote,id:Date.now()},...notes]);
+      setNote('');
+      window.alert('Nota salva localmente. O Supabase não aceitou a gravação agora.');
+    }
+  };
+  const addActivity = async () => {
+    if(!canWrite) return;
+    if(!activity.title.trim()) return;
+    const nextActivity = {...activity,dealId:deal.id};
+    try {
+      const saved = await saveActivityToSupabase(nextActivity, deals);
+      setActivities([saved,...activities]);
+      setActivity({...activity,title:'',notes:''});
+    } catch (error) {
+      console.warn('Falha ao salvar atividade no Supabase:', error);
+      setActivities([{...nextActivity,id:Date.now()},...activities]);
+      setActivity({...activity,title:'',notes:''});
+      window.alert('Atividade salva localmente. O Supabase não aceitou a gravação agora.');
+    }
+  };
   const addInteraction = () => {
+    if(!canWrite) return;
     if(!interaction.description.trim()) return;
     setInteractions([{...interaction,id:Date.now(),dealId:deal.id,createdAt:new Date().toISOString()},...safeArray(interactions)]);
     if(interaction.nextAction.trim()){
@@ -1215,10 +1890,10 @@ function DealDetailPage({deal,onBack,currentUser,companies=[],contacts=[],deals=
 
     <div className="tabs" style={{marginBottom:'18px'}}>{['dados','historico','atividades','contrato','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t === 'dados' ? 'Dados' : t === 'historico' ? 'Histórico' : t === 'atividades' ? 'Atividades' : t === 'contrato' ? 'Contrato' : 'Matriz'}</button>)}</div>
 
-    {tab==='dados' && <Panel title="Dados da oportunidade"><div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={safeArray(products).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><Input label="Probabilidade %" field="probability" form={draft} setForm={setDraft} type="number"/><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/><button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button></div></Panel>}
+    {tab==='dados' && <Panel title="Dados da oportunidade"><div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={safeArray(products).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><Input label="Probabilidade %" field="probability" form={draft} setForm={setDraft} type="number"/><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div></Panel>}
 
     {tab==='historico' && <>
-      <Panel title="Nova interação"><div className="formGrid modalGrid">
+      {canWrite && <Panel title="Nova interação"><div className="formGrid modalGrid">
         <Select label="Tipo" field="type" form={interaction} setForm={setInteraction} options={['Ligação','Reunião','E-mail','WhatsApp','Anotação'].map(x=>[x,x])}/>
         <Input label="Data e hora" field="dateTime" form={interaction} setForm={setInteraction} type="datetime-local"/>
         <Select label="Responsável" field="owner" form={interaction} setForm={setInteraction} options={USERS.map(u=>[u,u])}/>
@@ -1226,13 +1901,13 @@ function DealDetailPage({deal,onBack,currentUser,companies=[],contacts=[],deals=
         <Input label="Prazo da próxima ação" field="nextDueDate" form={interaction} setForm={setInteraction} type="date"/>
         <Textarea label="Descrição da tratativa" field="description" form={interaction} setForm={setInteraction}/>
         <button className="saveBtn" onClick={addInteraction}><MessageSquare size={16}/>Registrar interação</button>
-      </div></Panel>
+      </div></Panel>}
       <Panel title="Linha do tempo da oportunidade">
         <div className="timeline">{timeline.length ? timeline.map(item=><div className="timelineItem" key={item.id}><b>{interactionIcon(item.type)} {item.type}</b><span>{formatDateTime(item.date)} · {item.owner}</span><p>{item.description}</p>{item.nextAction && <p><b>Próxima ação:</b> {item.nextAction}{item.nextDueDate ? ` · Prazo: ${formatDate(item.nextDueDate)}` : ''}</p>}</div>) : <p className="muted">Nenhuma tratativa registrada ainda.</p>}</div>
       </Panel>
     </>}
 
-    {tab==='atividades' && <Panel title="Atividades da oportunidade"><div className="formGrid"><Select label="Tipo" field="type" form={activity} setForm={setActivity} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={activity} setForm={setActivity}/><Input label="Data" field="dueDate" form={activity} setForm={setActivity} type="date"/><Select label="Responsável" field="owner" form={activity} setForm={setActivity} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={activity} setForm={setActivity}/><button className="saveBtn" onClick={addActivity}><Plus size={16}/>Criar atividade</button></div><div className="timeline">{dealActivities.map(a=><div className="timelineItem" key={a.id}><b>{a.type}: {a.title}</b><span>{formatDate(a.dueDate)} · {a.owner} · {a.status}</span><p>{a.notes}</p></div>)}</div></Panel>}
+    {tab==='atividades' && <Panel title="Atividades da oportunidade">{canWrite && <div className="formGrid"><Select label="Tipo" field="type" form={activity} setForm={setActivity} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={activity} setForm={setActivity}/><Input label="Data" field="dueDate" form={activity} setForm={setActivity} type="date"/><Select label="Responsável" field="owner" form={activity} setForm={setActivity} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={activity} setForm={setActivity}/><button className="saveBtn" onClick={addActivity}><Plus size={16}/>Criar atividade</button></div>}<div className="timeline">{dealActivities.map(a=><div className="timelineItem" key={a.id}><b>{a.type}: {a.title}</b><span>{formatDate(a.dueDate)} · {a.owner} · {a.status}</span><p>{a.notes}</p></div>)}</div></Panel>}
 
     {tab==='contrato' && <Panel title="Resumo Comercial"><div className="formGrid modalGrid">
 <label><span>Empresa</span><input value={company?.name || ''} readOnly/></label>
@@ -1254,9 +1929,53 @@ function DealModal({deal,onClose,companies=[],contacts=[],deals=[],setDeals,acti
   const [draft,setDraft] = useState({contractMonths:12, setup:0, probability:30, ...deal});
   const [note,setNote] = useState('');
   const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),owner:deal.owner,status:'Pendente',notes:''});
-  const save = () => { setDeals(deals.map(d=>sameId(d.id,deal.id) ? {...draft,value:Number(draft.value),setup:Number(draft.setup),contractMonths:Number(draft.contractMonths||12),probability:Number(draft.probability||30)} : d)); onClose(); };
-  const addNote = () => { if(!note.trim()) return; setNotes([{id:Date.now(),dealId:deal.id,user:'Sergio',date:today(),text:note},...notes]); setNote(''); };
-  const addActivity = () => { if(!activity.title.trim()) return; setActivities([{...activity,id:Date.now(),dealId:deal.id},...activities]); setActivity({...activity,title:'',notes:''}); };
+  const save = async () => {
+    const nextDeal = {
+      ...draft,
+      value: Number(draft.value),
+      setup: Number(draft.setup),
+      contractMonths: Number(draft.contractMonths || 12),
+      probability: Number(draft.probability || 30)
+    };
+    try {
+      const saved = await saveDealToSupabase(nextDeal, companies, contacts);
+      setDeals(deals.map(d=>sameId(d.id,deal.id) ? saved : d));
+      onClose();
+    } catch (error) {
+      console.warn('Falha ao atualizar oportunidade no Supabase:', error);
+      setDeals(deals.map(d=>sameId(d.id,deal.id) ? nextDeal : d));
+      onClose();
+      window.alert('Alterações salvas localmente. O Supabase não aceitou a atualização agora.');
+    }
+  };
+  const addNote = async () => {
+    if(!note.trim()) return;
+    const nextNote = {dealId:deal.id,user:'Sergio',date:today(),text:note};
+    try {
+      const saved = await saveNoteToSupabase(nextNote, deals);
+      setNotes([saved,...notes]);
+      setNote('');
+    } catch (error) {
+      console.warn('Falha ao salvar nota no Supabase:', error);
+      setNotes([{...nextNote,id:Date.now()},...notes]);
+      setNote('');
+      window.alert('Nota salva localmente. O Supabase não aceitou a gravação agora.');
+    }
+  };
+  const addActivity = async () => {
+    if(!activity.title.trim()) return;
+    const nextActivity = {...activity,dealId:deal.id};
+    try {
+      const saved = await saveActivityToSupabase(nextActivity, deals);
+      setActivities([saved,...activities]);
+      setActivity({...activity,title:'',notes:''});
+    } catch (error) {
+      console.warn('Falha ao salvar atividade no Supabase:', error);
+      setActivities([{...nextActivity,id:Date.now()},...activities]);
+      setActivity({...activity,title:'',notes:''});
+      window.alert('Atividade salva localmente. O Supabase não aceitou a gravação agora.');
+    }
+  };
   const dealNotes = notes.filter(n=>String(n.dealId)===String(deal.id));
   const dealActivities = activities.filter(a=>String(a.dealId)===String(deal.id));
   return <div className="modalBackdrop"><div className="modal"><div className="modalHead"><div><h2>{deal.title}</h2><span>{byId(companies,deal.companyId)?.name} · Receita mensal {money(dealMrr(deal))} · Valor total {money(dealTcv(deal))}</span></div><button className="iconBtn" onClick={onClose}><X/></button></div><div className="tabs">{['geral','timeline','atividades','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t}</button>)}</div>
@@ -1278,31 +1997,100 @@ function DealModal({deal,onClose,companies=[],contacts=[],deals=[],setDeals,acti
   </div></div>;
 }
 
-function Activities({activities,setActivities,deals,query,setSelectedActivityId}){
+function Activities({activities,setActivities,deals,query,setSelectedActivityId,canWrite}){
   const list = activities.filter(a => (a.title+a.type+a.owner+a.status).toLowerCase().includes(query.toLowerCase()));
-  const toggle = (id) => setActivities(activities.map(a=>sameId(a.id,id) ? {...a,status:a.status==='Concluída'?'Pendente':'Concluída'} : a));
-  const removeActivity = (id) => { if(!window.confirm('Deseja realmente excluir esta atividade?')) return; setActivities(activities.filter(a => !sameId(a.id,id))); };
-  return <Panel title="Atividades e follow-ups"><Table headers={['Status','Tipo','Atividade','Oportunidade','Data','Responsável','Ações']}>{list.map(a=><tr key={a.id} onClick={()=>setSelectedActivityId(a.id)} style={{cursor:'pointer'}}><td><button className="mini" onClick={(e)=>{e.stopPropagation(); toggle(a.id)}}>{a.status}</button></td><td>{a.type}</td><td><b>{a.title}</b><span>{a.notes}</span></td><td>{byId(deals,a.dealId)?.title}</td><td>{formatDate(a.dueDate)}</td><td>{a.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedActivityId(a.id)}}><Edit3 size={15}/>Abrir</button><button className="mini" onClick={(e)=>{e.stopPropagation(); removeActivity(a.id)}}><Trash2 size={15}/>Excluir</button></div></td></tr>)}</Table></Panel>;
+  const toggle = async (activity) => {
+    if(!canWrite) return;
+    const nextActivity = {...activity,status:activity.status==='Concluída'?'Pendente':'Concluída'};
+    setActivities(activities.map(a=>sameId(a.id,activity.id) ? nextActivity : a));
+    try {
+      const saved = await saveActivityToSupabase(nextActivity, deals);
+      setActivities(activities.map(a=>sameId(a.id,activity.id) ? saved : a));
+    } catch (error) {
+      console.warn('Falha ao atualizar atividade no Supabase:', error);
+      window.alert('Status alterado localmente. O Supabase não aceitou a atualização agora.');
+    }
+  };
+  const removeActivity = async (activity) => {
+    if(!canWrite) return;
+    if(!window.confirm('Deseja realmente excluir esta atividade?')) return;
+    try {
+      await deleteActivityFromSupabase(activity);
+      setActivities(activities.filter(a => !sameId(a.id,activity.id)));
+    } catch (error) {
+      console.warn('Falha ao excluir atividade no Supabase:', error);
+      window.alert('Não foi possível excluir esta atividade no Supabase agora.');
+    }
+  };
+  return <Panel title="Atividades e follow-ups"><Table headers={['Status','Tipo','Atividade','Oportunidade','Data','Responsável','Ações']}>{list.map(a=><tr key={a.id} onClick={()=>setSelectedActivityId(a.id)} style={{cursor:'pointer'}}><td>{canWrite ? <button className="mini" onClick={(e)=>{e.stopPropagation(); toggle(a)}}>{a.status}</button> : a.status}</td><td>{a.type}</td><td><b>{a.title}</b><span>{a.notes}</span></td><td>{byId(deals,a.dealId)?.title}</td><td>{formatDate(a.dueDate)}</td><td>{a.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedActivityId(a.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeActivity(a)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table></Panel>;
 }
 
-function Companies({companies,setCompanies,query,setSelectedCompanyId}){
+function Companies({companies,setCompanies,query,setSelectedCompanyId,canWrite}){
   const empty = { name:'', segment:'', cnpj:'', site:'', status:'Prospect', phone:'', email:'', notes:'' };
   const [form,setForm] = useState(empty);
   const list = companies.filter(c => (c.name+c.segment+c.site+c.status).toLowerCase().includes(query.toLowerCase())).sort((a,b)=>String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'));;
-  const add = () => { if(!form.name.trim()) return; setCompanies([{...form,id:Date.now()},...companies]); setForm(empty); };
-  const removeCompany = (id) => { if(!window.confirm('Deseja realmente excluir esta empresa?')) return; setCompanies(companies.filter(c => !sameId(c.id,id))); };
-  return <><Panel title="Nova empresa"><div className="formGrid"><Input label="Nome fantasia" field="name" form={form} setForm={setForm}/><Input label="Segmento" field="segment" form={form} setForm={setForm}/><Input label="Site" field="site" form={form} setForm={setForm}/><Input label="CNPJ" field="cnpj" form={form} setForm={setForm}/><button className="saveBtn" onClick={add}><Plus size={16}/>Salvar empresa</button></div></Panel><Panel title="Empresas"><Table headers={['Empresa','Segmento','Site','Status','Ações']}>{list.map(c=><tr key={c.id} onClick={()=>setSelectedCompanyId(c.id)} style={{cursor:'pointer'}}><td><b>{c.name}</b><span>{c.notes}</span></td><td>{c.segment}</td><td>{c.site}</td><td><span className="pill">{c.status}</span></td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedCompanyId(c.id)}}><Edit3 size={15}/>Abrir</button><button className="mini" onClick={(e)=>{e.stopPropagation(); removeCompany(c.id)}}><Trash2 size={15}/>Excluir</button></div></td></tr>)}</Table></Panel></>;
+  const add = async () => {
+    if(!canWrite) return;
+    if(!form.name.trim()) return;
+    try {
+      const saved = await saveCompanyToSupabase(form);
+      setCompanies([saved,...companies]);
+      setForm(empty);
+    } catch (error) {
+      console.warn('Falha ao salvar empresa no Supabase:', error);
+      const fallback = {...form,id:Date.now()};
+      setCompanies([fallback,...companies]);
+      setForm(empty);
+      window.alert('Empresa salva localmente. O Supabase não aceitou a gravação agora.');
+    }
+  };
+  const removeCompany = async (company) => {
+    if(!canWrite) return;
+    if(!window.confirm('Deseja realmente excluir esta empresa?')) return;
+    try {
+      await deleteCompanyFromSupabase(company);
+      setCompanies(companies.filter(c => !sameId(c.id,company.id)));
+    } catch (error) {
+      console.warn('Falha ao excluir empresa no Supabase:', error);
+      window.alert('Não foi possível excluir esta empresa no Supabase agora.');
+    }
+  };
+  return <>{canWrite && <Panel title="Nova empresa"><div className="formGrid"><Input label="Nome fantasia" field="name" form={form} setForm={setForm}/><Input label="Segmento" field="segment" form={form} setForm={setForm}/><Input label="Site" field="site" form={form} setForm={setForm}/><Input label="CNPJ" field="cnpj" form={form} setForm={setForm}/><button className="saveBtn" onClick={add}><Plus size={16}/>Salvar empresa</button></div></Panel>}<Panel title="Empresas"><Table headers={['Empresa','Segmento','Site','Status','Ações']}>{list.map(c=><tr key={c.id} onClick={()=>setSelectedCompanyId(c.id)} style={{cursor:'pointer'}}><td><b>{c.name}</b><span>{c.notes}</span></td><td>{c.segment}</td><td>{c.site}</td><td><span className="pill">{c.status}</span></td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedCompanyId(c.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeCompany(c)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table></Panel></>;
 }
-function Contacts({contacts,setContacts,companies,query,setSelectedContactId}){
+function Contacts({contacts,setContacts,companies,query,setSelectedContactId,canWrite}){
   const empty = { companyId:companies[0]?.id||'', name:'', role:'', email:'', phone:'', whatsapp:'', type:'Decisor', linkedin:'', notes:'' };
   const [form,setForm] = useState(empty);
   const list = contacts.filter(c => (c.name+c.role+c.email+c.phone+c.whatsapp).toLowerCase().includes(query.toLowerCase())).sort((a,b)=>String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'));
-  const add = () => { if(!form.name.trim()) return; setContacts([{...form,id:Date.now()},...contacts]); setForm(empty); };
-  const removeContact = (id) => { if(!window.confirm('Deseja realmente excluir este contato?')) return; setContacts(contacts.filter(c => !sameId(c.id,id))); };
-  return <><Panel title="Novo contato"><div className="formGrid"><Input label="Nome" field="name" form={form} setForm={setForm}/><Select label="Empresa" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Input label="Cargo" field="role" form={form} setForm={setForm}/><Input label="E-mail" field="email" form={form} setForm={setForm}/><Input label="Telefone" field="phone" form={form} setForm={setForm}/><button className="saveBtn" onClick={add}><Plus size={16}/>Salvar contato</button></div></Panel><Panel title="Contatos"><Table headers={['Contato','Empresa','Cargo','E-mail','Telefone','Tipo','Ações']}>{list.map(c=><tr key={c.id} onClick={()=>setSelectedContactId(c.id)} style={{cursor:'pointer'}}><td><b>{c.name}</b></td><td>{byId(companies,c.companyId)?.name}</td><td>{c.role}</td><td>{c.email}</td><td>{c.phone}</td><td>{c.type}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedContactId(c.id)}}><Edit3 size={15}/>Abrir</button><button className="mini" onClick={(e)=>{e.stopPropagation(); removeContact(c.id)}}><Trash2 size={15}/>Excluir</button></div></td></tr>)}</Table></Panel></>;
+  const add = async () => {
+    if(!canWrite) return;
+    if(!form.name.trim()) return;
+    try {
+      const saved = await saveContactToSupabase(form, companies);
+      setContacts([saved,...contacts]);
+      setForm(empty);
+    } catch (error) {
+      console.warn('Falha ao salvar contato no Supabase:', error);
+      const fallback = {...form,id:Date.now()};
+      setContacts([fallback,...contacts]);
+      setForm(empty);
+      window.alert('Contato salvo localmente. O Supabase não aceitou a gravação agora.');
+    }
+  };
+  const removeContact = async (contact) => {
+    if(!canWrite) return;
+    if(!window.confirm('Deseja realmente excluir este contato?')) return;
+    try {
+      await deleteContactFromSupabase(contact);
+      setContacts(contacts.filter(c => !sameId(c.id,contact.id)));
+    } catch (error) {
+      console.warn('Falha ao excluir contato no Supabase:', error);
+      window.alert('Não foi possível excluir este contato no Supabase agora.');
+    }
+  };
+  return <>{canWrite && <Panel title="Novo contato"><div className="formGrid"><Input label="Nome" field="name" form={form} setForm={setForm}/><Select label="Empresa" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Input label="Cargo" field="role" form={form} setForm={setForm}/><Input label="E-mail" field="email" form={form} setForm={setForm}/><Input label="Telefone" field="phone" form={form} setForm={setForm}/><button className="saveBtn" onClick={add}><Plus size={16}/>Salvar contato</button></div></Panel>}<Panel title="Contatos"><Table headers={['Contato','Empresa','Cargo','E-mail','Telefone','Tipo','Ações']}>{list.map(c=><tr key={c.id} onClick={()=>setSelectedContactId(c.id)} style={{cursor:'pointer'}}><td><b>{c.name}</b></td><td>{byId(companies,c.companyId)?.name}</td><td>{c.role}</td><td>{c.email}</td><td>{c.phone}</td><td>{c.type}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedContactId(c.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeContact(c)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table></Panel></>;
 }
 
-function Contracts({contracts,setContracts,deals,companies,products,query}){
+function Contracts({contracts,setContracts,deals,companies,products,query,canWrite}){
   const empty = { companyId:companies[0]?.id||'', dealId:'', product:'SAC+', startDate:today(), endDate:addMonths(today(),12), mrr:0, setup:0, contractMonths:12, owner:'Sergio', status:'Ativo', notes:'' };
   const [form,setForm] = useState(empty);
   const list = contracts.filter(c => {
@@ -1316,19 +2104,39 @@ function Contracts({contracts,setContracts,deals,companies,products,query}){
   const risk90 = expiring90.reduce((s,c)=>s+contractMrr(c),0);
   const wonDeals = deals.filter(d=>d.stage==='Ganho');
 
-  const add = () => {
+  const add = async () => {
+    if(!canWrite) return;
     if(!form.companyId) return;
     const months = Number(form.contractMonths || 12);
-    setContracts([{...form,id:Date.now(),mrr:Number(form.mrr),setup:Number(form.setup),contractMonths:months,endDate:form.endDate || addMonths(form.startDate, months)},...contracts]);
-    setForm(empty);
+    const nextContract = {...form,mrr:Number(form.mrr),setup:Number(form.setup),contractMonths:months,endDate:form.endDate || addMonths(form.startDate, months)};
+    try {
+      const saved = await saveContractToSupabase(nextContract, companies, deals);
+      setContracts([saved,...contracts]);
+      setForm(empty);
+    } catch (error) {
+      console.warn('Falha ao salvar contrato no Supabase:', error);
+      setContracts([{...nextContract,id:Date.now()},...contracts]);
+      setForm(empty);
+      window.alert('Contrato salvo localmente. O Supabase não aceitou a gravação agora.');
+    }
   };
-  const removeContract = (id) => { if(!window.confirm('Deseja realmente excluir este contrato?')) return; setContracts(contracts.filter(c => c.id !== id)); };
-  const importWonDeals = () => {
+  const removeContract = async (contract) => {
+    if(!canWrite) return;
+    if(!window.confirm('Deseja realmente excluir este contrato?')) return;
+    try {
+      await deleteContractFromSupabase(contract);
+      setContracts(contracts.filter(c => !sameId(c.id, contract.id)));
+    } catch (error) {
+      console.warn('Falha ao excluir contrato no Supabase:', error);
+      window.alert('Não foi possível excluir este contrato no Supabase agora.');
+    }
+  };
+  const importWonDeals = async () => {
+    if(!canWrite) return;
     const existingDealIds = new Set(contracts.map(c=>String(c.dealId || '')));
     const newContracts = wonDeals
       .filter(d=>!existingDealIds.has(String(d.id)))
       .map(d=>({
-        id: Date.now() + d.id,
         dealId: d.id,
         companyId: d.companyId,
         product: d.product,
@@ -1342,7 +2150,17 @@ function Contracts({contracts,setContracts,deals,companies,products,query}){
         notes: `Contrato gerado a partir da oportunidade: ${d.title}`
       }));
     if(!newContracts.length){ window.alert('Não há oportunidades ganhas novas para converter em contrato.'); return; }
-    setContracts([...newContracts,...contracts]);
+    try {
+      const savedContracts = [];
+      for(const contract of newContracts){
+        savedContracts.push(await saveContractToSupabase(contract, companies, deals));
+      }
+      setContracts([...savedContracts,...contracts]);
+    } catch (error) {
+      console.warn('Falha ao gerar contratos no Supabase:', error);
+      setContracts([...newContracts.map((c,index)=>({...c,id:Date.now()+index})),...contracts]);
+      window.alert('Contratos gerados localmente. O Supabase não aceitou a gravação agora.');
+    }
   };
 
   return <>
@@ -1353,7 +2171,7 @@ function Contracts({contracts,setContracts,deals,companies,products,query}){
       <Kpi icon={AlertTriangle} label="Receita em risco 90 dias" value={moneyShort(risk90)}/>
     </section>
 
-    <Panel title="Novo contrato"><div className="formGrid">
+    {canWrite && <Panel title="Novo contrato"><div className="formGrid">
       <Select label="Cliente" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/>
       <Select label="Produto" field="product" form={form} setForm={setForm} options={safeArray(products).map(p=>[p,p])}/>
       <Input label="Início do contrato" field="startDate" form={form} setForm={setForm} type="date"/>
@@ -1365,7 +2183,7 @@ function Contracts({contracts,setContracts,deals,companies,products,query}){
       <Select label="Status" field="status" form={form} setForm={setForm} options={['Ativo','Renovando','Encerrado','Suspenso'].map(s=>[s,s])}/>
       <button className="saveBtn" onClick={add}><Plus size={16}/>Criar contrato</button>
       <button className="saveBtn" onClick={importWonDeals}><CheckCircle2 size={16}/>Gerar contratos das oportunidades ganhas</button>
-    </div></Panel>
+    </div></Panel>}
 
     <section className="grid2 compact">
       <Panel title="Contratos vencendo em 90 dias">
@@ -1390,7 +2208,7 @@ function Contracts({contracts,setContracts,deals,companies,products,query}){
     <Panel title="Todos os contratos"><Table headers={['Cliente','Produto','Início','Término','Tempo restante','Receita mensal','Valor total do contrato','Status','Responsável','Ações']}>
       {list.map(c=>{
         const company = byId(companies,c.companyId);
-        return <tr key={c.id}><td><b>{company?.name || 'Sem cliente'}</b><span>{c.notes}</span></td><td>{c.product}</td><td>{formatDate(c.startDate)}</td><td>{formatDate(c.endDate)}</td><td>{monthsRemaining(c.endDate)} meses</td><td>{moneyShort(contractMrr(c))}</td><td>{moneyShort(contractTcv(c))}</td><td><span className="pill">{contractStatus(c)}</span></td><td>{c.owner}</td><td><button className="mini" onClick={()=>removeContract(c.id)}><Trash2 size={15}/>Excluir</button></td></tr>
+        return <tr key={c.id}><td><b>{company?.name || 'Sem cliente'}</b><span>{c.notes}</span></td><td>{c.product}</td><td>{formatDate(c.startDate)}</td><td>{formatDate(c.endDate)}</td><td>{monthsRemaining(c.endDate)} meses</td><td>{moneyShort(contractMrr(c))}</td><td>{moneyShort(contractTcv(c))}</td><td><span className="pill">{contractStatus(c)}</span></td><td>{c.owner}</td><td>{canWrite ? <button className="mini" onClick={()=>removeContract(c)}><Trash2 size={15}/>Excluir</button> : '-'}</td></tr>
       })}
     </Table></Panel>
   </>;
@@ -1398,17 +2216,29 @@ function Contracts({contracts,setContracts,deals,companies,products,query}){
 
 
 
-function CompanyModal({company,onClose,companies,setCompanies,contacts=[],setSelectedContactId}){
+function CompanyModal({company,onClose,companies,setCompanies,contacts=[],setSelectedContactId,canWrite}){
   const [draft,setDraft] = useState({...company});
   const linkedContacts = safeArray(contacts).filter(c=>sameId(c.companyId, company.id));
-  const save = () => { setCompanies(companies.map(c=>sameId(c.id,company.id) ? draft : c)); onClose(); };
+  const save = async () => {
+    if(!canWrite) return;
+    try {
+      const saved = await saveCompanyToSupabase(draft);
+      setCompanies(companies.map(c=>sameId(c.id,company.id) ? saved : c));
+      onClose();
+    } catch (error) {
+      console.warn('Falha ao atualizar empresa no Supabase:', error);
+      setCompanies(companies.map(c=>sameId(c.id,company.id) ? draft : c));
+      onClose();
+      window.alert('Alterações salvas localmente. O Supabase não aceitou a atualização agora.');
+    }
+  };
   const openContact = (id) => {
     if(!setSelectedContactId) return;
     onClose();
     setSelectedContactId(id);
   };
   return <div className="modalBackdrop"><div className="modal"><div className="modalHead"><div><h2>{company.name}</h2><span>Cadastro da empresa</span></div><button className="iconBtn" onClick={onClose}><X/></button></div>
-    <div className="formGrid modalGrid"><Input label="Nome fantasia" field="name" form={draft} setForm={setDraft}/><Input label="Segmento" field="segment" form={draft} setForm={setDraft}/><Input label="CNPJ" field="cnpj" form={draft} setForm={setDraft}/><Input label="Site" field="site" form={draft} setForm={setDraft}/><Input label="Status" field="status" form={draft} setForm={setDraft}/><Input label="Telefone" field="phone" form={draft} setForm={setDraft}/><Input label="E-mail" field="email" form={draft} setForm={setDraft}/><Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/><button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button></div>
+    <div className="formGrid modalGrid"><Input label="Nome fantasia" field="name" form={draft} setForm={setDraft}/><Input label="Segmento" field="segment" form={draft} setForm={setDraft}/><Input label="CNPJ" field="cnpj" form={draft} setForm={setDraft}/><Input label="Site" field="site" form={draft} setForm={setDraft}/><Input label="Status" field="status" form={draft} setForm={setDraft}/><Input label="Telefone" field="phone" form={draft} setForm={setDraft}/><Input label="E-mail" field="email" form={draft} setForm={setDraft}/><Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div>
     <Panel title={`Contatos vinculados (${linkedContacts.length})`}>
       <DashboardTable headers={['Contato','Cargo','E-mail','Telefone / WhatsApp','Tipo','Ações']}>
         {linkedContacts.length ? linkedContacts.map(c=><tr key={c.id} onClick={()=>openContact(c.id)} style={{cursor:'pointer'}}><td><b>{c.name}</b><span>{c.notes}</span></td><td>{c.role || '-'}</td><td>{c.email || '-'}</td><td>{c.whatsapp || c.phone || '-'}</td><td>{c.type || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); openContact(c.id)}}><Edit3 size={15}/>Abrir contato</button></td></tr>) : <tr><td>Nenhum contato vinculado</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
@@ -1417,10 +2247,22 @@ function CompanyModal({company,onClose,companies,setCompanies,contacts=[],setSel
   </div></div>;
 }
 
-function ContactModal({contact,onClose,contacts,setContacts,companies,setSelectedCompanyId}){
+function ContactModal({contact,onClose,contacts,setContacts,companies,setSelectedCompanyId,canWrite}){
   const [draft,setDraft] = useState({...contact});
   const company = byId(companies, draft.companyId);
-  const save = () => { setContacts(contacts.map(c=>sameId(c.id,contact.id) ? draft : c)); onClose(); };
+  const save = async () => {
+    if(!canWrite) return;
+    try {
+      const saved = await saveContactToSupabase(draft, companies);
+      setContacts(contacts.map(c=>sameId(c.id,contact.id) ? saved : c));
+      onClose();
+    } catch (error) {
+      console.warn('Falha ao atualizar contato no Supabase:', error);
+      setContacts(contacts.map(c=>sameId(c.id,contact.id) ? draft : c));
+      onClose();
+      window.alert('Alterações salvas localmente. O Supabase não aceitou a atualização agora.');
+    }
+  };
   const openCompany = () => {
     if(!setSelectedCompanyId || !draft.companyId) return;
     onClose();
@@ -1436,15 +2278,27 @@ function ContactModal({contact,onClose,contacts,setContacts,companies,setSelecte
         <button className="mini" onClick={openCompany} disabled={!company}><Building2 size={15}/>Abrir empresa</button>
       </div>
     </Panel>
-    <div className="formGrid modalGrid"><Input label="Nome" field="name" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Input label="Cargo" field="role" form={draft} setForm={setDraft}/><Input label="E-mail" field="email" form={draft} setForm={setDraft}/><Input label="Telefone" field="phone" form={draft} setForm={setDraft}/><Input label="WhatsApp" field="whatsapp" form={draft} setForm={setDraft}/><Input label="LinkedIn" field="linkedin" form={draft} setForm={setDraft}/><Select label="Tipo" field="type" form={draft} setForm={setDraft} options={['Decisor','Influenciador','Usuário','Financeiro','Outros'].map(x=>[x,x])}/><Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/><button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button></div>
+    <div className="formGrid modalGrid"><Input label="Nome" field="name" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Input label="Cargo" field="role" form={draft} setForm={setDraft}/><Input label="E-mail" field="email" form={draft} setForm={setDraft}/><Input label="Telefone" field="phone" form={draft} setForm={setDraft}/><Input label="WhatsApp" field="whatsapp" form={draft} setForm={setDraft}/><Input label="LinkedIn" field="linkedin" form={draft} setForm={setDraft}/><Select label="Tipo" field="type" form={draft} setForm={setDraft} options={['Decisor','Influenciador','Usuário','Financeiro','Outros'].map(x=>[x,x])}/><Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div>
   </div></div>;
 }
 
-function ActivityModal({activity,onClose,activities,setActivities,deals}){
+function ActivityModal({activity,onClose,activities,setActivities,deals,canWrite}){
   const [draft,setDraft] = useState({...activity});
-  const save = () => { setActivities(activities.map(a=>sameId(a.id,activity.id) ? draft : a)); onClose(); };
+  const save = async () => {
+    if(!canWrite) return;
+    try {
+      const saved = await saveActivityToSupabase(draft, deals);
+      setActivities(activities.map(a=>sameId(a.id,activity.id) ? saved : a));
+      onClose();
+    } catch (error) {
+      console.warn('Falha ao atualizar atividade no Supabase:', error);
+      setActivities(activities.map(a=>sameId(a.id,activity.id) ? draft : a));
+      onClose();
+      window.alert('Alterações salvas localmente. O Supabase não aceitou a atualização agora.');
+    }
+  };
   return <div className="modalBackdrop"><div className="modal"><div className="modalHead"><div><h2>{activity.title}</h2><span>{byId(deals,activity.dealId)?.title || 'Atividade sem oportunidade vinculada'}</span></div><button className="iconBtn" onClick={onClose}><X/></button></div>
-    <div className="formGrid modalGrid"><Select label="Status" field="status" form={draft} setForm={setDraft} options={['Pendente','Concluída'].map(x=>[x,x])}/><Select label="Tipo" field="type" form={draft} setForm={setDraft} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Oportunidade" field="dealId" form={draft} setForm={setDraft} options={[['','Sem oportunidade'],...safeArray(deals).map(d=>[d.id,d.title])]}/><Input label="Data" field="dueDate" form={draft} setForm={setDraft} type="date"/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/><button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button></div>
+    <div className="formGrid modalGrid"><Select label="Status" field="status" form={draft} setForm={setDraft} options={['Pendente','Concluída'].map(x=>[x,x])}/><Select label="Tipo" field="type" form={draft} setForm={setDraft} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Oportunidade" field="dealId" form={draft} setForm={setDraft} options={[['','Sem oportunidade'],...safeArray(deals).map(d=>[d.id,d.title])]}/><Input label="Data" field="dueDate" form={draft} setForm={setDraft} type="date"/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div>
   </div></div>;
 }
 
@@ -1455,10 +2309,11 @@ function ProductInfoModal({product,onClose}){
   </div></div>;
 }
 
-function Products({products,setProducts,query}){
+function Products({products,setProducts,query,canWrite}){
   const [name,setName] = useState('');
   const list = products.filter(p => p.toLowerCase().includes(query.toLowerCase()));
   const add = () => {
+    if(!canWrite) return;
     const clean = name.trim();
     if(!clean) return;
     if(products.some(p => p.toLowerCase() === clean.toLowerCase())){
@@ -1469,14 +2324,63 @@ function Products({products,setProducts,query}){
     setName('');
   };
   const removeProduct = (product) => {
+    if(!canWrite) return;
     if(['SAC+','SAC 24h','Inside Sales','Help Desk','Back Office','Ouvidorias','Custom'].includes(product)){
       if(!window.confirm('Este é um produto padrão. Deseja realmente excluir?')) return;
     } else if(!window.confirm('Deseja realmente excluir este produto?')) return;
     setProducts(products.filter(p => p !== product));
   };
   return <>
-    <Panel title="Cadastro de produtos"><div className="formGrid"><label><span>Novo produto</span><input value={name} onChange={e=>setName(e.target.value)} placeholder="Ex.: Atendimento bilíngue" onKeyDown={e=>{ if(e.key==='Enter') add(); }}/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Adicionar produto</button></div></Panel>
-    <Panel title="Produtos cadastrados"><Table headers={['Produto','Ações']}>{list.map(p=><tr key={p}><td><b>{p}</b></td><td><button className="mini" onClick={()=>removeProduct(p)}><Trash2 size={15}/>Excluir</button></td></tr>)}</Table></Panel>
+    {canWrite && <Panel title="Cadastro de produtos"><div className="formGrid"><label><span>Novo produto</span><input value={name} onChange={e=>setName(e.target.value)} placeholder="Ex.: Atendimento bilíngue" onKeyDown={e=>{ if(e.key==='Enter') add(); }}/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Adicionar produto</button></div></Panel>}
+    <Panel title="Produtos cadastrados"><Table headers={['Produto','Ações']}>{list.map(p=><tr key={p}><td><b>{p}</b></td><td>{canWrite ? <button className="mini" onClick={()=>removeProduct(p)}><Trash2 size={15}/>Excluir</button> : '-'}</td></tr>)}</Table></Panel>
+  </>;
+}
+
+function ProfilesAdmin({currentUser}){
+  const { profiles, setProfiles, loading, error } = useProfiles(currentUser?.canViewDashboard === true);
+  const [status,setStatus] = useState('');
+
+  const updateProfile = async (profile, patch) => {
+    const nextProfile = {
+      ...profile,
+      ...patch
+    };
+
+    if(nextProfile.role === 'CEO') nextProfile.canViewDashboard = true;
+    if(nextProfile.role !== 'CEO') nextProfile.canViewDashboard = false;
+
+    setProfiles(profiles.map(item => sameId(item.id, profile.id) ? nextProfile : item));
+    setStatus('Salvando perfil...');
+
+    try {
+      const saved = await saveProfileToSupabase(nextProfile);
+      setProfiles(profiles.map(item => sameId(item.id, profile.id) ? saved : item));
+      setStatus('Perfil atualizado.');
+    } catch (err) {
+      console.warn('Falha ao atualizar perfil:', err);
+      setStatus('Não foi possível atualizar este perfil.');
+    }
+  };
+
+  return <>
+    <Panel title="Perfis e permissões">
+      <p className="muted">Os usuários são criados no Supabase Auth. Esta tela ajusta o perfil de acesso usado pelo CRM.</p>
+      {loading && <p className="muted">Carregando perfis...</p>}
+      {error && <p style={{color:'#dc2626',fontWeight:800}}>{error}</p>}
+      {status && <p className="muted">{status}</p>}
+      <Table headers={['Usuário','Perfil','Dashboard','Atualizado']}>
+        {profiles.length ? profiles.map(profile => <tr key={profile.id}>
+          <td><b>{profile.name}</b><span>{profile.id}</span></td>
+          <td>
+            <select value={profile.role} onChange={event=>updateProfile(profile, { role:event.target.value })}>
+              {['CEO','Comercial','Reserva'].map(role => <option key={role} value={role}>{role}</option>)}
+            </select>
+          </td>
+          <td>{profile.canViewDashboard ? 'Sim' : 'Não'}</td>
+          <td>{formatDateTime(profile.updatedAt)}</td>
+        </tr>) : <tr><td>Nenhum perfil encontrado</td><td>-</td><td>-</td><td>-</td></tr>}
+      </Table>
+    </Panel>
   </>;
 }
 
@@ -1505,7 +2409,73 @@ function PipedriveImport({
     counts: data?.counts || {}
   });
 
-  const importData = (raw, mode='merge') => {
+  const upsertImportedData = async (data) => {
+    const companiesPayload = data.companies.map(companyToDb);
+    const { data: savedCompaniesRaw, error: companiesError } = await supabase
+      .from('companies')
+      .upsert(companiesPayload, { onConflict: 'legacy_id' })
+      .select('id,name,segment,cnpj,site,website,status,phone,email,notes,legacy_id');
+    if(companiesError) throw companiesError;
+    const savedCompanies = (savedCompaniesRaw || []).map(mapCompanyFromDb);
+
+    const contactsPayload = data.contacts.map(contact => contactToDb(contact, savedCompanies));
+    const { data: savedContactsRaw, error: contactsError } = await supabase
+      .from('contacts')
+      .upsert(contactsPayload, { onConflict: 'legacy_id' })
+      .select(`
+        id,
+        company_id,
+        name,
+        role,
+        email,
+        phone,
+        whatsapp,
+        linkedin,
+        type,
+        contact_type,
+        notes,
+        legacy_id,
+        companies:company_id (
+          legacy_id
+        )
+      `);
+    if(contactsError) throw contactsError;
+    const savedContacts = (savedContactsRaw || []).map(mapContactFromDb);
+
+    const dealsPayload = data.deals.map(deal => dealToDb(deal, savedCompanies, savedContacts));
+    const { data: savedDealsRaw, error: dealsError } = await supabase
+      .from('opportunities')
+      .upsert(dealsPayload, { onConflict: 'legacy_id' })
+      .select(DEAL_SELECT);
+    if(dealsError) throw dealsError;
+    const savedDeals = (savedDealsRaw || []).map(mapDealFromDb);
+
+    const activitiesPayload = data.activities.map(activity => activityToDb(activity, savedDeals));
+    const { data: savedActivitiesRaw, error: activitiesError } = await supabase
+      .from('activities')
+      .upsert(activitiesPayload, { onConflict: 'legacy_id' })
+      .select(ACTIVITY_SELECT);
+    if(activitiesError) throw activitiesError;
+    const savedActivities = (savedActivitiesRaw || []).map(mapActivityFromDb);
+
+    const notesPayload = data.notes.map(note => noteToDb(note, savedDeals));
+    const { data: savedNotesRaw, error: notesError } = await supabase
+      .from('notes')
+      .upsert(notesPayload, { onConflict: 'legacy_id' })
+      .select(NOTE_SELECT);
+    if(notesError) throw notesError;
+    const savedNotes = (savedNotesRaw || []).map(mapNoteFromDb);
+
+    return {
+      companies: savedCompanies,
+      contacts: savedContacts,
+      deals: savedDeals,
+      activities: savedActivities,
+      notes: savedNotes
+    };
+  };
+
+  const importData = async (raw, mode='merge') => {
     const data = normalizeData(raw);
     const counts = {
       companies: data.companies.length,
@@ -1516,18 +2486,43 @@ function PipedriveImport({
     };
 
     if(mode === 'replace'){
-      if(!window.confirm('Substituir a base atual pelos dados importados do Pipedrive? Esta ação troca Empresas, Contatos, Oportunidades, Atividades e Notas.')) return;
-      setCompanies(data.companies);
-      setContacts(data.contacts);
-      setDeals(data.deals);
-      setActivities(data.activities);
-      setNotes(data.notes);
-    } else {
-      setCompanies(mergeById(companies, data.companies));
-      setContacts(mergeById(contacts, data.contacts));
-      setDeals(mergeById(deals, data.deals));
-      setActivities(mergeById(activities, data.activities));
-      setNotes(mergeById(notes, data.notes));
+      if(!window.confirm('Substituir a visualização atual pelos dados importados do Pipedrive? No Supabase, a importação faz upsert por ID legado e não apaga registros fora do arquivo.')) return;
+    }
+
+    try {
+      setStatus('Importando no Supabase: empresas, contatos, oportunidades, atividades e notas...');
+      const saved = await upsertImportedData(data);
+
+      if(mode === 'replace'){
+        setCompanies(saved.companies);
+        setContacts(saved.contacts);
+        setDeals(saved.deals);
+        setActivities(saved.activities);
+        setNotes(saved.notes);
+      } else {
+        setCompanies(mergeById(companies, saved.companies));
+        setContacts(mergeById(contacts, saved.contacts));
+        setDeals(mergeById(deals, saved.deals));
+        setActivities(mergeById(activities, saved.activities));
+        setNotes(mergeById(notes, saved.notes));
+      }
+    } catch (error) {
+      console.warn('Falha ao importar no Supabase:', error);
+      if(mode === 'replace'){
+        setCompanies(data.companies);
+        setContacts(data.contacts);
+        setDeals(data.deals);
+        setActivities(data.activities);
+        setNotes(data.notes);
+      } else {
+        setCompanies(mergeById(companies, data.companies));
+        setContacts(mergeById(contacts, data.contacts));
+        setDeals(mergeById(deals, data.deals));
+        setActivities(mergeById(activities, data.activities));
+        setNotes(mergeById(notes, data.notes));
+      }
+      setStatus('Supabase não aceitou a importação agora. Os dados foram aplicados localmente neste navegador.');
+      return;
     }
 
     const meta = {
@@ -1536,7 +2531,7 @@ function PipedriveImport({
       counts
     };
     setPipedriveImportMeta(meta);
-    setStatus(`Importação concluída: ${counts.companies} empresas, ${counts.contacts} contatos, ${counts.deals} oportunidades, ${counts.activities} atividades e ${counts.notes} notas.`);
+    setStatus(`Importação concluída no Supabase: ${counts.companies} empresas, ${counts.contacts} contatos, ${counts.deals} oportunidades, ${counts.activities} atividades e ${counts.notes} notas.`);
   };
 
   const loadDefaultFile = async () => {

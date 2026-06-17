@@ -1,23 +1,56 @@
-# Daleth Sales Hub Professional V1.1
+# Daleth Sales Hub Professional
 
 CRM comercial interno da Daleth AC.
 
 ## Rodar localmente
 
 ```bash
-cd ~/Downloads/daleth-sales-hub-professional-v1-1
 npm install --legacy-peer-deps
 npm run dev
 ```
 
-Abrir: http://localhost:5173
+Abrir o endereco mostrado pelo terminal, normalmente:
+
+```text
+http://localhost:5173
+```
+
+## Variaveis de ambiente
+
+Crie um arquivo `.env.local` com:
+
+```bash
+VITE_SUPABASE_URL=https://seu-projeto.supabase.co
+VITE_SUPABASE_ANON_KEY=sua-chave-anon-publica
+```
+
+No Vercel, cadastre as mesmas variaveis em:
+
+Project Settings > Environment Variables
+
+## Supabase
+
+Antes de usar em producao:
+
+1. Aplique `supabase/schema.sql` no SQL Editor do Supabase.
+2. Garanta que o usuario CEO exista no Supabase Auth.
+3. Promova o CEO seguindo `supabase/COMO_APLICAR.md`.
+4. Ajuste os demais usuarios na tela `Perfis`.
+5. Importe os dados pela tela `Importacao`.
+
+## Deploy
+
+Configuração esperada no Vercel:
+
+- Build Command: `npm run build`
+- Output Directory: `dist`
+- Variaveis: `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`
+- Dominio: `crm.daleth.com.br`
+
+O arquivo `vercel.json` garante que recarregar qualquer rota do app continue abrindo o CRM.
 
 ## Identidade visual
 
-- Cor principal: #00A0D1
-- Fundo institucional: #061B35
-- Logo vetorial em public/daleth-logo.svg
-
-## Próxima etapa
-
-Conectar Supabase: Auth, PostgreSQL e Row Level Security.
+- Cor principal: `#00A0D1`
+- Fundo institucional: `#061B35`
+- Logo em `public/daleth-logo.svg`
