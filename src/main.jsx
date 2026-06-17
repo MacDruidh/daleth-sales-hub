@@ -869,6 +869,9 @@ function contractStatus(c){
 function fallbackUserFromEmail(email){
   return { name: email?.split('@')[0] || 'Usuário', role: 'Reserva', canViewDashboard: false, email };
 }
+function canRoleViewDashboard(role, explicitPermission = false){
+  return explicitPermission === true || ['CEO','Comercial'].includes(role);
+}
 
 function withTimeout(promise, ms, message){
   return Promise.race([
@@ -898,7 +901,7 @@ async function loadUserProfile(authUser){
       email: authUser.email,
       name: data.full_name || authUser.email,
       role: data.role || 'Comercial',
-      canViewDashboard: data.can_view_dashboard === true
+      canViewDashboard: canRoleViewDashboard(data.role || 'Comercial', data.can_view_dashboard === true)
     };
   }
 
@@ -913,7 +916,7 @@ function mapProfileFromDb(profile){
     id: profile.id,
     name: profile.full_name || '',
     role: profile.role || 'Comercial',
-    canViewDashboard: profile.can_view_dashboard === true,
+    canViewDashboard: canRoleViewDashboard(profile.role || 'Comercial', profile.can_view_dashboard === true),
     createdAt: profile.created_at || '',
     updatedAt: profile.updated_at || ''
   };
@@ -923,7 +926,7 @@ function profileToDb(profile){
   return {
     full_name: profile.name || '',
     role: profile.role || 'Comercial',
-    can_view_dashboard: profile.role === 'CEO' ? true : profile.canViewDashboard === true
+    can_view_dashboard: canRoleViewDashboard(profile.role || 'Comercial', profile.canViewDashboard === true)
   };
 }
 
@@ -1337,14 +1340,19 @@ function App(){
   const selectedContact = byId(contacts, selectedContactId);
   const selectedContract = byId(contracts, selectedContractId);
   const selectedActivity = byId(activities, selectedActivityId);
-  const isCEO = currentUser?.canViewDashboard === true;
+  const canViewDashboard = currentUser?.canViewDashboard === true;
+  const isCEO = currentUser?.role === 'CEO';
   const canWrite = ['CEO','Comercial'].includes(currentUser?.role);
   const allMenu = [
     ['dashboard','Dashboard',LayoutDashboard], ['pipeline','Pipeline',KanbanSquare], ['deals','Oportunidades',BriefcaseBusiness],
     ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['companies','Empresas',Building2], ['contacts','Contatos',UserRound], ['products','Produtos',Package], ['imports','Importação',Filter], ['profiles','Perfis',Lock], ['matrix','Matriz Daleth',Sparkles]
   ];
-  const menu = isCEO ? allMenu : allMenu.filter(([id]) => !['dashboard','imports','profiles'].includes(id));
-  const activePage = (!isCEO && page === 'dashboard') ? 'deals' : page;
+  const menu = allMenu.filter(([id]) => {
+    if(id === 'dashboard') return canViewDashboard;
+    if(['imports','profiles'].includes(id)) return isCEO;
+    return true;
+  });
+  const activePage = (!canViewDashboard && page === 'dashboard') ? 'deals' : page;
   const pendingActivities = activities.filter(a => a.status !== 'Concluída');
   const overdueCount = pendingActivities.filter(a => a.dueDate && a.dueDate < today()).length;
   const meetingsTodayCount = pendingActivities.filter(a => a.dueDate === today() && String(a.type || '').toLowerCase().includes('reuni')).length;
@@ -1386,7 +1394,7 @@ function App(){
     <main className="main">
       <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresas, contatos e oportunidades..."/></div><div className="notification"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></div><div className="notification" style={{minWidth:'150px'}}><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><button className="mini" onClick={logout}><X size={15}/>Sair</button></div></header>
       {selectedDeal ? <DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/> : (query.trim() ? <GlobalSearch {...context}/> : <>
-        {activePage==='dashboard' && isCEO && <Dashboard {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='companies' && <Companies {...context}/>} {activePage==='contacts' && <Contacts {...context}/>} {activePage==='products' && <Products {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>} {activePage==='matrix' && <Matrix {...context}/>}    
+        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='companies' && <Companies {...context}/>} {activePage==='contacts' && <Contacts {...context}/>} {activePage==='products' && <Products {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>} {activePage==='matrix' && <Matrix {...context}/>}    
       </>)}
     </main>
     {selectedCompany && <CompanyModal company={selectedCompany} companies={companies} setCompanies={setCompanies} contacts={contacts} setSelectedContactId={setSelectedContactId} canWrite={canWrite} onClose={()=>setSelectedCompanyId(null)}/>}
@@ -2708,8 +2716,7 @@ function ProfilesAdmin({currentUser}){
       ...patch
     };
 
-    if(nextProfile.role === 'CEO') nextProfile.canViewDashboard = true;
-    if(nextProfile.role !== 'CEO') nextProfile.canViewDashboard = false;
+    nextProfile.canViewDashboard = canRoleViewDashboard(nextProfile.role, nextProfile.canViewDashboard);
 
     setProfiles(profiles.map(item => sameId(item.id, profile.id) ? nextProfile : item));
     setStatus('Salvando perfil...');
