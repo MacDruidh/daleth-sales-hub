@@ -531,6 +531,8 @@ function mapActivityFromDb(a){
     type: a.activity_type || 'Ligação',
     title: a.title || '',
     dueDate: a.due_date || '',
+    dueTime: a.due_time ? String(a.due_time).slice(0,5) : '',
+    meetingLink: a.meeting_link || '',
     status: a.status || 'Pendente',
     owner: a.owner || '',
     notes: a.notes || ''
@@ -543,6 +545,8 @@ function activityToDb(activity, deals){
     opportunity_id: dealDbIdFromUiId(deals, activity.dealId),
     title: activity.title || '',
     due_date: activity.dueDate || null,
+    due_time: activity.dueTime || null,
+    meeting_link: activity.meetingLink || null,
     status: activity.status || 'Pendente',
     notes: activity.notes || null,
     owner: activity.owner || null,
@@ -551,6 +555,23 @@ function activityToDb(activity, deals){
 }
 
 const ACTIVITY_SELECT = `
+  id,
+  opportunity_id,
+  title,
+  due_date,
+  due_time,
+  meeting_link,
+  status,
+  notes,
+  owner,
+  legacy_id,
+  activity_type,
+  created_at,
+  opportunities:opportunity_id (
+    legacy_id
+  )
+`;
+const ACTIVITY_LEGACY_SELECT = `
   id,
   opportunity_id,
   title,
@@ -565,6 +586,10 @@ const ACTIVITY_SELECT = `
     legacy_id
   )
 `;
+function isMissingActivityFieldError(error){
+  const message = String(error?.message || '');
+  return message.includes('due_time') || message.includes('meeting_link');
+}
 
 async function saveActivityToSupabase(activity, deals){
   const payload = activityToDb(activity, deals);
@@ -572,7 +597,22 @@ async function saveActivityToSupabase(activity, deals){
     ? supabase.from('activities').update(payload).eq('id', activity.supabaseId)
     : supabase.from('activities').insert(payload);
 
-  const { data, error } = await query.select(ACTIVITY_SELECT).single();
+  let { data, error } = await query.select(ACTIVITY_SELECT).single();
+
+  if(error && isMissingActivityFieldError(error)){
+    const legacyPayload = {...payload};
+    delete legacyPayload.due_time;
+    delete legacyPayload.meeting_link;
+    const legacyQuery = activity.supabaseId
+      ? supabase.from('activities').update(legacyPayload).eq('id', activity.supabaseId)
+      : supabase.from('activities').insert(legacyPayload);
+    const legacyResult = await legacyQuery.select(ACTIVITY_LEGACY_SELECT).single();
+    data = legacyResult.data;
+    error = legacyResult.error;
+    if(data){
+      return {...mapActivityFromDb(data), dueTime: activity.dueTime || '', meetingLink: activity.meetingLink || ''};
+    }
+  }
 
   if(error) throw error;
   return mapActivityFromDb(data);
@@ -644,10 +684,19 @@ function useActivities(){
 
     async function loadActivities(){
       try {
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from('activities')
           .select(ACTIVITY_SELECT)
           .order('created_at', { ascending: false });
+
+        if(error && isMissingActivityFieldError(error)){
+          const legacyResult = await supabase
+            .from('activities')
+            .select(ACTIVITY_LEGACY_SELECT)
+            .order('created_at', { ascending: false });
+          data = legacyResult.data;
+          error = legacyResult.error;
+        }
 
         if(error) throw error;
 
@@ -827,6 +876,10 @@ function formatDateTime(value){
   const [date, time=''] = String(value).replace('T',' ').split(' ');
   const formattedDate = formatDate(date);
   return time ? `${formattedDate} ${time.slice(0,5)}` : formattedDate;
+}
+function formatActivityDateTime(activity){
+  const date = formatDate(activity?.dueDate);
+  return activity?.dueTime ? `${date} ${String(activity.dueTime).slice(0,5)}` : date;
 }
 function openLinkedEntity(setter, id){ if(setter && id) setter(id); }
 function sameId(a,b){ return String(a ?? '') === String(b ?? ''); }
@@ -1473,7 +1526,7 @@ function GlobalSearch({query,companies,contacts,deals,setDeals,activities,contra
       </Panel>
       <Panel title="Atividades">
         <DashboardTable headers={['Atividade','Tipo','Data','Responsável','Ações']}>
-          {activityResults.length ? activityResults.map(a=><tr key={a.id} onClick={()=>setSelectedActivityId(a.id)} style={{cursor:'pointer'}}><td><b>{a.title}</b><span>{a.notes}</span></td><td>{a.type}</td><td>{formatDate(a.dueDate)}</td><td>{a.owner || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedActivityId(a.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma atividade</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+          {activityResults.length ? activityResults.map(a=><tr key={a.id} onClick={()=>setSelectedActivityId(a.id)} style={{cursor:'pointer'}}><td><b>{a.title}</b><span>{a.notes}</span></td><td>{a.type}</td><td>{formatActivityDateTime(a)}{a.meetingLink && <span><a href={a.meetingLink} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}>Link chamada</a></span>}</td><td>{a.owner || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedActivityId(a.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma atividade</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
     </section>
@@ -1529,7 +1582,7 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
   const topDeals = [...open].sort((a,b)=>dealTcv(b)-dealTcv(a)).slice(0,5);
   const overdueActivities = pending
     .filter(a => a.dueDate && a.dueDate < today())
-    .sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)))
+    .sort((a,b)=>(String(a.dueDate) + String(a.dueTime || '')).localeCompare(String(b.dueDate) + String(b.dueTime || '')))
     .slice(0,5);
 
   const lastTouchDate = (deal) => {
@@ -1629,11 +1682,11 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
     </section>
 
     {selectedSummary && <Panel title={selectedSummary === 'pending' ? 'Atividades pendentes' : selectedSummary === 'activeContracts' ? 'Contratos ativos' : 'Contratos vencendo em 90 dias'}>
-      {selectedSummary === 'pending' && <DashboardTable headers={['Atividade','Oportunidade','Data','Responsável','Ações']}>
-        {pending.length ? pending.slice().sort((a,b)=>String(a.dueDate || '').localeCompare(String(b.dueDate || ''))).slice(0,12).map(a=>{
+      {selectedSummary === 'pending' && <DashboardTable headers={['Atividade','Oportunidade','Data e hora','Link','Responsável','Ações']}>
+        {pending.length ? pending.slice().sort((a,b)=>(String(a.dueDate || '') + String(a.dueTime || '')).localeCompare(String(b.dueDate || '') + String(b.dueTime || ''))).slice(0,12).map(a=>{
           const deal = byId(deals,a.dealId);
-          return <tr key={a.id} onClick={()=>setSelectedActivityId?.(a.id)} style={{cursor:'pointer'}}><td><b>{a.title}</b><span>{a.type}</span></td><td>{deal?.title || '-'}</td><td>{formatDate(a.dueDate)}</td><td>{a.owner || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedActivityId?.(a.id)}}><Edit3 size={15}/>Abrir</button></td></tr>
-        }) : <tr><td>Nenhuma atividade pendente</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+          return <tr key={a.id} onClick={()=>setSelectedActivityId?.(a.id)} style={{cursor:'pointer'}}><td><b>{a.title}</b><span>{a.type}</span></td><td>{deal?.title || '-'}</td><td>{formatActivityDateTime(a)}</td><td>{a.meetingLink ? <a href={a.meetingLink} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}>Abrir chamada</a> : '-'}</td><td>{a.owner || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedActivityId?.(a.id)}}><Edit3 size={15}/>Abrir</button></td></tr>
+        }) : <tr><td>Nenhuma atividade pendente</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
       </DashboardTable>}
       {selectedSummary === 'activeContracts' && <DashboardTable headers={['Cliente','Produto','Receita mensal','Término','Tempo restante']}>
         {activeContracts.length ? activeContracts.slice().sort((a,b)=>contractMrr(b)-contractMrr(a)).slice(0,12).map(c=>{
@@ -1692,11 +1745,11 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
       </Panel>
 
       <Panel title="Atividades vencidas">
-        <DashboardTable headers={['Atividade','Oportunidade','Vencimento','Responsável','Ações']}>
+        <DashboardTable headers={['Atividade','Oportunidade','Vencimento','Link','Responsável','Ações']}>
           {overdueActivities.length ? overdueActivities.map(a=>{
             const deal = byId(deals,a.dealId);
-            return <tr key={a.id} onClick={()=>setSelectedActivityId?.(a.id)} style={{cursor:'pointer'}} title="Clique para abrir esta atividade"><td><b>{a.title}</b><span>{a.type}</span></td><td>{deal?.title || '-'}</td><td><b style={{color:'#dc2626'}}>{formatDate(a.dueDate)}</b></td><td>{a.owner}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedActivityId?.(a.id)}}><Edit3 size={15}/>Abrir</button></td></tr>
-          }) : <tr><td>Nenhuma atividade vencida</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+            return <tr key={a.id} onClick={()=>setSelectedActivityId?.(a.id)} style={{cursor:'pointer'}} title="Clique para abrir esta atividade"><td><b>{a.title}</b><span>{a.type}</span></td><td>{deal?.title || '-'}</td><td><b style={{color:'#dc2626'}}>{formatActivityDateTime(a)}</b></td><td>{a.meetingLink ? <a href={a.meetingLink} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}>Abrir chamada</a> : '-'}</td><td>{a.owner}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedActivityId?.(a.id)}}><Edit3 size={15}/>Abrir</button></td></tr>
+          }) : <tr><td>Nenhuma atividade vencida</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
     </section>
@@ -2032,7 +2085,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
   const [tab,setTab] = useState('dados');
   const [draft,setDraft] = useState({contractMonths:12, setup:0, probability:30, ...deal});
   const [note,setNote] = useState('');
-  const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),owner:deal.owner || currentUser?.name || 'Sergio',status:'Pendente',notes:''});
+  const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),dueTime:'',meetingLink:'',owner:deal.owner || currentUser?.name || 'Sergio',status:'Pendente',notes:''});
   const [interaction,setInteraction] = useState({type:'Ligação',dateTime:new Date().toISOString().slice(0,16),owner:currentUser?.name || deal.owner || 'Sergio',description:'',nextAction:'',nextDueDate:''});
 
   const company = byId(companies, deal.companyId);
@@ -2120,11 +2173,11 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
     try {
       const saved = await saveActivityToSupabase(nextActivity, deals);
       setActivities([saved,...activities]);
-      setActivity({...activity,title:'',notes:''});
+      setActivity({...activity,title:'',dueTime:'',meetingLink:'',notes:''});
     } catch (error) {
       console.warn('Falha ao salvar atividade no Supabase:', error);
       setActivities([{...nextActivity,id:Date.now()},...activities]);
-      setActivity({...activity,title:'',notes:''});
+      setActivity({...activity,title:'',dueTime:'',meetingLink:'',notes:''});
       window.alert('Atividade salva localmente. O Supabase não aceitou a gravação agora.');
     }
   };
@@ -2194,7 +2247,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
       </Panel>
     </>}
 
-    {tab==='atividades' && <Panel title="Atividades da oportunidade">{canWrite && <div className="formGrid"><Select label="Tipo" field="type" form={activity} setForm={setActivity} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={activity} setForm={setActivity}/><Input label="Data" field="dueDate" form={activity} setForm={setActivity} type="date"/><Select label="Responsável" field="owner" form={activity} setForm={setActivity} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={activity} setForm={setActivity}/><button className="saveBtn" onClick={addActivity}><Plus size={16}/>Criar atividade</button></div>}<div className="timeline">{dealActivities.map(a=><div className="timelineItem" key={a.id}><b>{a.type}: {a.title}</b><span>{formatDate(a.dueDate)} · {a.owner} · {a.status}</span><p>{a.notes}</p></div>)}</div></Panel>}
+    {tab==='atividades' && <Panel title="Atividades da oportunidade">{canWrite && <div className="formGrid"><Select label="Tipo" field="type" form={activity} setForm={setActivity} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={activity} setForm={setActivity}/><Input label="Data" field="dueDate" form={activity} setForm={setActivity} type="date"/><Input label="Hora" field="dueTime" form={activity} setForm={setActivity} type="time"/><Input label="Link chamada" field="meetingLink" form={activity} setForm={setActivity} type="url"/><Select label="Responsável" field="owner" form={activity} setForm={setActivity} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={activity} setForm={setActivity}/><button className="saveBtn" onClick={addActivity}><Plus size={16}/>Criar atividade</button></div>}<div className="timeline">{dealActivities.map(a=><div className="timelineItem" key={a.id}><b>{a.type}: {a.title}</b><span>{formatActivityDateTime(a)} · {a.owner} · {a.status}</span>{a.meetingLink && <p><a href={a.meetingLink} target="_blank" rel="noreferrer">Abrir chamada</a></p>}<p>{a.notes}</p></div>)}</div></Panel>}
 
     {tab==='contrato' && <Panel title="Resumo Comercial"><div className="formGrid modalGrid">
 <label><span>Empresa</span><input value={company?.name || ''} readOnly/></label>
@@ -2215,7 +2268,7 @@ function DealModal({deal,onClose,companies=[],contacts=[],deals=[],setDeals,acti
   const [tab,setTab] = useState('geral');
   const [draft,setDraft] = useState({contractMonths:12, setup:0, probability:30, ...deal});
   const [note,setNote] = useState('');
-  const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),owner:deal.owner,status:'Pendente',notes:''});
+  const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),dueTime:'',meetingLink:'',owner:deal.owner,status:'Pendente',notes:''});
   const save = async () => {
     const nextDeal = {
       ...draft,
@@ -2255,11 +2308,11 @@ function DealModal({deal,onClose,companies=[],contacts=[],deals=[],setDeals,acti
     try {
       const saved = await saveActivityToSupabase(nextActivity, deals);
       setActivities([saved,...activities]);
-      setActivity({...activity,title:'',notes:''});
+      setActivity({...activity,title:'',dueTime:'',meetingLink:'',notes:''});
     } catch (error) {
       console.warn('Falha ao salvar atividade no Supabase:', error);
       setActivities([{...nextActivity,id:Date.now()},...activities]);
-      setActivity({...activity,title:'',notes:''});
+      setActivity({...activity,title:'',dueTime:'',meetingLink:'',notes:''});
       window.alert('Atividade salva localmente. O Supabase não aceitou a gravação agora.');
     }
   };
@@ -2268,7 +2321,7 @@ function DealModal({deal,onClose,companies=[],contacts=[],deals=[],setDeals,acti
   return <div className="modalBackdrop"><div className="modal"><div className="modalHead"><div><h2>{deal.title}</h2><span>{byId(companies,deal.companyId)?.name} · Receita mensal {money(dealMrr(deal))} · Valor total {money(dealTcv(deal))}</span></div><button className="iconBtn" onClick={onClose}><X/></button></div><div className="tabs">{['geral','timeline','atividades','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t}</button>)}</div>
     {tab==='geral' && <div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={safeArray(products).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><Input label="Probabilidade %" field="probability" form={draft} setForm={setDraft} type="number"/><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/><button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button></div>}
     {tab==='timeline' && <div><div className="noteBox"><textarea placeholder="Adicionar comentário, registro de reunião, ligação, WhatsApp..." value={note} onChange={e=>setNote(e.target.value)}></textarea><button onClick={addNote}><MessageSquare size={16}/>Adicionar comentário</button></div><div className="timeline">{dealNotes.map(n=><div className="timelineItem" key={n.id}><b>{n.user || n.userName || n.user_name || 'Daleth'}</b><span>{formatDate(n.date || n.noteDate || n.note_date)}</span><p>{n.text || n.note || ''}</p></div>)}</div></div>}
-    {tab==='atividades' && <div><div className="formGrid"><Select label="Tipo" field="type" form={activity} setForm={setActivity} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={activity} setForm={setActivity}/><Input label="Data" field="dueDate" form={activity} setForm={setActivity} type="date"/><Select label="Responsável" field="owner" form={activity} setForm={setActivity} options={USERS.map(u=>[u,u])}/><button className="saveBtn" onClick={addActivity}><Plus size={16}/>Criar atividade</button></div><div className="timeline">{dealActivities.map(a=><div className="timelineItem" key={a.id}><b>{a.type}: {a.title}</b><span>{formatDate(a.dueDate)} · {a.owner} · {a.status}</span><p>{a.notes}</p></div>)}</div></div>}
+    {tab==='atividades' && <div><div className="formGrid"><Select label="Tipo" field="type" form={activity} setForm={setActivity} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={activity} setForm={setActivity}/><Input label="Data" field="dueDate" form={activity} setForm={setActivity} type="date"/><Input label="Hora" field="dueTime" form={activity} setForm={setActivity} type="time"/><Input label="Link chamada" field="meetingLink" form={activity} setForm={setActivity} type="url"/><Select label="Responsável" field="owner" form={activity} setForm={setActivity} options={USERS.map(u=>[u,u])}/><button className="saveBtn" onClick={addActivity}><Plus size={16}/>Criar atividade</button></div><div className="timeline">{dealActivities.map(a=><div className="timelineItem" key={a.id}><b>{a.type}: {a.title}</b><span>{formatActivityDateTime(a)} · {a.owner} · {a.status}</span>{a.meetingLink && <p><a href={a.meetingLink} target="_blank" rel="noreferrer">Abrir chamada</a></p>}<p>{a.notes}</p></div>)}</div></div>}
     {tab==='contrato' && <Panel title="Resumo Comercial"><div className="formGrid modalGrid">
 <label><span>Empresa</span><input value={company?.name || ''} readOnly/></label>
 <label><span>Produto</span><input value={draft.product || ''} readOnly/></label>
@@ -2309,7 +2362,7 @@ function Activities({activities,setActivities,deals,query,setSelectedActivityId,
       window.alert('Não foi possível excluir esta atividade no Supabase agora.');
     }
   };
-  return <Panel title="Atividades e follow-ups"><Table headers={['Status','Tipo','Atividade','Oportunidade','Data','Responsável','Ações']}>{list.map(a=><tr key={a.id} onClick={()=>setSelectedActivityId(a.id)} style={{cursor:'pointer'}}><td>{canWrite ? <button className="mini" onClick={(e)=>{e.stopPropagation(); toggle(a)}}>{a.status}</button> : a.status}</td><td>{a.type}</td><td><b>{a.title}</b><span>{a.notes}</span></td><td>{byId(deals,a.dealId)?.title}</td><td>{formatDate(a.dueDate)}</td><td>{a.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedActivityId(a.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeActivity(a)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table></Panel>;
+  return <Panel title="Atividades e follow-ups"><Table headers={['Status','Tipo','Atividade','Oportunidade','Data e hora','Link','Responsável','Ações']}>{list.map(a=><tr key={a.id} onClick={()=>setSelectedActivityId(a.id)} style={{cursor:'pointer'}}><td>{canWrite ? <button className="mini" onClick={(e)=>{e.stopPropagation(); toggle(a)}}>{a.status}</button> : a.status}</td><td>{a.type}</td><td><b>{a.title}</b><span>{a.notes}</span></td><td>{byId(deals,a.dealId)?.title}</td><td>{formatActivityDateTime(a)}</td><td>{a.meetingLink ? <a href={a.meetingLink} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}>Abrir chamada</a> : '-'}</td><td>{a.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedActivityId(a.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeActivity(a)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table></Panel>;
 }
 
 function Companies({companies,setCompanies,query,setSelectedCompanyId,canWrite}){
@@ -2662,7 +2715,7 @@ function ActivityModal({activity,onClose,activities,setActivities,deals,canWrite
     }
   };
   return <div className="modalBackdrop"><div className="modal"><div className="modalHead"><div><h2>{activity.title}</h2><span>{byId(deals,activity.dealId)?.title || 'Atividade sem oportunidade vinculada'}</span></div><button className="iconBtn" onClick={onClose}><X/></button></div>
-    <div className="formGrid modalGrid"><Select label="Status" field="status" form={draft} setForm={setDraft} options={['Pendente','Concluída'].map(x=>[x,x])}/><Select label="Tipo" field="type" form={draft} setForm={setDraft} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Oportunidade" field="dealId" form={draft} setForm={setDraft} options={[['','Sem oportunidade'],...safeArray(deals).map(d=>[d.id,d.title])]}/><Input label="Data" field="dueDate" form={draft} setForm={setDraft} type="date"/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div>
+    <div className="formGrid modalGrid"><Select label="Status" field="status" form={draft} setForm={setDraft} options={['Pendente','Concluída'].map(x=>[x,x])}/><Select label="Tipo" field="type" form={draft} setForm={setDraft} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Oportunidade" field="dealId" form={draft} setForm={setDraft} options={[['','Sem oportunidade'],...safeArray(deals).map(d=>[d.id,d.title])]}/><Input label="Data" field="dueDate" form={draft} setForm={setDraft} type="date"/><Input label="Hora" field="dueTime" form={draft} setForm={setDraft} type="time"/><Input label="Link chamada" field="meetingLink" form={draft} setForm={setDraft} type="url"/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div>
   </div></div>;
 }
 
