@@ -1261,6 +1261,7 @@ function App(){
   const [selectedDealId,setSelectedDealId] = useState(null);
   const [selectedCompanyId,setSelectedCompanyId] = useState(null);
   const [selectedContactId,setSelectedContactId] = useState(null);
+  const [selectedContractId,setSelectedContractId] = useState(null);
   const [selectedActivityId,setSelectedActivityId] = useState(null);
   const [selectedProductName,setSelectedProductName] = useState(null);
   const [authReady,setAuthReady] = useState(false);
@@ -1315,6 +1316,7 @@ function App(){
   const selectedDeal = byId(deals, selectedDealId);
   const selectedCompany = byId(companies, selectedCompanyId);
   const selectedContact = byId(contacts, selectedContactId);
+  const selectedContract = byId(contracts, selectedContractId);
   const selectedActivity = byId(activities, selectedActivityId);
   const isCEO = currentUser?.canViewDashboard === true;
   const canWrite = ['CEO','Comercial'].includes(currentUser?.role);
@@ -1333,11 +1335,12 @@ function App(){
   ).length;
   const alertTotal = overdueCount + meetingsTodayCount + proposalsWithoutFollowup;
   const alertText = `${overdueCount} atividades vencidas · ${proposalsWithoutFollowup} propostas sem follow-up · ${meetingsTodayCount} reuniões hoje`;
-  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,contracts,setContracts,products,setProducts,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName,query };
+  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,contracts,setContracts,products,setProducts,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
   const logout = async () => {
     setQuery('');
     setSelectedDealId(null);
     setSelectedProductName(null);
+    setSelectedContractId(null);
     await supabase.auth.signOut();
     setCurrentUser(null);
   };
@@ -1347,6 +1350,7 @@ function App(){
     setSelectedDealId(null);
     setSelectedCompanyId(null);
     setSelectedContactId(null);
+    setSelectedContractId(null);
     setSelectedActivityId(null);
     setSelectedProductName(null);
   };
@@ -1368,13 +1372,14 @@ function App(){
     </main>
     {selectedCompany && <CompanyModal company={selectedCompany} companies={companies} setCompanies={setCompanies} contacts={contacts} setSelectedContactId={setSelectedContactId} canWrite={canWrite} onClose={()=>setSelectedCompanyId(null)}/>}
     {selectedContact && <ContactModal contact={selectedContact} contacts={contacts} setContacts={setContacts} companies={companies} setSelectedCompanyId={setSelectedCompanyId} canWrite={canWrite} onClose={()=>setSelectedContactId(null)}/>}
+    {selectedContract && <ContractModal contract={selectedContract} contracts={contracts} setContracts={setContracts} companies={companies} deals={deals} products={products} setSelectedCompanyId={setSelectedCompanyId} setSelectedDealId={setSelectedDealId} setSelectedProductName={setSelectedProductName} canWrite={canWrite} onClose={()=>setSelectedContractId(null)}/>}
     {selectedActivity && <ActivityModal activity={selectedActivity} activities={activities} setActivities={setActivities} deals={deals} canWrite={canWrite} onClose={()=>setSelectedActivityId(null)}/>}  
-    {selectedProductName && <ProductInfoModal product={selectedProductName} onClose={()=>setSelectedProductName(null)}/>}
+    {selectedProductName && <ProductInfoModal product={selectedProductName} products={products} setProducts={setProducts} canWrite={canWrite} onClose={()=>setSelectedProductName(null)}/>}
   </div>;
 }
 
 
-function GlobalSearch({query,companies,contacts,deals,activities,contracts,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId}){
+function GlobalSearch({query,companies,contacts,deals,activities,contracts,products,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName}){
   const q = query.trim().toLowerCase();
   const includes = (...values) => values.join(' ').toLowerCase().includes(q);
   const companyResults = companies.filter(c => includes(c.name,c.segment,c.site,c.status,c.notes)).slice(0,8);
@@ -1384,11 +1389,12 @@ function GlobalSearch({query,companies,contacts,deals,activities,contracts,setSe
     const company = byId(companies,c.companyId);
     return includes(company?.name,c.product,c.owner,c.status,c.notes);
   }).slice(0,8);
+  const productResults = safeArray(products).filter(p => includes(p)).slice(0,8);
   const activityResults = activities.filter(a => includes(a.title,a.type,a.owner,a.status,a.notes)).slice(0,8);
-  const total = companyResults.length + contactResults.length + dealResults.length + contractResults.length + activityResults.length;
+  const total = companyResults.length + contactResults.length + dealResults.length + contractResults.length + productResults.length + activityResults.length;
   return <>
     <Panel title={`Busca no CRM: ${query}`}>
-      <p className="muted">Resultados encontrados nas principais áreas do Sales Hub. Clique em “Abrir” para visualizar a oportunidade.</p>
+      <p className="muted">Resultados encontrados nas principais áreas do Sales Hub. Clique em uma linha ou em “Abrir” para consultar e editar.</p>
       {!total && <p className="muted">Nenhum resultado encontrado.</p>}
     </Panel>
     <section className="grid2 compact">
@@ -1410,20 +1416,27 @@ function GlobalSearch({query,companies,contacts,deals,activities,contracts,setSe
         </DashboardTable>
       </Panel>
       <Panel title="Contratos">
-        <DashboardTable headers={['Cliente','Produto','Receita mensal','Status']}>
-          {contractResults.length ? contractResults.map(c=>{ const company = byId(companies,c.companyId); return <tr key={c.id}><td><b>{company?.name || 'Sem cliente'}</b></td><td>{c.product}</td><td>{moneyShort(contractMrr(c))}</td><td>{c.status}</td></tr> }) : <tr><td>Nenhum contrato</td><td>-</td><td>-</td><td>-</td></tr>}
+        <DashboardTable headers={['Cliente','Produto','Receita mensal','Status','Ações']}>
+          {contractResults.length ? contractResults.map(c=>{ const company = byId(companies,c.companyId); return <tr key={c.id} onClick={()=>setSelectedContractId?.(c.id)} style={{cursor:'pointer'}}><td><b>{company?.name || 'Sem cliente'}</b></td><td>{c.product}</td><td>{moneyShort(contractMrr(c))}</td><td>{c.status}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedContractId?.(c.id)}}><Edit3 size={15}/>Abrir</button></td></tr> }) : <tr><td>Nenhum contrato</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
     </section>
-    <Panel title="Atividades">
-      <DashboardTable headers={['Atividade','Tipo','Data','Responsável','Ações']}>
-        {activityResults.length ? activityResults.map(a=><tr key={a.id} onClick={()=>setSelectedActivityId(a.id)} style={{cursor:'pointer'}}><td><b>{a.title}</b><span>{a.notes}</span></td><td>{a.type}</td><td>{formatDate(a.dueDate)}</td><td>{a.owner || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedActivityId(a.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma atividade</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
-      </DashboardTable>
-    </Panel>
+    <section className="grid2 compact">
+      <Panel title="Produtos">
+        <DashboardTable headers={['Produto','Ações']}>
+          {productResults.length ? productResults.map(p=><tr key={p} onClick={()=>setSelectedProductName?.(p)} style={{cursor:'pointer'}}><td><b>{p}</b></td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(p)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhum produto</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+      <Panel title="Atividades">
+        <DashboardTable headers={['Atividade','Tipo','Data','Responsável','Ações']}>
+          {activityResults.length ? activityResults.map(a=><tr key={a.id} onClick={()=>setSelectedActivityId(a.id)} style={{cursor:'pointer'}}><td><b>{a.title}</b><span>{a.notes}</span></td><td>{a.type}</td><td>{formatDate(a.dueDate)}</td><td>{a.owner || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedActivityId(a.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma atividade</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+    </section>
   </>;
 }
 
-function Dashboard({deals,companies,contacts,activities,contracts,interactions,setSelectedDealId,setSelectedActivityId}){
+function Dashboard({deals,companies,contacts,activities,contracts,interactions,setSelectedDealId,setSelectedActivityId,setSelectedContractId,setSelectedCompanyId,setSelectedProductName}){
   const [selectedStage,setSelectedStage] = useState(null);
   const [selectedSegment,setSelectedSegment] = useState(null);
   const [selectedSummary,setSelectedSummary] = useState(null);
@@ -1581,13 +1594,13 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
       {selectedSummary === 'activeContracts' && <DashboardTable headers={['Cliente','Produto','Receita mensal','Término','Tempo restante']}>
         {activeContracts.length ? activeContracts.slice().sort((a,b)=>contractMrr(b)-contractMrr(a)).slice(0,12).map(c=>{
           const company = byId(companies,c.companyId);
-          return <tr key={c.id}><td><b>{company?.name || 'Sem cliente'}</b><span>{c.notes}</span></td><td>{c.product || '-'}</td><td>{moneyShort(contractMrr(c))}</td><td>{formatDate(c.endDate)}</td><td>{monthsRemaining(c.endDate)} meses</td></tr>
+          return <tr key={c.id} onClick={()=>setSelectedContractId?.(c.id)} style={{cursor:'pointer'}}><td><b>{company?.name || 'Sem cliente'}</b><span>{c.notes}</span></td><td>{c.product || '-'}</td><td>{moneyShort(contractMrr(c))}</td><td>{formatDate(c.endDate)}</td><td>{monthsRemaining(c.endDate)} meses</td></tr>
         }) : <tr><td>Nenhum contrato ativo</td><td>-</td><td>{moneyShort(0)}</td><td>-</td><td>-</td></tr>}
       </DashboardTable>}
       {selectedSummary === 'expiring90' && <DashboardTable headers={['Cliente','Produto','Término','Tempo restante','Receita mensal']}>
         {expiring90.length ? expiring90.slice().sort((a,b)=>String(a.endDate || '').localeCompare(String(b.endDate || ''))).map(c=>{
           const company = byId(companies,c.companyId);
-          return <tr key={c.id}><td><b>{company?.name || 'Sem cliente'}</b><span>{c.notes}</span></td><td>{c.product || '-'}</td><td>{formatDate(c.endDate)}</td><td>{monthsRemaining(c.endDate)} meses</td><td>{moneyShort(contractMrr(c))}</td></tr>
+          return <tr key={c.id} onClick={()=>setSelectedContractId?.(c.id)} style={{cursor:'pointer'}}><td><b>{company?.name || 'Sem cliente'}</b><span>{c.notes}</span></td><td>{c.product || '-'}</td><td>{formatDate(c.endDate)}</td><td>{monthsRemaining(c.endDate)} meses</td><td>{moneyShort(contractMrr(c))}</td></tr>
         }) : <tr><td>Nenhum contrato vencendo em 90 dias</td><td>-</td><td>-</td><td>-</td><td>{moneyShort(0)}</td></tr>}
       </DashboardTable>}
     </Panel>}
@@ -1703,7 +1716,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
   </>;
 }
 
-function Deals({deals,setDeals,companies,contacts,products,stages,setSelectedDealId,query,canWrite}){
+function Deals({deals,setDeals,companies,contacts,products,stages,setSelectedDealId,setSelectedProductName,query,canWrite}){
   const empty = { title:'', companyId:companies[0]?.id||'', contactId:'', product:'SAC+', value:0, setup:0, contractMonths:12, stage:stages[0], owner:'Sergio', probability:30, closeDate:'', description:'', nextStep:'', priority:'Média' };
   const [form,setFormBase] = useState(empty);
   const [filters,setFilters] = useState({ companyId:'', product:'', stage:'', owner:'' });
@@ -1767,7 +1780,7 @@ function Deals({deals,setDeals,companies,contacts,products,stages,setSelectedDea
       <Select label="Responsável" field="owner" form={filters} setForm={setFilters} options={[["","Todos"],...USERS.map(u=>[u,u])]}/>
       <button className="saveBtn" onClick={clearFilters}><Filter size={16}/>Limpar filtros</button>
     </div></Panel>
-    <Panel title={`Oportunidades (${list.length})`}><Table headers={['Oportunidade','Empresa','Produto','Receita mensal','Prazo','Valor total','Etapa','Responsável','Ações']}>{list.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{byId(companies,d.companyId)?.name}</td><td>{d.product}</td><td>{money(dealMrr(d))}</td><td>{dealMonths(d)} meses</td><td><b>{money(dealTcv(d))}</b></td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table></Panel>
+    <Panel title={`Oportunidades (${list.length})`}><Table headers={['Oportunidade','Empresa','Produto','Receita mensal','Prazo','Valor total','Etapa','Responsável','Ações']}>{list.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{byId(companies,d.companyId)?.name}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(d.product)}} disabled={!d.product}>{d.product || '-'}</button></td><td>{money(dealMrr(d))}</td><td>{dealMonths(d)} meses</td><td><b>{money(dealTcv(d))}</b></td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table></Panel>
   </>;
 }
 
@@ -2120,9 +2133,10 @@ function Contacts({contacts,setContacts,companies,query,setSelectedContactId,can
   return <>{canWrite && <Panel title="Novo contato"><div className="formGrid"><Input label="Nome" field="name" form={form} setForm={setForm}/><Select label="Empresa" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Input label="Cargo" field="role" form={form} setForm={setForm}/><Input label="E-mail" field="email" form={form} setForm={setForm}/><Input label="Telefone" field="phone" form={form} setForm={setForm}/><button className="saveBtn" onClick={add}><Plus size={16}/>Salvar contato</button></div></Panel>}<Panel title="Contatos"><Table headers={['Contato','Empresa','Cargo','E-mail','Telefone','Tipo','Ações']}>{list.map(c=><tr key={c.id} onClick={()=>setSelectedContactId(c.id)} style={{cursor:'pointer'}}><td><b>{c.name}</b></td><td>{byId(companies,c.companyId)?.name}</td><td>{c.role}</td><td>{c.email}</td><td>{c.phone}</td><td>{c.type}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedContactId(c.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeContact(c)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table></Panel></>;
 }
 
-function Contracts({contracts,setContracts,deals,companies,products,query,canWrite}){
+function Contracts({contracts,setContracts,deals,companies,products,query,canWrite,setSelectedContractId}){
   const empty = { companyId:companies[0]?.id||'', dealId:'', product:'SAC+', startDate:today(), endDate:addMonths(today(),12), mrr:0, setup:0, contractMonths:12, owner:'Sergio', status:'Ativo', notes:'' };
   const [form,setForm] = useState(empty);
+  const calculatedEndDate = addMonths(form.startDate, Number(form.contractMonths || 12));
   const list = contracts.filter(c => {
     const company = byId(companies,c.companyId);
     return ((company?.name||'') + c.product + c.owner + c.status + c.notes).toLowerCase().includes(query.toLowerCase());
@@ -2138,7 +2152,7 @@ function Contracts({contracts,setContracts,deals,companies,products,query,canWri
     if(!canWrite) return;
     if(!form.companyId) return;
     const months = Number(form.contractMonths || 12);
-    const nextContract = {...form,mrr:Number(form.mrr),setup:Number(form.setup),contractMonths:months,endDate:form.endDate || addMonths(form.startDate, months)};
+    const nextContract = {...form,mrr:Number(form.mrr),setup:Number(form.setup),contractMonths:months,endDate:addMonths(form.startDate, months)};
     try {
       const saved = await saveContractToSupabase(nextContract, companies, deals);
       setContracts([saved,...contracts]);
@@ -2205,7 +2219,7 @@ function Contracts({contracts,setContracts,deals,companies,products,query,canWri
       <Select label="Cliente" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/>
       <Select label="Produto" field="product" form={form} setForm={setForm} options={safeArray(products).map(p=>[p,p])}/>
       <Input label="Início do contrato" field="startDate" form={form} setForm={setForm} type="date"/>
-      <Input label="Término do contrato" field="endDate" form={form} setForm={setForm} type="date"/>
+      <label title="Inserir prazo contratual"><span>Término do contrato</span><input type="date" value={calculatedEndDate} readOnly aria-readonly="true"/></label>
       <Input label="Receita mensal" field="mrr" form={form} setForm={setForm} type="number"/>
       <Input label="Implantação" field="setup" form={form} setForm={setForm} type="number"/>
       <Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/>
@@ -2220,7 +2234,7 @@ function Contracts({contracts,setContracts,deals,companies,products,query,canWri
         <DashboardTable headers={['Cliente','Término','Tempo restante','Receita mensal']}>
           {expiring90.length ? expiring90.sort((a,b)=>String(a.endDate).localeCompare(String(b.endDate))).map(c=>{
             const company = byId(companies,c.companyId);
-            return <tr key={c.id}><td><b>{company?.name || 'Sem cliente'}</b><span>{c.product}</span></td><td>{formatDate(c.endDate)}</td><td>{monthsRemaining(c.endDate)} meses</td><td>{moneyShort(contractMrr(c))}</td></tr>
+            return <tr key={c.id} onClick={()=>setSelectedContractId?.(c.id)} style={{cursor:'pointer'}}><td><b>{company?.name || 'Sem cliente'}</b><span>{c.product}</span></td><td>{formatDate(c.endDate)}</td><td>{monthsRemaining(c.endDate)} meses</td><td>{moneyShort(contractMrr(c))}</td></tr>
           }) : <tr><td>Nenhum contrato vencendo</td><td>-</td><td>-</td><td>{moneyShort(0)}</td></tr>}
         </DashboardTable>
       </Panel>
@@ -2229,7 +2243,7 @@ function Contracts({contracts,setContracts,deals,companies,products,query,canWri
         <DashboardTable headers={['Cliente','Status','Tempo restante','Receita mensal']}>
           {active.length ? active.slice().sort((a,b)=>contractMrr(b)-contractMrr(a)).slice(0,6).map(c=>{
             const company = byId(companies,c.companyId);
-            return <tr key={c.id}><td><b>{company?.name || 'Sem cliente'}</b><span>{c.product}</span></td><td><span className="pill">{contractStatus(c)}</span></td><td>{monthsRemaining(c.endDate)} meses</td><td>{moneyShort(contractMrr(c))}</td></tr>
+            return <tr key={c.id} onClick={()=>setSelectedContractId?.(c.id)} style={{cursor:'pointer'}}><td><b>{company?.name || 'Sem cliente'}</b><span>{c.product}</span></td><td><span className="pill">{contractStatus(c)}</span></td><td>{monthsRemaining(c.endDate)} meses</td><td>{moneyShort(contractMrr(c))}</td></tr>
           }) : <tr><td>Nenhum contrato ativo</td><td>-</td><td>-</td><td>{moneyShort(0)}</td></tr>}
         </DashboardTable>
       </Panel>
@@ -2238,10 +2252,86 @@ function Contracts({contracts,setContracts,deals,companies,products,query,canWri
     <Panel title="Todos os contratos"><Table headers={['Cliente','Produto','Início','Término','Tempo restante','Receita mensal','Valor total do contrato','Status','Responsável','Ações']}>
       {list.map(c=>{
         const company = byId(companies,c.companyId);
-        return <tr key={c.id}><td><b>{company?.name || 'Sem cliente'}</b><span>{c.notes}</span></td><td>{c.product}</td><td>{formatDate(c.startDate)}</td><td>{formatDate(c.endDate)}</td><td>{monthsRemaining(c.endDate)} meses</td><td>{moneyShort(contractMrr(c))}</td><td>{moneyShort(contractTcv(c))}</td><td><span className="pill">{contractStatus(c)}</span></td><td>{c.owner}</td><td>{canWrite ? <button className="mini" onClick={()=>removeContract(c)}><Trash2 size={15}/>Excluir</button> : '-'}</td></tr>
+        return <tr key={c.id} onClick={()=>setSelectedContractId?.(c.id)} style={{cursor:'pointer'}}><td><b>{company?.name || 'Sem cliente'}</b><span>{c.notes}</span></td><td>{c.product}</td><td>{formatDate(c.startDate)}</td><td>{formatDate(c.endDate)}</td><td>{monthsRemaining(c.endDate)} meses</td><td>{moneyShort(contractMrr(c))}</td><td>{moneyShort(contractTcv(c))}</td><td><span className="pill">{contractStatus(c)}</span></td><td>{c.owner}</td><td>{canWrite ? <button className="mini" onClick={(e)=>{e.stopPropagation(); removeContract(c)}}><Trash2 size={15}/>Excluir</button> : '-'}</td></tr>
       })}
     </Table></Panel>
   </>;
+}
+
+
+function ContractModal({contract,onClose,contracts,setContracts,companies,deals,products,setSelectedCompanyId,setSelectedDealId,setSelectedProductName,canWrite}){
+  const [draft,setDraft] = useState({...contract});
+  const company = byId(companies, draft.companyId);
+  const deal = byId(deals, draft.dealId);
+  const calculatedEndDate = addMonths(draft.startDate, Number(draft.contractMonths || 12));
+
+  const openCompany = () => {
+    if(!company || !setSelectedCompanyId) return;
+    onClose();
+    setSelectedCompanyId(company.id);
+  };
+
+  const openDeal = () => {
+    if(!deal || !setSelectedDealId) return;
+    onClose();
+    setSelectedDealId(deal.id);
+  };
+
+  const openProduct = () => {
+    if(!draft.product || !setSelectedProductName) return;
+    onClose();
+    setSelectedProductName(draft.product);
+  };
+
+  const save = async () => {
+    if(!canWrite) return;
+    const months = Number(draft.contractMonths || 12);
+    const nextDraft = {
+      ...draft,
+      mrr: Number(draft.mrr || 0),
+      setup: Number(draft.setup || 0),
+      contractMonths: months,
+      endDate: addMonths(draft.startDate, months)
+    };
+
+    try {
+      const saved = await saveContractToSupabase(nextDraft, companies, deals);
+      setContracts(contracts.map(c=>sameId(c.id, contract.id) ? saved : c));
+      onClose();
+    } catch (error) {
+      console.warn('Falha ao atualizar contrato no Supabase:', error);
+      setContracts(contracts.map(c=>sameId(c.id, contract.id) ? nextDraft : c));
+      onClose();
+      window.alert('Alterações salvas localmente. O Supabase não aceitou a atualização agora.');
+    }
+  };
+
+  return <div className="modalBackdrop"><div className="modal"><div className="modalHead"><div><h2>{company?.name || 'Contrato'}</h2><span>{draft.product || 'Produto não informado'} · {contractStatus(draft)}</span></div><button className="iconBtn" onClick={onClose}><X/></button></div>
+    <Panel title="Vínculos do contrato">
+      <div style={{display:'flex',gap:'10px',flexWrap:'wrap'}}>
+        <button className="mini" onClick={openCompany} disabled={!company}><Building2 size={15}/>{company?.name || 'Sem cliente'}</button>
+        <button className="mini" onClick={openDeal} disabled={!deal}><BriefcaseBusiness size={15}/>{deal?.title || 'Sem oportunidade'}</button>
+        <button className="mini" onClick={openProduct} disabled={!draft.product}><Sparkles size={15}/>{draft.product || 'Sem produto'}</button>
+      </div>
+    </Panel>
+    <Panel title="Dados do contrato">
+      <div className="formGrid modalGrid">
+        <Select label="Cliente" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/>
+        <Select label="Produto" field="product" form={draft} setForm={setDraft} options={safeArray(products).map(p=>[p,p])}/>
+        <Select label="Oportunidade" field="dealId" form={draft} setForm={setDraft} options={[['','Sem oportunidade'],...safeArray(deals).map(d=>[d.id,d.title])]}/>
+        <Input label="Início do contrato" field="startDate" form={draft} setForm={setDraft} type="date"/>
+        <label title="Inserir prazo contratual"><span>Término do contrato</span><input type="date" value={calculatedEndDate} readOnly aria-readonly="true"/></label>
+        <Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/>
+        <Input label="Receita mensal" field="mrr" form={draft} setForm={setDraft} type="number"/>
+        <Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/>
+        <Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/>
+        <Select label="Status" field="status" form={draft} setForm={setDraft} options={['Ativo','Renovando','Encerrado','Suspenso'].map(s=>[s,s])}/>
+        <label><span>Valor total do contrato</span><input value={money(contractTcv({...draft,endDate:calculatedEndDate}))} readOnly/></label>
+        <Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/>
+        {canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}
+      </div>
+    </Panel>
+  </div></div>;
 }
 
 
@@ -2333,13 +2423,26 @@ function ActivityModal({activity,onClose,activities,setActivities,deals,canWrite
 }
 
 
-function ProductInfoModal({product,onClose}){
+function ProductInfoModal({product,onClose,products,setProducts,canWrite}){
+  const [name,setName] = useState(product);
+  const save = () => {
+    if(!canWrite) return;
+    const clean = name.trim();
+    if(!clean) return;
+    if(clean.toLowerCase() !== product.toLowerCase() && products.some(p => p.toLowerCase() === clean.toLowerCase())){
+      window.alert('Este produto já está cadastrado.');
+      return;
+    }
+    setProducts(products.map(p => p === product ? clean : p));
+    onClose();
+  };
+
   return <div className="modalBackdrop"><div className="modal"><div className="modalHead"><div><h2>{product}</h2><span>Cadastro de produto</span></div><button className="iconBtn" onClick={onClose}><X/></button></div>
-    <Panel title="Dados do produto"><p className="muted">Produto cadastrado no Daleth Sales Hub. Os detalhes avançados de produto poderão ser ampliados em uma próxima sprint.</p><div className="formGrid modalGrid"><label><span>Nome do produto</span><input value={product} readOnly/></label></div></Panel>
+    <Panel title="Dados do produto"><p className="muted">Produto cadastrado no Daleth Sales Hub. Os detalhes avançados de produto poderão ser ampliados em uma próxima sprint.</p><div className="formGrid modalGrid"><label><span>Nome do produto</span><input value={name} onChange={e=>setName(e.target.value)} readOnly={!canWrite}/></label>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar produto</button>}</div></Panel>
   </div></div>;
 }
 
-function Products({products,setProducts,query,canWrite}){
+function Products({products,setProducts,query,canWrite,setSelectedProductName}){
   const [name,setName] = useState('');
   const list = products.filter(p => p.toLowerCase().includes(query.toLowerCase()));
   const add = () => {
@@ -2362,7 +2465,7 @@ function Products({products,setProducts,query,canWrite}){
   };
   return <>
     {canWrite && <Panel title="Cadastro de produtos"><div className="formGrid"><label><span>Novo produto</span><input value={name} onChange={e=>setName(e.target.value)} placeholder="Ex.: Atendimento bilíngue" onKeyDown={e=>{ if(e.key==='Enter') add(); }}/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Adicionar produto</button></div></Panel>}
-    <Panel title="Produtos cadastrados"><Table headers={['Produto','Ações']}>{list.map(p=><tr key={p}><td><b>{p}</b></td><td>{canWrite ? <button className="mini" onClick={()=>removeProduct(p)}><Trash2 size={15}/>Excluir</button> : '-'}</td></tr>)}</Table></Panel>
+    <Panel title="Produtos cadastrados"><Table headers={['Produto','Ações']}>{list.map(p=><tr key={p} onClick={()=>setSelectedProductName?.(p)} style={{cursor:'pointer'}}><td><b>{p}</b></td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(p)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeProduct(p)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table></Panel>
   </>;
 }
 
