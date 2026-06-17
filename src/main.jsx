@@ -1893,7 +1893,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
 function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,notes,setNotes,setSelectedDealId,setSelectedProductName,query,canWrite}){
   const empty = { title:'', companyId:companies[0]?.id||'', contactId:'', product:'SAC+', value:0, setup:0, contractMonths:12, stage:stages[0], owner:'Sergio', probability:30, closeDate:'', description:'', nextStep:'', priority:'Média' };
   const [form,setFormBase] = useState(empty);
-  const [filters,setFilters] = useState({ companyId:'', product:'', stage:'', owner:'' });
+  const [filters,setFilters] = useState({ companyId:'', product:'', stage:'', owner:'', closeBeforeMonth:'' });
   const [selectedDealIds,setSelectedDealIds] = useState([]);
   const setForm = (next) => {
     const resolved = typeof next === 'function' ? next(form) : next;
@@ -1911,7 +1911,8 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
     const matchesProduct = !filters.product || d.product === filters.product;
     const matchesStage = !filters.stage || d.stage === filters.stage;
     const matchesOwner = !filters.owner || d.owner === filters.owner;
-    return matchesQuery && matchesCompany && matchesProduct && matchesStage && matchesOwner;
+    const matchesCloseBefore = !filters.closeBeforeMonth || (d.closeDate && d.closeDate < `${filters.closeBeforeMonth}-01`);
+    return matchesQuery && matchesCompany && matchesProduct && matchesStage && matchesOwner && matchesCloseBefore;
   }).sort((a,b)=>String(a.title || '').localeCompare(String(b.title || ''),'pt-BR',{sensitivity:'base'}));
   const selectedDeals = deals.filter(deal => selectedDealIds.some(id => sameId(id, deal.id)));
   const visibleSelectedCount = list.filter(deal => selectedDealIds.some(id => sameId(id, deal.id))).length;
@@ -2000,7 +2001,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
       window.alert(`${failedIds.length} oportunidade(s) não puderam ser excluídas no Supabase agora.`);
     }
   };
-  const clearFilters = () => setFilters({ companyId:'', product:'', stage:'', owner:'' });
+  const clearFilters = () => setFilters({ companyId:'', product:'', stage:'', owner:'', closeBeforeMonth:'' });
   return <>
     {canWrite && <Panel title="Nova oportunidade"><div className="formGrid"><Input label="Título" field="title" form={form} setForm={setForm}/><Select label="Empresa" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Contato" field="contactId" form={form} setForm={setForm} options={[["", availableContacts.length ? "Selecione" : "Sem contatos desta empresa"],...availableContacts.map(c=>[c.id,c.name])]}/><Select label="Produto" field="product" form={form} setForm={setForm} options={safeArray(products).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={form} setForm={setForm} type="number"/><Input label="Implantação" field="setup" form={form} setForm={setForm} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/><Input label="Probabilidade %" field="probability" form={form} setForm={setForm} type="number"/><Select label="Etapa" field="stage" form={form} setForm={setForm} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={form} setForm={setForm} options={USERS.map(u=>[u,u])}/><Input label="Fechamento previsto" field="closeDate" form={form} setForm={setForm} type="date"/><label><span>Valor total do contrato</span><input value={money(dealTcv(form))} readOnly/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Criar oportunidade</button></div></Panel>}
     <Panel title="Filtros de oportunidades"><div className="formGrid">
@@ -2008,6 +2009,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
       <Select label="Produto" field="product" form={filters} setForm={setFilters} options={[["","Todos"],...safeArray(products).map(p=>[p,p])]}/>
       <Select label="Etapa" field="stage" form={filters} setForm={setFilters} options={[["","Todas"],...safeArray(stages).map(s=>[s,s])]}/>
       <Select label="Responsável" field="owner" form={filters} setForm={setFilters} options={[["","Todos"],...USERS.map(u=>[u,u])]}/>
+      <Input label="Fechamento anterior a" field="closeBeforeMonth" form={filters} setForm={setFilters} type="month"/>
       <button className="saveBtn" onClick={clearFilters}><Filter size={16}/>Limpar filtros</button>
     </div></Panel>
     <Panel title={`Oportunidades (${list.length})`}>
