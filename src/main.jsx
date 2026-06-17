@@ -1234,7 +1234,7 @@ function UXStyle(){
     .grid2{gap:18px!important;}
     .tableWrap table{font-size:13px!important;}
     .kanban{gap:10px!important;overflow-x:auto!important;padding-bottom:12px!important;align-items:flex-start!important;}
-    .column{min-width:205px!important;width:205px!important;padding:12px!important;border-radius:18px!important;border:1px solid var(--ux-border)!important;background:#fff!important;box-shadow:0 8px 20px rgba(15,23,42,.04)!important;}
+    .column{min-width:205px!important;width:205px!important;max-height:calc(100vh - 230px)!important;padding:12px!important;border-radius:18px!important;border:1px solid var(--ux-border)!important;background:#fff!important;box-shadow:0 8px 20px rgba(15,23,42,.04)!important;display:flex!important;flex-direction:column!important;}
     .column.stageDragging{opacity:.55!important;}
     .column.stageDropTarget{border-color:var(--ux-blue)!important;box-shadow:0 0 0 3px rgba(0,160,209,.14),0 8px 20px rgba(15,23,42,.04)!important;}
     .column h3{font-size:13px!important;line-height:1.2!important;margin-bottom:10px!important;gap:6px!important;}
@@ -1250,6 +1250,9 @@ function UXStyle(){
     .stageEdit{display:grid!important;gap:8px!important;margin-bottom:10px!important;}
     .stageEdit input{width:100%!important;min-width:0!important;}
     .stageEditActions{display:flex!important;gap:6px!important;flex-wrap:wrap!important;}
+    .stageCards{min-height:0!important;overflow-y:auto!important;overscroll-behavior:contain!important;padding-right:4px!important;}
+    .stageCards::-webkit-scrollbar{width:8px!important;}
+    .stageCards::-webkit-scrollbar-thumb{background:#cbd5e1!important;border-radius:999px!important;}
     .bulkActions{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important;flex-wrap:wrap!important;margin-bottom:12px!important;padding:10px 12px!important;border:1px solid var(--ux-border)!important;border-radius:14px!important;background:#f8fbfd!important;}
     .bulkActions span{color:var(--ux-muted)!important;font-size:13px!important;font-weight:800!important;}
     .rowSelect{width:18px!important;height:18px!important;accent-color:var(--ux-blue)!important;cursor:pointer!important;}
@@ -1878,7 +1881,9 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
             <button className="mini" onClick={()=>deleteStage(stage)} title="Excluir etapa" aria-label={`Excluir ${stage}`}><Trash2 size={14}/></button>
           </div>}
         </div>}
-        {currentStageDeals.map(d => <article className="dealCard" key={d.id}><div onClick={()=>setSelectedDealId(d.id)}><b>{d.title}</b><span>{byId(companies,d.companyId)?.name || 'Sem empresa'}</span><strong>{money(dealTcv(d))}</strong></div><select value={d.stage} onChange={e=>move(d,e.target.value)} disabled={!canWrite}>{stages.map(s=><option key={s}>{s}</option>)}</select></article>)}
+        <div className="stageCards">
+          {currentStageDeals.map(d => <article className="dealCard" key={d.id}><div onClick={()=>setSelectedDealId(d.id)}><b>{d.title}</b><span>{byId(companies,d.companyId)?.name || 'Sem empresa'}</span><strong>{money(dealTcv(d))}</strong></div><select value={d.stage} onChange={e=>move(d,e.target.value)} disabled={!canWrite}>{stages.map(s=><option key={s}>{s}</option>)}</select></article>)}
+        </div>
       </div>;
     })}</section>
     {selectedStage && <Panel title={`Oportunidades em ${selectedStage}`}>
