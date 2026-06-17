@@ -1247,6 +1247,11 @@ function UXStyle(){
     .stageEdit{display:grid!important;gap:8px!important;margin-bottom:10px!important;}
     .stageEdit input{width:100%!important;min-width:0!important;}
     .stageEditActions{display:flex!important;gap:6px!important;flex-wrap:wrap!important;}
+    .bulkActions{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important;flex-wrap:wrap!important;margin-bottom:12px!important;padding:10px 12px!important;border:1px solid var(--ux-border)!important;border-radius:14px!important;background:#f8fbfd!important;}
+    .bulkActions span{color:var(--ux-muted)!important;font-size:13px!important;font-weight:800!important;}
+    .rowSelect{width:18px!important;height:18px!important;accent-color:var(--ux-blue)!important;cursor:pointer!important;}
+    .timelineItem{position:relative!important;}
+    .timelineNote:hover::after{content:attr(data-full-note);position:absolute;left:18px;top:calc(100% + 8px);width:min(520px,72vw);max-height:260px;overflow:auto;white-space:pre-wrap;background:#0f172a;color:#fff;border-radius:14px;padding:14px 16px;font-size:13px;line-height:1.5;font-weight:500;box-shadow:0 18px 44px rgba(15,23,42,.28);z-index:80;}
     .dealCard{padding:10px!important;margin-bottom:10px!important;border-radius:14px!important;}
     .dealCard b{font-size:13px!important;line-height:1.25!important;display:block!important;}
     .dealCard span{font-size:12px!important;line-height:1.25!important;}
@@ -1863,10 +1868,11 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
   </>;
 }
 
-function Deals({deals,setDeals,companies,contacts,products,stages,setSelectedDealId,setSelectedProductName,query,canWrite}){
+function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,notes,setNotes,setSelectedDealId,setSelectedProductName,query,canWrite}){
   const empty = { title:'', companyId:companies[0]?.id||'', contactId:'', product:'SAC+', value:0, setup:0, contractMonths:12, stage:stages[0], owner:'Sergio', probability:30, closeDate:'', description:'', nextStep:'', priority:'Média' };
   const [form,setFormBase] = useState(empty);
   const [filters,setFilters] = useState({ companyId:'', product:'', stage:'', owner:'' });
+  const [selectedDealIds,setSelectedDealIds] = useState([]);
   const setForm = (next) => {
     const resolved = typeof next === 'function' ? next(form) : next;
     if(!sameId(resolved.companyId, form.companyId)){
@@ -1885,6 +1891,28 @@ function Deals({deals,setDeals,companies,contacts,products,stages,setSelectedDea
     const matchesOwner = !filters.owner || d.owner === filters.owner;
     return matchesQuery && matchesCompany && matchesProduct && matchesStage && matchesOwner;
   });
+  const selectedDeals = deals.filter(deal => selectedDealIds.some(id => sameId(id, deal.id)));
+  const visibleSelectedCount = list.filter(deal => selectedDealIds.some(id => sameId(id, deal.id))).length;
+  const allVisibleSelected = list.length > 0 && visibleSelectedCount === list.length;
+  useEffect(() => {
+    setSelectedDealIds(ids => ids.filter(id => deals.some(deal => sameId(deal.id, id))));
+  }, [deals]);
+  const creationNoteFor = (deal) => ({
+    dealId: deal.id,
+    user: currentUser?.name || deal.owner || 'Sergio',
+    date: today(),
+    text: `Oportunidade criada em ${formatDate(today())}.`
+  });
+  const saveCreationNote = async (deal, allDeals) => {
+    const nextNote = creationNoteFor(deal);
+    try {
+      const savedNote = await saveNoteToSupabase(nextNote, allDeals);
+      setNotes([savedNote,...safeArray(notes)]);
+    } catch (error) {
+      console.warn('Falha ao salvar nota automática no Supabase:', error);
+      setNotes([{...nextNote,id:Date.now()},...safeArray(notes)]);
+    }
+  };
   const add = async () => {
     if(!canWrite) return;
     if(!form.title.trim()) return;
@@ -1897,11 +1925,15 @@ function Deals({deals,setDeals,companies,contacts,products,stages,setSelectedDea
     };
     try {
       const saved = await saveDealToSupabase(nextDeal, companies, contacts);
-      setDeals([saved,...deals]);
+      const nextDeals = [saved,...deals];
+      setDeals(nextDeals);
+      await saveCreationNote(saved, nextDeals);
       setFormBase(empty);
     } catch (error) {
       console.warn('Falha ao salvar oportunidade no Supabase:', error);
-      setDeals([{...nextDeal,id:Date.now()},...deals]);
+      const localDeal = {...nextDeal,id:Date.now()};
+      setDeals([localDeal,...deals]);
+      setNotes([{...creationNoteFor(localDeal),id:Date.now()+1},...safeArray(notes)]);
       setFormBase(empty);
       window.alert('Oportunidade salva localmente. O Supabase não aceitou a gravação agora.');
     }
@@ -1917,6 +1949,35 @@ function Deals({deals,setDeals,companies,contacts,products,stages,setSelectedDea
       window.alert('Não foi possível excluir esta oportunidade no Supabase agora.');
     }
   };
+  const toggleDealSelection = (dealId) => {
+    setSelectedDealIds(ids => ids.some(id => sameId(id, dealId)) ? ids.filter(id => !sameId(id, dealId)) : [...ids, dealId]);
+  };
+  const toggleVisibleSelection = () => {
+    if(allVisibleSelected){
+      setSelectedDealIds(ids => ids.filter(id => !list.some(deal => sameId(deal.id, id))));
+    } else {
+      setSelectedDealIds(ids => [...ids, ...list.filter(deal => !ids.some(id => sameId(id, deal.id))).map(deal => deal.id)]);
+    }
+  };
+  const removeSelectedDeals = async () => {
+    if(!canWrite || !selectedDeals.length) return;
+    if(!window.confirm(`Deseja realmente excluir ${selectedDeals.length} oportunidade(s) selecionada(s)?`)) return;
+    const results = await Promise.allSettled(selectedDeals.map(deal => deleteDealFromSupabase(deal)));
+    const failedIds = selectedDeals
+      .filter((deal, index) => results[index].status === 'rejected')
+      .map(deal => deal.id);
+    const removedIds = selectedDeals
+      .filter((deal, index) => results[index].status === 'fulfilled')
+      .map(deal => deal.id);
+
+    if(removedIds.length){
+      setDeals(deals.filter(deal => !removedIds.some(id => sameId(id, deal.id))));
+    }
+    setSelectedDealIds(ids => ids.filter(id => failedIds.some(failedId => sameId(failedId, id))));
+    if(failedIds.length){
+      window.alert(`${failedIds.length} oportunidade(s) não puderam ser excluídas no Supabase agora.`);
+    }
+  };
   const clearFilters = () => setFilters({ companyId:'', product:'', stage:'', owner:'' });
   return <>
     {canWrite && <Panel title="Nova oportunidade"><div className="formGrid"><Input label="Título" field="title" form={form} setForm={setForm}/><Select label="Empresa" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Contato" field="contactId" form={form} setForm={setForm} options={[["", availableContacts.length ? "Selecione" : "Sem contatos desta empresa"],...availableContacts.map(c=>[c.id,c.name])]}/><Select label="Produto" field="product" form={form} setForm={setForm} options={safeArray(products).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={form} setForm={setForm} type="number"/><Input label="Implantação" field="setup" form={form} setForm={setForm} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/><Input label="Probabilidade %" field="probability" form={form} setForm={setForm} type="number"/><Select label="Etapa" field="stage" form={form} setForm={setForm} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={form} setForm={setForm} options={USERS.map(u=>[u,u])}/><Input label="Fechamento previsto" field="closeDate" form={form} setForm={setForm} type="date"/><label><span>Valor total do contrato</span><input value={money(dealTcv(form))} readOnly/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Criar oportunidade</button></div></Panel>}
@@ -1927,7 +1988,14 @@ function Deals({deals,setDeals,companies,contacts,products,stages,setSelectedDea
       <Select label="Responsável" field="owner" form={filters} setForm={setFilters} options={[["","Todos"],...USERS.map(u=>[u,u])]}/>
       <button className="saveBtn" onClick={clearFilters}><Filter size={16}/>Limpar filtros</button>
     </div></Panel>
-    <Panel title={`Oportunidades (${list.length})`}><Table headers={['Oportunidade','Empresa','Produto','Receita mensal','Prazo','Valor total','Etapa','Responsável','Ações']}>{list.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{byId(companies,d.companyId)?.name}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(d.product)}} disabled={!d.product}>{d.product || '-'}</button></td><td>{money(dealMrr(d))}</td><td>{dealMonths(d)} meses</td><td><b>{money(dealTcv(d))}</b></td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table></Panel>
+    <Panel title={`Oportunidades (${list.length})`}>
+      {canWrite && <div className="bulkActions">
+        <label style={{display:'inline-flex',alignItems:'center',gap:'8px',cursor:'pointer'}}><input className="rowSelect" type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection}/>Selecionar visíveis</label>
+        <span>{selectedDeals.length} selecionada(s)</span>
+        <button className="mini" onClick={removeSelectedDeals} disabled={!selectedDeals.length}><Trash2 size={15}/>Excluir selecionadas</button>
+      </div>}
+      <Table headers={['Sel.','Oportunidade','Empresa','Produto','Receita mensal','Prazo','Valor total','Etapa','Responsável','Ações']}>{list.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><input className="rowSelect" type="checkbox" checked={selectedDealIds.some(id=>sameId(id,d.id))} onChange={(e)=>{e.stopPropagation(); toggleDealSelection(d.id);}} onClick={e=>e.stopPropagation()} disabled={!canWrite}/></td><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{byId(companies,d.companyId)?.name}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(d.product)}} disabled={!d.product}>{d.product || '-'}</button></td><td>{money(dealMrr(d))}</td><td>{dealMonths(d)} meses</td><td><b>{money(dealTcv(d))}</b></td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table>
+    </Panel>
   </>;
 }
 
@@ -2093,7 +2161,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
         <button className="saveBtn" onClick={addInteraction}><MessageSquare size={16}/>Registrar interação</button>
       </div></Panel>}
       <Panel title="Linha do tempo da oportunidade">
-        <div className="timeline">{timeline.length ? timeline.map(item=><div className="timelineItem" key={item.id}><b>{interactionIcon(item.type)} {item.type}</b><span>{formatDateTime(item.date)} · {item.owner}</span><p>{item.description}</p>{item.nextAction && <p><b>Próxima ação:</b> {item.nextAction}{item.nextDueDate ? ` · Prazo: ${formatDate(item.nextDueDate)}` : ''}</p>}</div>) : <p className="muted">Nenhuma tratativa registrada ainda.</p>}</div>
+        <div className="timeline">{timeline.length ? timeline.map(item=><div className={`timelineItem ${item.source === 'note' ? 'timelineNote' : ''}`} data-full-note={item.source === 'note' ? item.description : undefined} title={item.source === 'note' ? 'Passe o cursor para ver a anotação completa' : undefined} key={item.id}><b>{interactionIcon(item.type)} {item.type}</b><span>{formatDateTime(item.date)} · {item.owner}</span><p>{item.description}</p>{item.nextAction && <p><b>Próxima ação:</b> {item.nextAction}{item.nextDueDate ? ` · Prazo: ${formatDate(item.nextDueDate)}` : ''}</p>}</div>) : <p className="muted">Nenhuma tratativa registrada ainda.</p>}</div>
       </Panel>
     </>}
 
