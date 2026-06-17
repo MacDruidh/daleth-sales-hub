@@ -1249,7 +1249,10 @@ function App(){
 
     async function restoreSession(){
       try {
-        const { data } = await supabase.auth.getSession();
+        const { data } = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise(resolve => setTimeout(() => resolve({ data: { session: null } }), 4000))
+        ]);
         const authUser = data?.session?.user;
         if(authUser){
           const profile = await loadUserProfile(authUser);
