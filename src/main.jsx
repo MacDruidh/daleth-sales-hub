@@ -1065,8 +1065,10 @@ function LoginScreen({onLogin}){
       padding:'36px 42px'
     }}>
       <div style={{display:'flex',alignItems:'center',gap:'14px',marginBottom:'34px'}}>
-        <div style={{width:'42px',height:'42px',borderRadius:'11px',background:'linear-gradient(135deg,#0878ff 0%,#bde9ff 100%)',display:'grid',placeItems:'center',fontWeight:900,color:'#061b34',fontSize:'22px',flex:'0 0 auto'}}>D</div>
-        <strong style={{fontSize:'18px',color:'#0878ff',letterSpacing:'-.02em'}}>Sales Hub</strong>
+        <div style={{width:'42px',height:'42px',borderRadius:'11px',background:'#e6f8fd',display:'grid',placeItems:'center',flex:'0 0 auto',overflow:'hidden'}}>
+          <img src="/daleth-star.png" alt="Daleth AC" style={{width:'34px',height:'34px',objectFit:'contain'}} />
+        </div>
+        <strong style={{fontSize:'18px',color:'#00A0D1',letterSpacing:'-.02em'}}>Sales Hub</strong>
       </div>
 
       <h1 style={{margin:'0 0 10px',fontSize:'40px',lineHeight:1.05,letterSpacing:'-.04em',color:'#061b34',fontWeight:900}}>Daleth Sales Hub</h1>
@@ -1137,7 +1139,7 @@ function LoginScreen({onLogin}){
           background:'rgba(13,116,255,.10)',
           flex:'0 0 auto'
         }}>
-          <CheckCircle2 size={30} color="#0b7cff" />
+          <CheckCircle2 size={30} color="#00A0D1" />
         </div>
         <div>
           <b style={{display:'block',fontSize:'22px',color:'#061b34',marginBottom:'6px',fontWeight:900}}>Supabase Auth</b>
@@ -1155,8 +1157,8 @@ function LoginScreen({onLogin}){
         borderRadius:'14px',
         fontSize:'20px',
         fontWeight:900,
-        background:'linear-gradient(135deg,#0078ff 0%,#005eea 100%)',
-        boxShadow:'0 12px 24px rgba(0,110,255,.20)'
+        background:'linear-gradient(135deg,#00A0D1 0%,#008bb8 100%)',
+        boxShadow:'0 12px 24px rgba(0,160,209,.20)'
       }}>{loading ? 'Entrando...' : 'Entrar'}</button>
 
       <button type="button" onClick={sendPasswordReset} disabled={resetLoading} style={{
@@ -1189,8 +1191,8 @@ function UXStyle(){
       --ux-border:#e5edf6;
       --ux-text:#0f172a;
       --ux-muted:#64748b;
-      --ux-blue:#0b7cff;
-      --ux-blue-soft:#eef6ff;
+      --ux-blue:#00A0D1;
+      --ux-blue-soft:#e6f8fd;
       --ux-shadow:0 12px 34px rgba(15,23,42,.07);
       --ux-radius:18px;
     }
@@ -1203,20 +1205,20 @@ function UXStyle(){
     .sidebar nav button{width:52px!important;height:52px!important;min-height:52px!important;padding:0!important;display:grid!important;place-items:center!important;border-radius:16px!important;position:relative!important;color:#64748b!important;background:transparent!important;border:1px solid transparent!important;transition:all .18s ease!important;}
     .sidebar nav button svg{width:21px!important;height:21px!important;margin:0!important;}
     .sidebar nav button:hover{background:var(--ux-blue-soft)!important;color:var(--ux-blue)!important;transform:translateY(-1px)!important;}
-    .sidebar nav button.active{background:linear-gradient(135deg,#0b7cff 0%,#005eea 100%)!important;color:#fff!important;box-shadow:0 10px 22px rgba(11,124,255,.24)!important;}
+    .sidebar nav button.active{background:linear-gradient(135deg,#00A0D1 0%,#008bb8 100%)!important;color:#fff!important;box-shadow:0 10px 22px rgba(0,160,209,.24)!important;}
     .sidebar nav button::after{content:attr(data-label);position:absolute;left:64px;top:50%;transform:translateY(-50%);background:#0f172a;color:#fff;font-size:13px;font-weight:700;padding:8px 10px;border-radius:10px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s ease, transform .15s ease;z-index:50;box-shadow:0 10px 24px rgba(15,23,42,.18);}
     .sidebar nav button:hover::after{opacity:1;transform:translateY(-50%) translateX(4px);}
     .navLabel{display:none!important;}
-    .sidebarBox{width:52px!important;height:52px!important;margin-top:auto!important;padding:0!important;border-radius:50%!important;display:grid!important;place-items:center!important;background:#f1f6fd!important;border:1px solid var(--ux-border)!important;overflow:hidden!important;position:relative!important;}
-    .sidebarBox b{font-size:0!important;}
-    .sidebarBox b::after{content:'DS';font-size:15px;font-weight:900;color:#0b7cff;}
+    .sidebarBox{width:52px!important;height:52px!important;margin-top:auto!important;padding:7px!important;border-radius:50%!important;display:grid!important;place-items:center!important;background:#e6f8fd!important;border:1px solid #c9eef8!important;overflow:hidden!important;position:relative!important;}
+    .sidebarBox b{display:none!important;}
+    .sidebarBox::after{content:'';width:100%!important;height:100%!important;background:url('/daleth-star.png') center/contain no-repeat!important;display:block!important;}
     .sidebarBox span{display:none!important;}
     .main{padding:22px 28px 32px!important;min-width:0!important;}
     .topbar{background:rgba(255,255,255,.9)!important;backdrop-filter:blur(14px)!important;border:1px solid var(--ux-border)!important;border-radius:24px!important;padding:18px 20px!important;margin-bottom:22px!important;box-shadow:var(--ux-shadow)!important;align-items:center!important;gap:18px!important;}
     .uxHeaderTitle{min-width:260px!important;}
     .uxHeaderTitle h1{font-size:26px!important;line-height:1.02!important;letter-spacing:-.04em!important;color:var(--ux-text)!important;margin:0!important;font-weight:900!important;}
     .uxHeaderTitle p{margin:5px 0 0!important;color:var(--ux-muted)!important;font-size:14px!important;font-weight:600!important;}
-    .uxEyebrow{display:inline-flex!important;align-items:center!important;gap:6px!important;color:var(--ux-blue)!important;background:var(--ux-blue-soft)!important;border:1px solid #d8ebff!important;border-radius:999px!important;padding:5px 10px!important;font-size:12px!important;font-weight:900!important;margin-bottom:8px!important;}
+    .uxEyebrow{display:inline-flex!important;align-items:center!important;gap:6px!important;color:var(--ux-blue)!important;background:var(--ux-blue-soft)!important;border:1px solid #c9eef8!important;border-radius:999px!important;padding:5px 10px!important;font-size:12px!important;font-weight:900!important;margin-bottom:8px!important;}
     .topActions{flex:1!important;justify-content:flex-end!important;gap:12px!important;}
     .search{min-width:min(440px,36vw)!important;height:46px!important;background:#f8fbff!important;border:1px solid var(--ux-border)!important;border-radius:16px!important;padding:0 14px!important;}
     .search input{font-size:14px!important;}
@@ -1351,7 +1353,10 @@ function App(){
   return <div className="app">
     <UXStyle/>
     <aside className="sidebar">
-      <div className="brand"><img className="brandLogo" src="/daleth-logo.svg" alt="Daleth Sales Hub" /></div>
+      <div className="brand" style={{alignItems:'center'}}>
+        <img src="/daleth-star.png" alt="Daleth AC" style={{width:'42px',height:'42px',objectFit:'contain',flex:'0 0 auto'}} />
+        <div><b>Daleth</b><span>Sales Hub</span></div>
+      </div>
       <nav>{menu.map(([id,label,Icon]) => <button key={id} title={label} aria-label={label} data-label={label} className={activePage===id?'active':''} onClick={()=>navigate(id)}><Icon size={18}/><span className="navLabel">{label}</span></button>)}</nav>
       <div className="sidebarBox"><b>Perfil ativo</b><span>{currentUser.name} · {currentUser.role}</span></div>
     </aside>
@@ -1650,7 +1655,7 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
 function Kpi({icon:Icon,label,value}){ return <div className="kpi"><Icon size={24}/><span>{label}</span><strong>{value}</strong></div>; }
 function MiniMetric({icon:Icon,label,value,onClick,active=false}){
   return <div onClick={onClick} title={onClick ? 'Clique para abrir' : undefined} style={{
-    border: active ? '1px solid #0878ff' : '1px solid #edf2f7',
+    border: active ? '1px solid #00A0D1' : '1px solid #edf2f7',
     background: active ? 'linear-gradient(180deg,#eef7ff 0%,#ffffff 100%)' : 'linear-gradient(180deg,#ffffff 0%,#f8fbff 100%)',
     borderRadius:'18px',
     padding:'14px',
@@ -1660,7 +1665,7 @@ function MiniMetric({icon:Icon,label,value,onClick,active=false}){
     transform: active ? 'translateY(-1px)' : 'none',
     transition:'all .18s ease'
   }}>
-    <div style={{display:'flex',alignItems:'center',gap:'8px',color:'#0878ff',marginBottom:'10px'}}>
+    <div style={{display:'flex',alignItems:'center',gap:'8px',color:'#00A0D1',marginBottom:'10px'}}>
       <Icon size={17}/>
       <span style={{fontSize:'12px',fontWeight:800,color:'#64748b',textTransform:'uppercase',letterSpacing:'.04em'}}>{label}</span>
     </div>
