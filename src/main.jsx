@@ -1234,6 +1234,15 @@ function UXStyle(){
     .column{min-width:205px!important;width:205px!important;padding:12px!important;border-radius:18px!important;border:1px solid var(--ux-border)!important;background:#fff!important;box-shadow:0 8px 20px rgba(15,23,42,.04)!important;}
     .column h3{font-size:13px!important;line-height:1.2!important;margin-bottom:10px!important;gap:6px!important;}
     .column h3 small{width:24px!important;height:24px!important;min-width:24px!important;font-size:12px!important;}
+    .stageHeader{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;gap:8px!important;align-items:center!important;margin-bottom:10px!important;}
+    .stageName{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:8px!important;width:100%!important;border:0!important;background:transparent!important;padding:0!important;text-align:left!important;color:var(--ux-text)!important;font-weight:900!important;font-size:13px!important;line-height:1.2!important;cursor:pointer!important;}
+    .stageName span{min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
+    .stageName small{display:grid!important;place-items:center!important;width:24px!important;height:24px!important;min-width:24px!important;border-radius:999px!important;background:var(--ux-blue-soft)!important;color:var(--ux-blue)!important;font-size:12px!important;font-weight:900!important;}
+    .stageActions{display:flex!important;gap:4px!important;}
+    .stageActions button{width:28px!important;height:28px!important;padding:0!important;display:grid!important;place-items:center!important;border-radius:9px!important;}
+    .stageEdit{display:grid!important;gap:8px!important;margin-bottom:10px!important;}
+    .stageEdit input{width:100%!important;min-width:0!important;}
+    .stageEditActions{display:flex!important;gap:6px!important;flex-wrap:wrap!important;}
     .dealCard{padding:10px!important;margin-bottom:10px!important;border-radius:14px!important;}
     .dealCard b{font-size:13px!important;line-height:1.25!important;display:block!important;}
     .dealCard span{font-size:12px!important;line-height:1.25!important;}
@@ -1437,7 +1446,7 @@ function GlobalSearch({query,companies,contacts,deals,activities,contracts,produ
   </>;
 }
 
-function Dashboard({deals,companies,contacts,activities,contracts,interactions,setSelectedDealId,setSelectedActivityId,setSelectedContractId,setSelectedCompanyId,setSelectedProductName}){
+function Dashboard({deals,companies,contacts,activities,contracts,interactions,stages=STAGES,setSelectedDealId,setSelectedActivityId,setSelectedContractId,setSelectedCompanyId,setSelectedProductName}){
   const [selectedStage,setSelectedStage] = useState(null);
   const [selectedSegment,setSelectedSegment] = useState(null);
   const [selectedSummary,setSelectedSummary] = useState(null);
@@ -1466,7 +1475,7 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
     return date <= next90 ? s + dealWeightedTcv(d) : s;
   },0);
 
-  const stageRows = STAGES.map(stage => {
+  const stageRows = safeArray(stages).map(stage => {
     const stageDeals = open.filter(d=>d.stage===stage);
     return {
       label: stage,
@@ -1692,6 +1701,21 @@ function DashboardTable({headers,children}){ return <div className="tableWrap da
 function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelectedDealId,canWrite}){
   const [newStage,setNewStage] = useState('');
   const [selectedStage,setSelectedStage] = useState(null);
+  const [editingStage,setEditingStage] = useState(null);
+  const [editingValue,setEditingValue] = useState('');
+  const stageExists = (name, ignoreStage = null) => safeArray(stages).some(stage =>
+    stage !== ignoreStage && stage.toLowerCase() === name.toLowerCase()
+  );
+  const addStage = () => {
+    const name = newStage.trim();
+    if(!name) return;
+    if(stageExists(name)){
+      window.alert('Já existe uma etapa com esse nome.');
+      return;
+    }
+    setStages([...stages, name]);
+    setNewStage('');
+  };
   const move = async (deal, stage) => {
     if(!canWrite) return;
     const nextDeal = {...deal, stage};
@@ -1704,10 +1728,85 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
       window.alert('Etapa alterada localmente. O Supabase não aceitou a atualização agora.');
     }
   };
+  const startEditStage = (stage) => {
+    if(!canWrite) return;
+    setEditingStage(stage);
+    setEditingValue(stage);
+  };
+  const cancelEditStage = () => {
+    setEditingStage(null);
+    setEditingValue('');
+  };
+  const renameStage = async (oldStage) => {
+    if(!canWrite) return;
+    const nextName = editingValue.trim();
+    if(!nextName) {
+      window.alert('Informe um nome para a etapa.');
+      return;
+    }
+    if(nextName === oldStage) {
+      cancelEditStage();
+      return;
+    }
+    if(stageExists(nextName, oldStage)) {
+      window.alert('Já existe uma etapa com esse nome.');
+      return;
+    }
+
+    const nextStages = stages.map(stage => stage === oldStage ? nextName : stage);
+    const nextDeals = deals.map(deal => deal.stage === oldStage ? {...deal, stage: nextName} : deal);
+    const changedDeals = nextDeals.filter(deal => deal.stage === nextName && deals.some(current => sameId(current.id, deal.id) && current.stage === oldStage));
+
+    setStages(nextStages);
+    setDeals(nextDeals);
+    if(selectedStage === oldStage) setSelectedStage(nextName);
+    cancelEditStage();
+
+    if(changedDeals.length){
+      const results = await Promise.allSettled(changedDeals.map(deal => saveDealToSupabase(deal, companies, contacts)));
+      if(results.some(result => result.status === 'rejected')) {
+        window.alert('A etapa foi renomeada na tela, mas algumas oportunidades não sincronizaram com o Supabase agora.');
+      }
+    }
+  };
+  const deleteStage = (stage) => {
+    if(!canWrite) return;
+    const count = deals.filter(deal => deal.stage === stage).length;
+    if(count){
+      window.alert(`Esta etapa tem ${count} oportunidade(s). Mova ou renomeie essas oportunidades antes de excluir a etapa.`);
+      return;
+    }
+    if(stages.length <= 1){
+      window.alert('O pipeline precisa manter pelo menos uma etapa.');
+      return;
+    }
+    if(!window.confirm(`Excluir a etapa "${stage}"?`)) return;
+    setStages(stages.filter(item => item !== stage));
+    if(selectedStage === stage) setSelectedStage(null);
+    if(editingStage === stage) cancelEditStage();
+  };
   const stageDeals = selectedStage ? deals.filter(d=>d.stage===selectedStage) : [];
   return <>
-    {canWrite && <div className="toolbar"><input placeholder="Nova etapa customizável" value={newStage} onChange={e=>setNewStage(e.target.value)}/><button onClick={()=>{ if(newStage.trim()){ setStages([...stages,newStage.trim()]); setNewStage(''); }}}><Plus size={16}/>Adicionar etapa</button></div>}
-    <section className="kanban">{stages.map(stage => <div className="column" key={stage}><h3 onClick={()=>setSelectedStage(stage)} style={{cursor:'pointer'}} title="Clique para listar as oportunidades desta etapa">{stage}<small>{deals.filter(d=>d.stage===stage).length}</small></h3>{deals.filter(d=>d.stage===stage).map(d => <article className="dealCard" key={d.id}><div onClick={()=>setSelectedDealId(d.id)}><b>{d.title}</b><span>{byId(companies,d.companyId)?.name || 'Sem empresa'}</span><strong>{money(dealTcv(d))}</strong></div><select value={d.stage} onChange={e=>move(d,e.target.value)} disabled={!canWrite}>{stages.map(s=><option key={s}>{s}</option>)}</select></article>)}</div>)}</section>
+    {canWrite && <div className="toolbar"><input placeholder="Nova etapa customizável" value={newStage} onChange={e=>setNewStage(e.target.value)} onKeyDown={e=>{ if(e.key === 'Enter') addStage(); }}/><button onClick={addStage}><Plus size={16}/>Adicionar etapa</button></div>}
+    <section className="kanban">{stages.map(stage => {
+      const currentStageDeals = deals.filter(d=>d.stage===stage);
+      return <div className="column" key={stage}>
+        {editingStage === stage ? <div className="stageEdit">
+          <input value={editingValue} onChange={e=>setEditingValue(e.target.value)} onKeyDown={e=>{ if(e.key === 'Enter') renameStage(stage); if(e.key === 'Escape') cancelEditStage(); }} autoFocus/>
+          <div className="stageEditActions">
+            <button className="mini" onClick={()=>renameStage(stage)}><Save size={15}/>Salvar</button>
+            <button className="mini" onClick={cancelEditStage}><X size={15}/>Cancelar</button>
+          </div>
+        </div> : <div className="stageHeader">
+          <button type="button" className="stageName" onClick={()=>setSelectedStage(stage)} title="Clique para listar as oportunidades desta etapa"><span>{stage}</span><small>{currentStageDeals.length}</small></button>
+          {canWrite && <div className="stageActions">
+            <button className="mini" onClick={()=>startEditStage(stage)} title="Renomear etapa" aria-label={`Renomear ${stage}`}><Edit3 size={14}/></button>
+            <button className="mini" onClick={()=>deleteStage(stage)} title="Excluir etapa" aria-label={`Excluir ${stage}`}><Trash2 size={14}/></button>
+          </div>}
+        </div>}
+        {currentStageDeals.map(d => <article className="dealCard" key={d.id}><div onClick={()=>setSelectedDealId(d.id)}><b>{d.title}</b><span>{byId(companies,d.companyId)?.name || 'Sem empresa'}</span><strong>{money(dealTcv(d))}</strong></div><select value={d.stage} onChange={e=>move(d,e.target.value)} disabled={!canWrite}>{stages.map(s=><option key={s}>{s}</option>)}</select></article>)}
+      </div>;
+    })}</section>
     {selectedStage && <Panel title={`Oportunidades em ${selectedStage}`}>
       <DashboardTable headers={['Oportunidade','Empresa','Responsável','Valor total','Ações']}>
         {stageDeals.length ? stageDeals.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{byId(companies,d.companyId)?.name || '-'}</td><td>{d.owner || '-'}</td><td>{moneyShort(dealTcv(d))}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade nesta etapa</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
