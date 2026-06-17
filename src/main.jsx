@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { LayoutDashboard, KanbanSquare, Building2, Users, BriefcaseBusiness, CalendarDays, Plus, Search, Edit3, Trash2, MessageSquare, CheckCircle2, Clock3, CircleDollarSign, X, Save, Sparkles, Phone, Mail, UserRound, Filter, BellRing, TrendingUp, AlertTriangle, Lock, Package } from 'lucide-react';
+import { LayoutDashboard, KanbanSquare, Building2, Users, BriefcaseBusiness, CalendarDays, Plus, Search, Edit3, Trash2, MessageSquare, CheckCircle2, Clock3, CircleDollarSign, X, Save, Sparkles, Phone, Mail, UserRound, Filter, BellRing, TrendingUp, AlertTriangle, Lock, Package, GripVertical } from 'lucide-react';
 import './style.css';
 import { supabase } from './lib/supabase';
 
@@ -1232,6 +1232,8 @@ function UXStyle(){
     .tableWrap table{font-size:13px!important;}
     .kanban{gap:10px!important;overflow-x:auto!important;padding-bottom:12px!important;align-items:flex-start!important;}
     .column{min-width:205px!important;width:205px!important;padding:12px!important;border-radius:18px!important;border:1px solid var(--ux-border)!important;background:#fff!important;box-shadow:0 8px 20px rgba(15,23,42,.04)!important;}
+    .column.stageDragging{opacity:.55!important;}
+    .column.stageDropTarget{border-color:var(--ux-blue)!important;box-shadow:0 0 0 3px rgba(0,160,209,.14),0 8px 20px rgba(15,23,42,.04)!important;}
     .column h3{font-size:13px!important;line-height:1.2!important;margin-bottom:10px!important;gap:6px!important;}
     .column h3 small{width:24px!important;height:24px!important;min-width:24px!important;font-size:12px!important;}
     .stageHeader{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;gap:8px!important;align-items:center!important;margin-bottom:10px!important;}
@@ -1240,6 +1242,8 @@ function UXStyle(){
     .stageName small{display:grid!important;place-items:center!important;width:24px!important;height:24px!important;min-width:24px!important;border-radius:999px!important;background:var(--ux-blue-soft)!important;color:var(--ux-blue)!important;font-size:12px!important;font-weight:900!important;}
     .stageActions{display:flex!important;gap:4px!important;}
     .stageActions button{width:28px!important;height:28px!important;padding:0!important;display:grid!important;place-items:center!important;border-radius:9px!important;}
+    .stageDragHandle{cursor:grab!important;}
+    .stageDragHandle:active{cursor:grabbing!important;}
     .stageEdit{display:grid!important;gap:8px!important;margin-bottom:10px!important;}
     .stageEdit input{width:100%!important;min-width:0!important;}
     .stageEditActions{display:flex!important;gap:6px!important;flex-wrap:wrap!important;}
@@ -1703,6 +1707,8 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
   const [selectedStage,setSelectedStage] = useState(null);
   const [editingStage,setEditingStage] = useState(null);
   const [editingValue,setEditingValue] = useState('');
+  const [draggingStage,setDraggingStage] = useState(null);
+  const [dragOverStage,setDragOverStage] = useState(null);
   const stageExists = (name, ignoreStage = null) => safeArray(stages).some(stage =>
     stage !== ignoreStage && stage.toLowerCase() === name.toLowerCase()
   );
@@ -1785,12 +1791,52 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
     if(selectedStage === stage) setSelectedStage(null);
     if(editingStage === stage) cancelEditStage();
   };
+  const reorderStage = (fromStage, toStage) => {
+    if(!canWrite || !fromStage || !toStage || fromStage === toStage) return;
+    const fromIndex = stages.indexOf(fromStage);
+    const toIndex = stages.indexOf(toStage);
+    if(fromIndex < 0 || toIndex < 0) return;
+
+    const nextStages = [...stages];
+    const [movedStage] = nextStages.splice(fromIndex, 1);
+    nextStages.splice(toIndex, 0, movedStage);
+    setStages(nextStages);
+  };
+  const startStageDrag = (event, stage) => {
+    if(!canWrite || editingStage) return;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', stage);
+    setDraggingStage(stage);
+  };
+  const overStage = (event, stage) => {
+    if(!canWrite || !draggingStage || draggingStage === stage) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDragOverStage(stage);
+  };
+  const dropStage = (event, stage) => {
+    if(!canWrite) return;
+    event.preventDefault();
+    reorderStage(event.dataTransfer.getData('text/plain') || draggingStage, stage);
+    setDraggingStage(null);
+    setDragOverStage(null);
+  };
+  const endStageDrag = () => {
+    setDraggingStage(null);
+    setDragOverStage(null);
+  };
   const stageDeals = selectedStage ? deals.filter(d=>d.stage===selectedStage) : [];
   return <>
     {canWrite && <div className="toolbar"><input placeholder="Nova etapa customizável" value={newStage} onChange={e=>setNewStage(e.target.value)} onKeyDown={e=>{ if(e.key === 'Enter') addStage(); }}/><button onClick={addStage}><Plus size={16}/>Adicionar etapa</button></div>}
     <section className="kanban">{stages.map(stage => {
       const currentStageDeals = deals.filter(d=>d.stage===stage);
-      return <div className="column" key={stage}>
+      return <div
+        className={`column ${draggingStage===stage ? 'stageDragging' : ''} ${dragOverStage===stage && draggingStage!==stage ? 'stageDropTarget' : ''}`}
+        key={stage}
+        onDragOver={e=>overStage(e, stage)}
+        onDragLeave={()=>{ if(dragOverStage === stage) setDragOverStage(null); }}
+        onDrop={e=>dropStage(e, stage)}
+      >
         {editingStage === stage ? <div className="stageEdit">
           <input value={editingValue} onChange={e=>setEditingValue(e.target.value)} onKeyDown={e=>{ if(e.key === 'Enter') renameStage(stage); if(e.key === 'Escape') cancelEditStage(); }} autoFocus/>
           <div className="stageEditActions">
@@ -1800,6 +1846,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
         </div> : <div className="stageHeader">
           <button type="button" className="stageName" onClick={()=>setSelectedStage(stage)} title="Clique para listar as oportunidades desta etapa"><span>{stage}</span><small>{currentStageDeals.length}</small></button>
           {canWrite && <div className="stageActions">
+            <button className="mini stageDragHandle" draggable onDragStart={e=>startStageDrag(e, stage)} onDragEnd={endStageDrag} title="Arrastar etapa" aria-label={`Arrastar ${stage}`}><GripVertical size={14}/></button>
             <button className="mini" onClick={()=>startEditStage(stage)} title="Renomear etapa" aria-label={`Renomear ${stage}`}><Edit3 size={14}/></button>
             <button className="mini" onClick={()=>deleteStage(stage)} title="Excluir etapa" aria-label={`Excluir ${stage}`}><Trash2 size={14}/></button>
           </div>}
