@@ -1236,11 +1236,11 @@ function UXStyle(){
     .column.stageDropTarget{border-color:var(--ux-blue)!important;box-shadow:0 0 0 3px rgba(0,160,209,.14),0 8px 20px rgba(15,23,42,.04)!important;}
     .column h3{font-size:13px!important;line-height:1.2!important;margin-bottom:10px!important;gap:6px!important;}
     .column h3 small{width:24px!important;height:24px!important;min-width:24px!important;font-size:12px!important;}
-    .stageHeader{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;gap:8px!important;align-items:center!important;margin-bottom:10px!important;}
-    .stageName{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:8px!important;width:100%!important;border:0!important;background:transparent!important;padding:0!important;text-align:left!important;color:var(--ux-text)!important;font-weight:900!important;font-size:13px!important;line-height:1.2!important;cursor:pointer!important;}
-    .stageName span{min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
+    .stageHeader{display:grid!important;grid-template-columns:1fr!important;gap:8px!important;align-items:start!important;margin-bottom:10px!important;}
+    .stageName{display:flex!important;align-items:flex-start!important;justify-content:space-between!important;gap:8px!important;width:100%!important;border:0!important;background:transparent!important;padding:0!important;text-align:left!important;color:var(--ux-text)!important;font-weight:900!important;font-size:13px!important;line-height:1.25!important;cursor:pointer!important;}
+    .stageName span{min-width:0!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;word-break:break-word!important;}
     .stageName small{display:grid!important;place-items:center!important;width:24px!important;height:24px!important;min-width:24px!important;border-radius:999px!important;background:var(--ux-blue-soft)!important;color:var(--ux-blue)!important;font-size:12px!important;font-weight:900!important;}
-    .stageActions{display:flex!important;gap:4px!important;}
+    .stageActions{display:flex!important;gap:6px!important;justify-content:flex-start!important;flex-wrap:wrap!important;}
     .stageActions button{width:28px!important;height:28px!important;padding:0!important;display:grid!important;place-items:center!important;border-radius:9px!important;}
     .stageDragHandle{cursor:grab!important;}
     .stageDragHandle:active{cursor:grabbing!important;}
