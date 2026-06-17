@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { LayoutDashboard, KanbanSquare, Building2, Users, BriefcaseBusiness, CalendarDays, Plus, Search, Edit3, Trash2, MessageSquare, CheckCircle2, Clock3, CircleDollarSign, X, Save, Sparkles, Phone, Mail, UserRound, Filter, BellRing, TrendingUp, AlertTriangle, Lock } from 'lucide-react';
+import { LayoutDashboard, KanbanSquare, Building2, Users, BriefcaseBusiness, CalendarDays, Plus, Search, Edit3, Trash2, MessageSquare, CheckCircle2, Clock3, CircleDollarSign, X, Save, Sparkles, Phone, Mail, UserRound, Filter, BellRing, TrendingUp, AlertTriangle, Lock, Package } from 'lucide-react';
 import './style.css';
 import { supabase } from './lib/supabase';
 
@@ -1199,8 +1199,9 @@ function UXStyle(){
     body{background:var(--ux-bg)!important;}
     .app{grid-template-columns:80px minmax(0,1fr)!important;background:var(--ux-bg)!important;}
     .sidebar{width:80px!important;min-width:80px!important;padding:18px 12px!important;border-right:1px solid var(--ux-border)!important;background:#ffffff!important;box-shadow:8px 0 28px rgba(15,23,42,.04)!important;align-items:center!important;}
-    .brand{height:48px!important;display:grid!important;place-items:center!important;margin-bottom:18px!important;padding:0!important;}
+    .brand{height:56px!important;width:100%!important;display:grid!important;place-items:center!important;margin-bottom:14px!important;padding:0!important;}
     .brandLogo{max-width:44px!important;max-height:44px!important;object-fit:contain!important;}
+    .brand div{display:none!important;}
     .sidebar nav{width:100%!important;display:flex!important;flex-direction:column!important;gap:10px!important;align-items:center!important;}
     .sidebar nav button{width:52px!important;height:52px!important;min-height:52px!important;padding:0!important;display:grid!important;place-items:center!important;border-radius:16px!important;position:relative!important;color:#64748b!important;background:transparent!important;border:1px solid transparent!important;transition:all .18s ease!important;}
     .sidebar nav button svg{width:21px!important;height:21px!important;margin:0!important;}
@@ -1322,7 +1323,7 @@ function App(){
   const canWrite = ['CEO','Comercial'].includes(currentUser?.role);
   const allMenu = [
     ['dashboard','Dashboard',LayoutDashboard], ['pipeline','Pipeline',KanbanSquare], ['deals','Oportunidades',BriefcaseBusiness],
-    ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['companies','Empresas',Building2], ['contacts','Contatos',Users], ['products','Produtos',Sparkles], ['imports','Importação',Filter], ['profiles','Perfis',Users], ['matrix','Matriz Daleth',Sparkles]
+    ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['companies','Empresas',Building2], ['contacts','Contatos',UserRound], ['products','Produtos',Package], ['imports','Importação',Filter], ['profiles','Perfis',Lock], ['matrix','Matriz Daleth',Sparkles]
   ];
   const menu = isCEO ? allMenu : allMenu.filter(([id]) => !['dashboard','imports','profiles'].includes(id));
   const activePage = (!isCEO && page === 'dashboard') ? 'deals' : page;
