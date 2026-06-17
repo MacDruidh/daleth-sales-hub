@@ -947,7 +947,10 @@ function useProfiles(enabled){
           .order('full_name');
 
         if(error) throw error;
-        if(!cancelled) setProfiles((data || []).map(mapProfileFromDb));
+        if(!cancelled){
+          setProfiles((data || []).map(mapProfileFromDb));
+          if(!data?.length) setError('Nenhum perfil foi retornado pela sessão atual. Saia e entre novamente com o usuário CEO.');
+        }
       } catch (err) {
         console.warn('Falha ao carregar perfis:', err);
         if(!cancelled) setError('Não foi possível carregar perfis. Confira se o arquivo supabase/schema.sql já foi aplicado no painel do Supabase.');
@@ -1223,7 +1226,7 @@ function UXStyle(){
 function App(){
   const [page,setPage] = useState('dashboard');
   const [query,setQuery] = useState('');
-  const [currentUser,setCurrentUser] = useStore('dsh-v1-current-user', null);
+  const [currentUser,setCurrentUser] = useState(null);
   const [companies,setCompanies] = useCompanies();
   const [contacts,setContacts] = useContacts();
   const [deals,setDeals] = useDeals();
