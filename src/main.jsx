@@ -1398,12 +1398,15 @@ function App(){
 }
 
 
-function GlobalSearch({query,companies,contacts,deals,activities,contracts,products,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName}){
+function GlobalSearch({query,companies,contacts,deals,setDeals,activities,contracts,products,canWrite,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName}){
   const q = query.trim().toLowerCase();
   const includes = (...values) => values.join(' ').toLowerCase().includes(q);
   const companyResults = companies.filter(c => includes(c.name,c.segment,c.site,c.status,c.notes)).slice(0,8);
   const contactResults = contacts.filter(c => includes(c.name,c.role,c.email,c.phone,c.whatsapp,c.notes)).slice(0,8);
-  const dealResults = deals.filter(d => includes(d.title,d.product,d.owner,d.stage,d.description,d.nextStep)).slice(0,12);
+  const dealResults = deals
+    .filter(d => includes(d.title,d.product,d.owner,d.stage,d.description,d.nextStep,byId(companies,d.companyId)?.name))
+    .sort((a,b)=>String(a.title || '').localeCompare(String(b.title || ''),'pt-BR',{sensitivity:'base'}))
+    .slice(0,12);
   const contractResults = contracts.filter(c => {
     const company = byId(companies,c.companyId);
     return includes(company?.name,c.product,c.owner,c.status,c.notes);
@@ -1411,6 +1414,17 @@ function GlobalSearch({query,companies,contacts,deals,activities,contracts,produ
   const productResults = safeArray(products).filter(p => includes(p)).slice(0,8);
   const activityResults = activities.filter(a => includes(a.title,a.type,a.owner,a.status,a.notes)).slice(0,8);
   const total = companyResults.length + contactResults.length + dealResults.length + contractResults.length + productResults.length + activityResults.length;
+  const removeDealFromSearch = async (deal) => {
+    if(!canWrite) return;
+    if(!window.confirm('Deseja realmente excluir esta oportunidade?')) return;
+    try {
+      await deleteDealFromSupabase(deal);
+      setDeals(deals.filter(d => !sameId(d.id, deal.id)));
+    } catch (error) {
+      console.warn('Falha ao excluir oportunidade pela busca:', error);
+      window.alert('Não foi possível excluir esta oportunidade no Supabase agora.');
+    }
+  };
   return <>
     <Panel title={`Busca no CRM: ${query}`}>
       <p className="muted">Resultados encontrados nas principais áreas do Sales Hub. Clique em uma linha ou em “Abrir” para consultar e editar.</p>
@@ -1419,7 +1433,7 @@ function GlobalSearch({query,companies,contacts,deals,activities,contracts,produ
     <section className="grid2 compact">
       <Panel title="Oportunidades">
         <DashboardTable headers={['Oportunidade','Empresa','Etapa','Valor total','Ações']}>
-          {dealResults.length ? dealResults.map(d=><tr key={d.id}><td><b>{d.title}</b><span>{d.product}</span></td><td>{byId(companies,d.companyId)?.name || '-'}</td><td>{d.stage}</td><td>{moneyShort(dealTcv(d))}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+          {dealResults.length ? dealResults.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.product}</span></td><td>{byId(companies,d.companyId)?.name || '-'}</td><td>{d.stage}</td><td>{moneyShort(dealTcv(d))}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Editar</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDealFromSearch(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>) : <tr><td>Nenhuma oportunidade</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
       <Panel title="Empresas">
@@ -1890,7 +1904,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
     const matchesStage = !filters.stage || d.stage === filters.stage;
     const matchesOwner = !filters.owner || d.owner === filters.owner;
     return matchesQuery && matchesCompany && matchesProduct && matchesStage && matchesOwner;
-  });
+  }).sort((a,b)=>String(a.title || '').localeCompare(String(b.title || ''),'pt-BR',{sensitivity:'base'}));
   const selectedDeals = deals.filter(deal => selectedDealIds.some(id => sameId(id, deal.id)));
   const visibleSelectedCount = list.filter(deal => selectedDealIds.some(id => sameId(id, deal.id))).length;
   const allVisibleSelected = list.length > 0 && visibleSelectedCount === list.length;
