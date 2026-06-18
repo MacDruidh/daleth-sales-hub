@@ -1,0 +1,95 @@
+name: Backup diario do Supabase
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-production-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Gerar backup criptografado
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Validar configuracao protegida
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_ENCRYPTION_PASSWORD: ${{ secrets.BACKUP_ENCRYPTION_PASSWORD }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${SUPABASE_DB_URL:-}" || { echo "Secret SUPABASE_DB_URL ausente."; exit 1; }
+          test -n "${BACKUP_ENCRYPTION_PASSWORD:-}" || { echo "Secret BACKUP_ENCRYPTION_PASSWORD ausente."; exit 1; }
+
+      - name: Instalar ferramenta oficial do Supabase
+        uses: supabase/setup-cli@v2
+        with:
+          version: 2.84.2
+          github-token: ${{ github.token }}
+
+      - name: Exportar e validar o banco
+        id: export
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_ENCRYPTION_PASSWORD: ${{ secrets.BACKUP_ENCRYPTION_PASSWORD }}
+        run: |
+          set -Eeuo pipefail
+
+          timestamp="$(date -u +'%Y-%m-%dT%H-%M-%SZ')"
+          backup_dir="${RUNNER_TEMP}/daleth-backup"
+          roles_file="${backup_dir}/roles-${timestamp}.sql"
+          schema_file="${backup_dir}/schema-${timestamp}.sql"
+          data_file="${backup_dir}/dados-${timestamp}.sql"
+          manifest_file="${backup_dir}/manifesto-${timestamp}.txt"
+          archive_file="${backup_dir}/daleth-sales-hub-${timestamp}.tar.gz"
+          encrypted_file="${archive_file}.enc"
+
+          mkdir -p "${backup_dir}"
+
+          supabase db dump --db-url "${SUPABASE_DB_URL}" -f "${roles_file}" --role-only
+          supabase db dump --db-url "${SUPABASE_DB_URL}" -f "${schema_file}"
+          supabase db dump --db-url "${SUPABASE_DB_URL}" -f "${data_file}" --data-only --use-copy
+
+          test -s "${roles_file}"
+          test -s "${schema_file}"
+          test -s "${data_file}"
+
+          {
+            echo "Backup Daleth Sales Hub"
+            echo "Gerado em UTC: ${timestamp}"
+            sha256sum "${roles_file}" "${schema_file}" "${data_file}"
+          } > "${manifest_file}"
+          test -s "${manifest_file}"
+
+          tar -C "${backup_dir}" -czf "${archive_file}" \
+            "$(basename "${roles_file}")" \
+            "$(basename "${schema_file}")" \
+            "$(basename "${data_file}")" \
+            "$(basename "${manifest_file}")"
+
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 \
+            -in "${archive_file}" \
+            -out "${encrypted_file}" \
+            -pass env:BACKUP_ENCRYPTION_PASSWORD
+
+          test -s "${encrypted_file}"
+          rm -f "${roles_file}" "${schema_file}" "${data_file}" "${manifest_file}" "${archive_file}"
+
+          echo "artifact_path=${encrypted_file}" >> "${GITHUB_OUTPUT}"
+          echo "artifact_name=daleth-backup-${timestamp}" >> "${GITHUB_OUTPUT}"
+
+      - name: Guardar backup por 30 dias
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.export.outputs.artifact_name }}
+          path: ${{ steps.export.outputs.artifact_path }}
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
