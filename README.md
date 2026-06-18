@@ -49,6 +49,10 @@ Configuração esperada no Vercel:
 
 O arquivo `vercel.json` garante que recarregar qualquer rota do app continue abrindo o CRM.
 
+## Backups
+
+O banco do CRM possui uma rotina de backup diario criptografado com retencao de 30 dias. A configuracao dos segredos, a verificacao e o processo seguro de restauracao estao descritos em `BACKUP_E_RESTAURACAO.md`.
+
 ## Identidade visual
 
 - Cor principal: `#00A0D1`

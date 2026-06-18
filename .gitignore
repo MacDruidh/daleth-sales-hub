@@ -2,3 +2,7 @@ node_modules/
 dist/
 .env.local
 .DS_Store
+backups/
+*.dump
+*.dump.enc
+*.tar.gz.enc
