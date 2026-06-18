@@ -614,31 +614,54 @@ const ACTIVITY_LEGACY_SELECT = `
   )
 `;
 function isMissingActivityFieldError(error){
-  const message = String(error?.message || '');
+  const message = `${String(error?.message || '')} ${String(error?.details || '')} ${String(error?.hint || '')} ${String(error?.code || '')}`;
   return message.includes('due_time') || message.includes('meeting_link');
+}
+function isActivityRelationError(error){
+  const message = `${String(error?.message || '')} ${String(error?.details || '')} ${String(error?.hint || '')} ${String(error?.code || '')}`.toLowerCase();
+  return message.includes('opportunity_id') || message.includes('foreign key') || message.includes('23503');
+}
+function supabaseErrorText(error){
+  return [error?.message, error?.details, error?.hint, error?.code].filter(Boolean).join(' · ') || 'Erro não detalhado.';
+}
+async function runActivityMutation(activity, payload, selectQuery){
+  const query = activity.supabaseId
+    ? supabase.from('activities').update(payload).eq('id', activity.supabaseId)
+    : supabase.from('activities').insert(payload);
+  return query.select(selectQuery).single();
 }
 
 async function saveActivityToSupabase(activity, deals){
   const resolvedOpportunityId = await resolveDealDbIdFromUiId(deals, activity.dealId);
   const payload = activityToDb(activity, deals, resolvedOpportunityId);
-  const query = activity.supabaseId
-    ? supabase.from('activities').update(payload).eq('id', activity.supabaseId)
-    : supabase.from('activities').insert(payload);
 
-  let { data, error } = await query.select(ACTIVITY_SELECT).single();
+  let { data, error } = await runActivityMutation(activity, payload, ACTIVITY_SELECT);
 
   if(error && isMissingActivityFieldError(error)){
     const legacyPayload = {...payload};
     delete legacyPayload.due_time;
     delete legacyPayload.meeting_link;
-    const legacyQuery = activity.supabaseId
-      ? supabase.from('activities').update(legacyPayload).eq('id', activity.supabaseId)
-      : supabase.from('activities').insert(legacyPayload);
-    const legacyResult = await legacyQuery.select(ACTIVITY_LEGACY_SELECT).single();
+    const legacyResult = await runActivityMutation(activity, legacyPayload, ACTIVITY_LEGACY_SELECT);
     data = legacyResult.data;
     error = legacyResult.error;
     if(data){
       return {...mapActivityFromDb(data), dueTime: activity.dueTime || '', meetingLink: activity.meetingLink || ''};
+    }
+  }
+
+  if(error && isActivityRelationError(error)){
+    const unlinkedPayload = {...payload, opportunity_id: null};
+    let unlinkedResult = await runActivityMutation(activity, unlinkedPayload, ACTIVITY_SELECT);
+    if(unlinkedResult.error && isMissingActivityFieldError(unlinkedResult.error)){
+      const legacyUnlinkedPayload = {...unlinkedPayload};
+      delete legacyUnlinkedPayload.due_time;
+      delete legacyUnlinkedPayload.meeting_link;
+      unlinkedResult = await runActivityMutation(activity, legacyUnlinkedPayload, ACTIVITY_LEGACY_SELECT);
+    }
+    data = unlinkedResult.data;
+    error = unlinkedResult.error;
+    if(data){
+      return {...mapActivityFromDb(data), dealId: activity.dealId, dueTime: activity.dueTime || '', meetingLink: activity.meetingLink || ''};
     }
   }
 
@@ -2206,7 +2229,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
       console.warn('Falha ao salvar atividade no Supabase:', error);
       setActivities([{...nextActivity,id:Date.now()},...activities]);
       setActivity({...activity,title:'',dueTime:'',meetingLink:'',notes:''});
-      window.alert('Atividade salva localmente. O Supabase não aceitou a gravação agora.');
+      window.alert(`Atividade salva localmente. O Supabase não aceitou a gravação agora: ${supabaseErrorText(error)}`);
     }
   };
   const addInteraction = () => {
@@ -2341,7 +2364,7 @@ function DealModal({deal,onClose,companies=[],contacts=[],deals=[],setDeals,acti
       console.warn('Falha ao salvar atividade no Supabase:', error);
       setActivities([{...nextActivity,id:Date.now()},...activities]);
       setActivity({...activity,title:'',dueTime:'',meetingLink:'',notes:''});
-      window.alert('Atividade salva localmente. O Supabase não aceitou a gravação agora.');
+      window.alert(`Atividade salva localmente. O Supabase não aceitou a gravação agora: ${supabaseErrorText(error)}`);
     }
   };
   const dealNotes = notes.filter(n=>String(n.dealId)===String(deal.id));
