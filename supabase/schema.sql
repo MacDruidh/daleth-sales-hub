@@ -186,6 +186,7 @@ create table if not exists activities (
   legacy_id text,
   opportunity_id bigint references opportunities(id) on delete cascade,
   title text not null,
+  type text not null default 'Follow-up',
   due_date date,
   due_time time,
   meeting_link text,
@@ -199,6 +200,7 @@ create table if not exists activities (
 
 alter table activities add column if not exists legacy_id text;
 alter table activities add column if not exists opportunity_id bigint references opportunities(id) on delete cascade;
+alter table activities add column if not exists type text not null default 'Follow-up';
 alter table activities add column if not exists activity_type text not null default 'Follow-up';
 alter table activities add column if not exists due_time time;
 alter table activities add column if not exists meeting_link text;

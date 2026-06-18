@@ -555,7 +555,7 @@ function mapActivityFromDb(a){
     id: a.legacy_id || a.id,
     supabaseId: a.id,
     dealId: a.opportunities?.legacy_id || a.opportunity_id,
-    type: a.activity_type || 'Ligação',
+    type: a.activity_type || a.type || 'Ligação',
     title: a.title || '',
     dueDate: a.due_date || '',
     dueTime: a.due_time ? String(a.due_time).slice(0,5) : '',
@@ -577,6 +577,7 @@ function activityToDb(activity, deals, opportunityIdOverride){
     status: activity.status || 'Pendente',
     notes: activity.notes || null,
     owner: activity.owner || null,
+    type: activity.type || 'Follow-up',
     activity_type: activity.type || 'Follow-up'
   };
 }
@@ -591,6 +592,7 @@ const ACTIVITY_SELECT = `
   status,
   notes,
   owner,
+  type,
   legacy_id,
   activity_type,
   created_at,
@@ -606,6 +608,7 @@ const ACTIVITY_LEGACY_SELECT = `
   status,
   notes,
   owner,
+  type,
   legacy_id,
   activity_type,
   created_at,
