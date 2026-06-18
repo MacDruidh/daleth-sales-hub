@@ -522,6 +522,33 @@ function dealDbIdFromUiId(deals, dealId){
   const deal = safeArray(deals).find(d => sameId(d.id, dealId));
   return deal?.supabaseId || (deal ? deal.id : dealId) || null;
 }
+async function resolveDealDbIdFromUiId(deals, dealId){
+  if(!dealId) return null;
+  const deal = safeArray(deals).find(d => sameId(d.id, dealId));
+  if(deal?.supabaseId) return deal.supabaseId;
+
+  const candidateId = deal ? deal.id : dealId;
+  if(!candidateId) return null;
+
+  const queryValue = String(candidateId);
+  const numericId = Number(queryValue);
+  const filter = Number.isFinite(numericId) && queryValue.trim() !== ''
+    ? `legacy_id.eq.${queryValue},id.eq.${numericId}`
+    : `legacy_id.eq.${queryValue}`;
+
+  const { data, error } = await supabase
+    .from('opportunities')
+    .select('id,legacy_id')
+    .or(filter)
+    .limit(1);
+
+  if(error){
+    console.warn('Falha ao resolver ID da oportunidade no Supabase:', error);
+    return null;
+  }
+
+  return data?.[0]?.id || null;
+}
 
 function mapActivityFromDb(a){
   return {
@@ -539,10 +566,10 @@ function mapActivityFromDb(a){
   };
 }
 
-function activityToDb(activity, deals){
+function activityToDb(activity, deals, opportunityIdOverride){
   return {
     legacy_id: activity.legacy_id || activity.legacyId || (activity.pipedriveId ? String(activity.id) : null),
-    opportunity_id: dealDbIdFromUiId(deals, activity.dealId),
+    opportunity_id: opportunityIdOverride !== undefined ? opportunityIdOverride : dealDbIdFromUiId(deals, activity.dealId),
     title: activity.title || '',
     due_date: activity.dueDate || null,
     due_time: activity.dueTime || null,
@@ -592,7 +619,8 @@ function isMissingActivityFieldError(error){
 }
 
 async function saveActivityToSupabase(activity, deals){
-  const payload = activityToDb(activity, deals);
+  const resolvedOpportunityId = await resolveDealDbIdFromUiId(deals, activity.dealId);
+  const payload = activityToDb(activity, deals, resolvedOpportunityId);
   const query = activity.supabaseId
     ? supabase.from('activities').update(payload).eq('id', activity.supabaseId)
     : supabase.from('activities').insert(payload);
