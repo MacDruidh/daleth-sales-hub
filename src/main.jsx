@@ -940,6 +940,35 @@ function sameId(a,b){ return String(a ?? '') === String(b ?? ''); }
 function byId(list,id){ return (Array.isArray(list) ? list : []).find(item => sameId(item?.id,id)); }
 function safeText(value){ return String(value ?? ''); }
 function safeArray(value){ return Array.isArray(value) ? value : []; }
+function normalizedLookup(value){
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+}
+function digitsOnly(value){ return String(value || '').replace(/\D/g,''); }
+function entityCode(prefix, entity){
+  const raw = entity?.legacyId || entity?.legacy_id || entity?.id || '';
+  const clean = String(raw).replace(/\D/g,'') || String(raw);
+  return `${prefix}${clean.padStart(4,'0')}`;
+}
+function websiteHref(value){
+  const site = String(value || '').trim();
+  if(!site) return '';
+  return /^https?:\/\//i.test(site) ? site : `https://${site}`;
+}
+function normalizedSite(value){
+  return String(value || '').trim().toLowerCase().replace(/^https?:\/\//,'').replace(/^www\./,'').replace(/\/$/,'');
+}
+function companyForDeal(deal, companies, contacts){
+  const direct = byId(companies, deal?.companyId);
+  if(direct) return direct;
+  const contact = byId(contacts, deal?.contactId);
+  const viaContact = byId(companies, contact?.companyId);
+  if(viaContact) return viaContact;
+  const title = normalizedLookup(deal?.title);
+  return safeArray(companies).find(company => {
+    const name = normalizedLookup(company?.name);
+    return name.length >= 4 && title.includes(name);
+  });
+}
 function optionsIncludingCurrent(values, current){
   const items = [current, ...safeArray(values)].map(value => String(value || '').trim()).filter(Boolean);
   return items.filter((value, index) => items.findIndex(item => item.toLowerCase() === value.toLowerCase()) === index);
@@ -2055,6 +2084,11 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
   const add = async () => {
     if(!canWrite) return;
     if(!form.title.trim()) return;
+    const similarDeal = deals.find(deal =>
+      normalizedLookup(deal.title) === normalizedLookup(form.title) ||
+      (sameId(deal.companyId, form.companyId) && normalizedLookup(deal.product) === normalizedLookup(form.product) && normalizedLookup(deal.title).includes(normalizedLookup(form.title)))
+    );
+    if(similarDeal && !window.confirm(`Existe uma oportunidade ${entityCode('O',similarDeal)} - ${similarDeal.title} com dados semelhantes. Deseja incluir mesmo assim?`)) return;
     const nextDeal = {
       ...form,
       value: Number(form.value),
@@ -2134,20 +2168,22 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
         <span>{selectedDeals.length} selecionada(s)</span>
         <button className="mini" onClick={removeSelectedDeals} disabled={!selectedDeals.length}><Trash2 size={15}/>Excluir selecionadas</button>
       </div>}
-      <Table headers={['Sel.','Oportunidade','Empresa','Produto','Receita mensal','Prazo','Valor total','Etapa','Responsável','Ações']}>{list.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><input className="rowSelect" type="checkbox" checked={selectedDealIds.some(id=>sameId(id,d.id))} onChange={(e)=>{e.stopPropagation(); toggleDealSelection(d.id);}} onClick={e=>e.stopPropagation()} disabled={!canWrite}/></td><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{byId(companies,d.companyId)?.name}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(d.product)}} disabled={!d.product}>{d.product || '-'}</button></td><td>{money(dealMrr(d))}</td><td>{dealMonths(d)} meses</td><td><b>{money(dealTcv(d))}</b></td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table>
+      <Table headers={['Sel.','Oportunidade','Empresa','Produto','Receita mensal','Prazo','Valor total','Etapa','Responsável','Ações']}>{list.map(d=>{ const linkedCompany = companyForDeal(d,companies,contacts); return <tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><input className="rowSelect" type="checkbox" checked={selectedDealIds.some(id=>sameId(id,d.id))} onChange={(e)=>{e.stopPropagation(); toggleDealSelection(d.id);}} onClick={e=>e.stopPropagation()} disabled={!canWrite}/></td><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{linkedCompany?.name || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(d.product)}} disabled={!d.product}>{d.product || '-'}</button></td><td>{money(dealMrr(d))}</td><td>{dealMonths(d)} meses</td><td><b>{money(dealTcv(d))}</b></td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>})}</Table>
     </Panel>
   </>;
 }
 
 function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,setSelectedCompanyId,setSelectedContactId,setSelectedProductName}){
+  const initialContact = byId(contacts, deal.contactId);
+  const inferredCompany = companyForDeal(deal, companies, contacts);
   const [tab,setTab] = useState('dados');
-  const [draft,setDraft] = useState({contractMonths:12, setup:0, probability:30, ...deal});
+  const [draft,setDraft] = useState({contractMonths:12, setup:0, probability:30, ...deal, companyId:inferredCompany?.id || deal.companyId});
   const [note,setNote] = useState('');
   const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),dueTime:'',meetingLink:'',owner:deal.owner || currentUser?.name || 'Sergio',status:'Pendente',notes:''});
   const [interaction,setInteraction] = useState({type:'Ligação',dateTime:new Date().toISOString().slice(0,16),owner:currentUser?.name || deal.owner || 'Sergio',description:'',nextAction:'',nextDueDate:''});
 
-  const company = byId(companies, deal.companyId);
-  const contact = byId(contacts, deal.contactId);
+  const company = byId(companies, draft.companyId) || inferredCompany;
+  const contact = initialContact;
   const dealNotes = safeArray(notes).filter(n=>sameId(n.dealId, deal.id));
   const dealActivities = safeArray(activities).filter(a=>sameId(a.dealId, deal.id));
   const dealInteractions = safeArray(interactions).filter(i=>sameId(i.dealId, deal.id));
@@ -2266,7 +2302,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
           <button className="mini" onClick={onBack} style={{marginBottom:'14px'}}><X size={15}/>Voltar</button>
           <h2 style={{fontSize:'28px',margin:'0 0 8px'}}>{deal.title}</h2>
           <p className="muted" style={{margin:0,display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center'}}>
-            <button className="mini" onClick={()=>openLinkedEntity(setSelectedCompanyId, deal.companyId)} disabled={!company}>{company?.name || 'Sem empresa'}</button>
+            <button className="mini" onClick={()=>openLinkedEntity(setSelectedCompanyId, company?.id)} disabled={!company}>{company?.name || 'Sem empresa'}</button>
             {contact?.name && <button className="mini" onClick={()=>openLinkedEntity(setSelectedContactId, deal.contactId)}>{contact.name}</button>}
             <button className="mini" onClick={()=>setSelectedProductName?.(draft.product)} disabled={!draft.product}>{draft.product || 'Sem produto'}</button>
           </p>
@@ -2288,7 +2324,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
 
     <div className="tabs" style={{marginBottom:'18px'}}>{['dados','historico','atividades','contrato','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t === 'dados' ? 'Dados' : t === 'historico' ? 'Histórico' : t === 'atividades' ? 'Atividades' : t === 'contrato' ? 'Contrato' : 'Matriz'}</button>)}</div>
 
-    {tab==='dados' && <Panel title="Dados da oportunidade"><div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={optionsIncludingCurrent(products,draft.product).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><Input label="Probabilidade %" field="probability" form={draft} setForm={setDraft} type="number"/><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div></Panel>}
+    {tab==='dados' && <Panel title="Dados da oportunidade"><div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={optionsIncludingCurrent(products,draft.product).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><Input label="Probabilidade %" field="probability" form={draft} setForm={setDraft} type="number"/><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div></Panel>}
 
     {tab==='historico' && <>
       {canWrite && <Panel title="Nova interação"><div className="formGrid modalGrid">
@@ -2323,8 +2359,9 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
 }
 
 function DealModal({deal,onClose,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES}){
+  const inferredCompany = companyForDeal(deal, companies, contacts);
   const [tab,setTab] = useState('geral');
-  const [draft,setDraft] = useState({contractMonths:12, setup:0, probability:30, ...deal});
+  const [draft,setDraft] = useState({contractMonths:12, setup:0, probability:30, ...deal, companyId:inferredCompany?.id || deal.companyId});
   const [note,setNote] = useState('');
   const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),dueTime:'',meetingLink:'',owner:deal.owner,status:'Pendente',notes:''});
   const save = async () => {
@@ -2377,7 +2414,7 @@ function DealModal({deal,onClose,companies=[],contacts=[],deals=[],setDeals,acti
   const dealNotes = notes.filter(n=>String(n.dealId)===String(deal.id));
   const dealActivities = activities.filter(a=>String(a.dealId)===String(deal.id));
   return <div className="modalBackdrop"><div className="modal"><div className="modalHead"><div><h2>{deal.title}</h2><span>{byId(companies,deal.companyId)?.name} · Receita mensal {money(dealMrr(deal))} · Valor total {money(dealTcv(deal))}</span></div><button className="iconBtn" onClick={onClose}><X/></button></div><div className="tabs">{['geral','timeline','atividades','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t}</button>)}</div>
-    {tab==='geral' && <div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={optionsIncludingCurrent(products,draft.product).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><Input label="Probabilidade %" field="probability" form={draft} setForm={setDraft} type="number"/><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/><button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button></div>}
+    {tab==='geral' && <div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={optionsIncludingCurrent(products,draft.product).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><Input label="Probabilidade %" field="probability" form={draft} setForm={setDraft} type="number"/><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/><button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button></div>}
     {tab==='timeline' && <div><div className="noteBox"><textarea placeholder="Adicionar comentário, registro de reunião, ligação, WhatsApp..." value={note} onChange={e=>setNote(e.target.value)}></textarea><button onClick={addNote}><MessageSquare size={16}/>Adicionar comentário</button></div><div className="timeline">{dealNotes.map(n=><div className="timelineItem" key={n.id}><b>{n.user || n.userName || n.user_name || 'Daleth'}</b><span>{formatDate(n.date || n.noteDate || n.note_date)}</span><p>{n.text || n.note || ''}</p></div>)}</div></div>}
     {tab==='atividades' && <div><div className="formGrid"><Select label="Tipo" field="type" form={activity} setForm={setActivity} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={activity} setForm={setActivity}/><Input label="Data" field="dueDate" form={activity} setForm={setActivity} type="date"/><Input label="Hora" field="dueTime" form={activity} setForm={setActivity} type="time"/><Input label="Link chamada" field="meetingLink" form={activity} setForm={setActivity} type="url"/><Select label="Responsável" field="owner" form={activity} setForm={setActivity} options={USERS.map(u=>[u,u])}/><button className="saveBtn" onClick={addActivity}><Plus size={16}/>Criar atividade</button></div><div className="timeline">{dealActivities.map(a=><div className="timelineItem" key={a.id}><b>{a.type}: {a.title}</b><span>{formatActivityDateTime(a)} · {a.owner} · {a.status}</span>{a.meetingLink && <p><a href={a.meetingLink} target="_blank" rel="noreferrer">Abrir chamada</a></p>}<p>{a.notes}</p></div>)}</div></div>}
     {tab==='contrato' && <Panel title="Resumo Comercial"><div className="formGrid modalGrid">
@@ -2430,6 +2467,17 @@ function Companies({companies,setCompanies,query,setSelectedCompanyId,canWrite})
   const add = async () => {
     if(!canWrite) return;
     if(!form.name.trim()) return;
+    const duplicate = companies.find(company =>
+      normalizedLookup(company.name) === normalizedLookup(form.name) ||
+      (digitsOnly(form.cnpj) && digitsOnly(company.cnpj) === digitsOnly(form.cnpj)) ||
+      (normalizedSite(form.site) && normalizedSite(company.site) === normalizedSite(form.site))
+    );
+    if(duplicate){
+      if(window.confirm(`A empresa ${entityCode('E',duplicate)} - ${duplicate.name} já existe. Deseja abrir o cadastro existente para edição?`)){
+        setSelectedCompanyId(duplicate.id);
+      }
+      return;
+    }
     try {
       const saved = await saveCompanyToSupabase(form);
       setCompanies([saved,...companies]);
@@ -2453,7 +2501,7 @@ function Companies({companies,setCompanies,query,setSelectedCompanyId,canWrite})
       window.alert('Não foi possível excluir esta empresa no Supabase agora.');
     }
   };
-  return <>{canWrite && <Panel title="Nova empresa"><div className="formGrid"><Input label="Nome fantasia" field="name" form={form} setForm={setForm}/><Input label="Segmento" field="segment" form={form} setForm={setForm}/><Input label="Site" field="site" form={form} setForm={setForm}/><Input label="CNPJ" field="cnpj" form={form} setForm={setForm}/><button className="saveBtn" onClick={add}><Plus size={16}/>Salvar empresa</button></div></Panel>}<Panel title="Empresas"><Table headers={['Empresa','Segmento','Site','Status','Ações']}>{list.map(c=><tr key={c.id} onClick={()=>setSelectedCompanyId(c.id)} style={{cursor:'pointer'}}><td><b>{c.name}</b><span>{c.notes}</span></td><td>{c.segment}</td><td>{c.site}</td><td><span className="pill">{c.status}</span></td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedCompanyId(c.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeCompany(c)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table></Panel></>;
+  return <>{canWrite && <Panel title="Nova empresa"><div className="formGrid"><Input label="Nome fantasia" field="name" form={form} setForm={setForm}/><Input label="Segmento" field="segment" form={form} setForm={setForm}/><Input label="Site" field="site" form={form} setForm={setForm}/><Input label="CNPJ" field="cnpj" form={form} setForm={setForm}/><button className="saveBtn" onClick={add}><Plus size={16}/>Salvar empresa</button></div></Panel>}<Panel title="Empresas"><Table headers={['Empresa','Segmento','Site','Status','Ações']}>{list.map(c=><tr key={c.id} onClick={()=>setSelectedCompanyId(c.id)} style={{cursor:'pointer'}}><td><b>{c.name}</b><span>{c.notes}</span></td><td>{c.segment}</td><td>{c.site ? <a href={websiteHref(c.site)} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}>{c.site}</a> : '-'}</td><td><span className="pill">{c.status}</span></td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedCompanyId(c.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeCompany(c)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table></Panel></>;
 }
 function Contacts({contacts,setContacts,companies,query,setSelectedContactId,canWrite}){
   const empty = { companyId:companies[0]?.id||'', name:'', role:'', email:'', phone:'', whatsapp:'', type:'Decisor', linkedin:'', notes:'' };
@@ -2804,8 +2852,9 @@ function Products({products,setProducts,query,canWrite,setSelectedProductName}){
     if(!canWrite) return;
     const clean = name.trim();
     if(!clean) return;
-    if(products.some(p => p.toLowerCase() === clean.toLowerCase())){
-      window.alert('Este produto já está cadastrado.');
+    const duplicate = products.find(product => normalizedLookup(product) === normalizedLookup(clean));
+    if(duplicate){
+      if(window.confirm(`O produto ${duplicate} já existe. Deseja abrir o cadastro existente?`)) setSelectedProductName?.(duplicate);
       return;
     }
     setProducts([...products, clean]);
