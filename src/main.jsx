@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { LayoutDashboard, KanbanSquare, Building2, Users, BriefcaseBusiness, CalendarDays, Plus, Search, Edit3, Trash2, MessageSquare, CheckCircle2, Clock3, CircleDollarSign, X, Save, Sparkles, Phone, Mail, UserRound, Filter, BellRing, TrendingUp, AlertTriangle, Lock, Package, GripVertical, ChevronLeft, ChevronRight, List } from 'lucide-react';
+import { LayoutDashboard, KanbanSquare, Building2, Users, BriefcaseBusiness, CalendarDays, Plus, Search, Edit3, Trash2, MessageSquare, CheckCircle2, Clock3, CircleDollarSign, X, Save, Sparkles, Phone, Mail, UserRound, Filter, BellRing, TrendingUp, AlertTriangle, Lock, Package, GripVertical, ChevronLeft, ChevronRight, List, ExternalLink, Link2, FileText } from 'lucide-react';
 import './style.css';
 import './calendar.css';
 import { supabase } from './lib/supabase';
@@ -958,6 +958,22 @@ function websiteHref(value){
 function normalizedSite(value){
   return String(value || '').trim().toLowerCase().replace(/^https?:\/\//,'').replace(/^www\./,'').replace(/\/$/,'');
 }
+function dropboxHref(value){
+  const link = String(value || '').trim();
+  if(!link) return '';
+  return /^https?:\/\//i.test(link) ? link : `https://${link}`;
+}
+function isDropboxLink(value){
+  try {
+    const hostname = new URL(dropboxHref(value)).hostname.toLowerCase();
+    return hostname === 'dropbox.com' || hostname.endsWith('.dropbox.com') || hostname === 'db.tt' || hostname.endsWith('.dropboxusercontent.com');
+  } catch {
+    return false;
+  }
+}
+function normalizedDropboxLink(value){
+  return dropboxHref(value).toLowerCase().replace(/([?&])dl=[01](&|$)/,'$1').replace(/[?&]$/,'').replace(/\/$/,'');
+}
 function companyForDeal(deal, companies, contacts){
   const direct = byId(companies, deal?.companyId);
   if(direct) return direct;
@@ -1420,6 +1436,7 @@ function App(){
   const [activities,setActivities] = useActivities();
   const [notes,setNotes] = useNotes();
   const [interactions,setInteractions] = useStore('dsh-v1-interactions', initialInteractions);
+  const [opportunityFiles,setOpportunityFiles] = useStore('dsh-v1-opportunity-files', []);
   const [contracts,setContracts] = useContracts();
   const [products,setProducts] = useProducts();
   const [pipedriveImportMeta,setPipedriveImportMeta] = useStore('dsh-v1-pipedrive-import-meta', null);
@@ -1506,7 +1523,7 @@ function App(){
   ).length;
   const alertTotal = overdueCount + meetingsTodayCount + proposalsWithoutFollowup;
   const alertText = `${overdueCount} atividades vencidas · ${proposalsWithoutFollowup} propostas sem follow-up · ${meetingsTodayCount} reuniões hoje`;
-  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,contracts,setContracts,products,setProducts,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
+  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,contracts,setContracts,products,setProducts,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
   const logout = async () => {
     setQuery('');
     setSelectedDealId(null);
@@ -2174,7 +2191,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
   </>;
 }
 
-function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName}){
+function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,opportunityFiles=[],setOpportunityFiles,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName}){
   const initialContact = byId(contacts, deal.contactId);
   const inferredCompany = companyForDeal(deal, companies, contacts);
   const [tab,setTab] = useState('dados');
@@ -2182,12 +2199,15 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
   const [note,setNote] = useState('');
   const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),dueTime:'',meetingLink:'',owner:deal.owner || currentUser?.name || 'Sergio',status:'Pendente',notes:''});
   const [interaction,setInteraction] = useState({type:'Ligação',dateTime:new Date().toISOString().slice(0,16),owner:currentUser?.name || deal.owner || 'Sergio',description:'',nextAction:'',nextDueDate:''});
+  const emptyFile = {id:'',name:'',url:'',category:'Proposta',notes:'',owner:currentUser?.name || deal.owner || 'Sergio'};
+  const [fileDraft,setFileDraft] = useState(emptyFile);
 
   const company = byId(companies, draft.companyId) || inferredCompany;
   const contact = initialContact;
   const dealNotes = safeArray(notes).filter(n=>sameId(n.dealId, deal.id));
   const dealActivities = safeArray(activities).filter(a=>sameId(a.dealId, deal.id));
   const dealInteractions = safeArray(interactions).filter(i=>sameId(i.dealId, deal.id));
+  const dealFiles = safeArray(opportunityFiles).filter(file=>sameId(file.dealId,deal.id)).sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
 
   const timeline = [
     ...dealInteractions.map(i => ({
@@ -2286,6 +2306,36 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
     }
     setInteraction({type:'Ligação',dateTime:new Date().toISOString().slice(0,16),owner:currentUser?.name || deal.owner || 'Sergio',description:'',nextAction:'',nextDueDate:''});
   };
+  const saveFileLink = () => {
+    if(!canWrite || !setOpportunityFiles) return;
+    if(!fileDraft.name.trim() || !fileDraft.url.trim()){
+      window.alert('Informe o nome do arquivo e o link do Dropbox.');
+      return;
+    }
+    if(!isDropboxLink(fileDraft.url)){
+      window.alert('Informe um link válido do Dropbox.');
+      return;
+    }
+    const duplicate = dealFiles.find(file => !sameId(file.id,fileDraft.id) && normalizedDropboxLink(file.url) === normalizedDropboxLink(fileDraft.url));
+    if(duplicate){
+      window.alert(`Este link já está cadastrado como "${duplicate.name}".`);
+      return;
+    }
+    const now = new Date().toISOString();
+    if(fileDraft.id){
+      setOpportunityFiles(safeArray(opportunityFiles).map(file=>sameId(file.id,fileDraft.id) ? {...file,...fileDraft,url:dropboxHref(fileDraft.url),updatedAt:now} : file));
+    } else {
+      setOpportunityFiles([{...fileDraft,id:`file-${Date.now()}`,dealId:deal.id,url:dropboxHref(fileDraft.url),createdAt:now,updatedAt:now},...safeArray(opportunityFiles)]);
+    }
+    setFileDraft(emptyFile);
+  };
+  const editFileLink = (file) => setFileDraft({id:file.id,name:file.name||'',url:file.url||'',category:file.category||'Outros',notes:file.notes||'',owner:file.owner||currentUser?.name||'Sergio'});
+  const removeFileLink = (file) => {
+    if(!canWrite || !setOpportunityFiles) return;
+    if(!window.confirm(`Remover o vínculo "${file.name}" do CRM? O arquivo não será excluído do Dropbox.`)) return;
+    setOpportunityFiles(safeArray(opportunityFiles).filter(item=>!sameId(item.id,file.id)));
+    if(sameId(fileDraft.id,file.id)) setFileDraft(emptyFile);
+  };
 
   const interactionIcon = (type) => {
     const t = String(type || '').toLowerCase();
@@ -2323,7 +2373,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
       <Kpi icon={Clock3} label="Próxima ação" value={latestNext?.nextAction || 'Não definida'}/>
     </section>
 
-    <div className="tabs" style={{marginBottom:'18px'}}>{['dados','historico','atividades','contrato','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t === 'dados' ? 'Dados' : t === 'historico' ? 'Histórico' : t === 'atividades' ? 'Atividades' : t === 'contrato' ? 'Contrato' : 'Matriz'}</button>)}</div>
+    <div className="tabs" style={{marginBottom:'18px',overflowX:'auto'}}>{['dados','historico','atividades','arquivos','contrato','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t === 'dados' ? 'Dados' : t === 'historico' ? 'Histórico' : t === 'atividades' ? 'Atividades' : t === 'arquivos' ? `Arquivos (${dealFiles.length})` : t === 'contrato' ? 'Contrato' : 'Matriz'}</button>)}</div>
 
     {tab==='dados' && <Panel title="Dados da oportunidade"><div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={optionsIncludingCurrent(products,draft.product).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><Input label="Probabilidade %" field="probability" form={draft} setForm={setDraft} type="number"/><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div></Panel>}
 
@@ -2343,6 +2393,13 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
     </>}
 
     {tab==='atividades' && <Panel title="Atividades da oportunidade">{canWrite && <div className="formGrid"><Select label="Tipo" field="type" form={activity} setForm={setActivity} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={activity} setForm={setActivity}/><Input label="Data" field="dueDate" form={activity} setForm={setActivity} type="date"/><Input label="Hora" field="dueTime" form={activity} setForm={setActivity} type="time"/><Input label="Link chamada" field="meetingLink" form={activity} setForm={setActivity} type="url"/><Select label="Responsável" field="owner" form={activity} setForm={setActivity} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={activity} setForm={setActivity}/><button className="saveBtn" onClick={addActivity}><Plus size={16}/>Criar atividade</button></div>}<div className="timeline">{dealActivities.map(a=><div className="timelineItem" key={a.id}><div style={{display:'flex',justifyContent:'space-between',gap:'12px',alignItems:'flex-start',flexWrap:'wrap'}}><b>{a.type}: {a.title}</b>{canWrite && <button className="mini" onClick={()=>setSelectedActivityId?.(a.id)}><Edit3 size={15}/>Editar</button>}</div><span>{formatActivityDateTime(a)} · {a.owner} · {a.status}</span>{a.meetingLink && <p><a href={a.meetingLink} target="_blank" rel="noreferrer">Abrir chamada</a></p>}<p>{a.notes}</p></div>)}</div></Panel>}
+
+    {tab==='arquivos' && <>
+      {canWrite && <Panel title={fileDraft.id ? 'Editar vínculo de arquivo' : 'Novo vínculo de arquivo'}><div className="formGrid modalGrid"><Input label="Nome do arquivo" field="name" form={fileDraft} setForm={setFileDraft}/><Input label="Link do Dropbox" field="url" form={fileDraft} setForm={setFileDraft} type="url"/><Select label="Categoria" field="category" form={fileDraft} setForm={setFileDraft} options={['Proposta','Contrato','Briefing','Apresentação','Planilha','Escopo','Outros'].map(x=>[x,x])}/><Select label="Responsável" field="owner" form={fileDraft} setForm={setFileDraft} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={fileDraft} setForm={setFileDraft}/><div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}><button className="saveBtn" onClick={saveFileLink}><Link2 size={16}/>{fileDraft.id ? 'Salvar alterações' : 'Adicionar link'}</button>{fileDraft.id && <button className="mini" onClick={()=>setFileDraft(emptyFile)}><X size={15}/>Cancelar</button>}</div></div></Panel>}
+      <Panel title={`Arquivos vinculados (${dealFiles.length})`}>
+        <Table headers={['Arquivo','Categoria','Observações','Responsável','Atualizado','Ações']}>{dealFiles.length ? dealFiles.map(file=><tr key={file.id}><td><b style={{display:'flex',alignItems:'center',gap:'7px'}}><FileText size={16}/>{file.name}</b></td><td><span className="pill">{file.category||'Outros'}</span></td><td>{file.notes||'-'}</td><td>{file.owner||'-'}</td><td>{formatDate(file.updatedAt||file.createdAt)}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><a className="mini" style={{textDecoration:'none'}} href={dropboxHref(file.url)} target="_blank" rel="noreferrer"><ExternalLink size={15}/>Abrir</a>{canWrite && <button className="mini" onClick={()=>editFileLink(file)}><Edit3 size={15}/>Editar</button>}{canWrite && <button className="mini" onClick={()=>removeFileLink(file)}><Trash2 size={15}/>Remover</button>}</div></td></tr>) : <tr><td>Nenhum arquivo vinculado</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}</Table>
+      </Panel>
+    </>}
 
     {tab==='contrato' && <Panel title="Resumo Comercial"><div className="formGrid modalGrid">
 <label><span>Empresa</span><input value={company?.name || ''} readOnly/></label>
