@@ -1,7 +1,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { LayoutDashboard, KanbanSquare, Building2, Users, BriefcaseBusiness, CalendarDays, Plus, Search, Edit3, Trash2, MessageSquare, CheckCircle2, Clock3, CircleDollarSign, X, Save, Sparkles, Phone, Mail, UserRound, Filter, BellRing, TrendingUp, AlertTriangle, Lock, Package, GripVertical } from 'lucide-react';
+import { LayoutDashboard, KanbanSquare, Building2, Users, BriefcaseBusiness, CalendarDays, Plus, Search, Edit3, Trash2, MessageSquare, CheckCircle2, Clock3, CircleDollarSign, X, Save, Sparkles, Phone, Mail, UserRound, Filter, BellRing, TrendingUp, AlertTriangle, Lock, Package, GripVertical, ChevronLeft, ChevronRight, List } from 'lucide-react';
 import './style.css';
+import './calendar.css';
 import { supabase } from './lib/supabase';
 
 const STAGES = ['Lead Captado','Primeiro Contato','Reunião Agendada','Levantamento','Proposta Enviada','Negociação','Ganho','Perdido'];
@@ -2433,7 +2434,40 @@ function DealModal({deal,onClose,companies=[],contacts=[],deals=[],setDeals,acti
 }
 
 function Activities({activities,setActivities,deals,query,setSelectedActivityId,canWrite}){
+  const [view,setView] = useState('list');
+  const [month,setMonth] = useState(() => new Date(`${today()}T12:00:00`));
+  const [calendarFilters,setCalendarFilters] = useState({owner:'',type:'',status:''});
   const list = activities.filter(a => (a.title+a.type+a.owner+a.status).toLowerCase().includes(query.toLowerCase()));
+  const calendarActivities = list.filter(a =>
+    a.dueDate &&
+    (!calendarFilters.owner || a.owner === calendarFilters.owner) &&
+    (!calendarFilters.type || a.type === calendarFilters.type) &&
+    (!calendarFilters.status || a.status === calendarFilters.status)
+  );
+  const owners = [...new Set(safeArray(activities).map(a=>a.owner).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const types = [...new Set(safeArray(activities).map(a=>a.type).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const calendarStart = new Date(year,monthIndex,1 - new Date(year,monthIndex,1).getDay());
+  const calendarDays = Array.from({length:42},(_,index)=>{
+    const date = new Date(calendarStart);
+    date.setDate(calendarStart.getDate()+index);
+    return date;
+  });
+  const dateKey = (date) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+  const monthLabel = month.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const monthPrefix = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
+  const monthActivityCount = calendarActivities.filter(a=>String(a.dueDate||'').startsWith(monthPrefix)).length;
+  const changeMonth = (offset) => setMonth(new Date(year,monthIndex+offset,1,12));
+  const activityColor = (type) => {
+    const normalized = String(type || '').toLowerCase();
+    if(normalized.includes('reuni')) return '#007fa8';
+    if(normalized.includes('liga')) return '#16865f';
+    if(normalized.includes('whats')) return '#218a72';
+    if(normalized.includes('proposta')) return '#b36b00';
+    if(normalized.includes('mail')) return '#6d5aa8';
+    return '#426783';
+  };
   const toggle = async (activity) => {
     if(!canWrite) return;
     const nextActivity = {...activity,status:activity.status==='Concluída'?'Pendente':'Concluída'};
@@ -2457,7 +2491,46 @@ function Activities({activities,setActivities,deals,query,setSelectedActivityId,
       window.alert('Não foi possível excluir esta atividade no Supabase agora.');
     }
   };
-  return <Panel title={`Atividades (${list.length})`}><Table headers={['Status','Tipo','Atividade','Oportunidade','Data e hora','Link','Responsável','Ações']}>{list.map(a=><tr key={a.id} onClick={()=>setSelectedActivityId(a.id)} style={{cursor:'pointer'}}><td>{canWrite ? <button className="mini" onClick={(e)=>{e.stopPropagation(); toggle(a)}}>{a.status}</button> : a.status}</td><td>{a.type}</td><td><b>{a.title}</b><span>{a.notes}</span></td><td>{byId(deals,a.dealId)?.title}</td><td>{formatActivityDateTime(a)}</td><td>{a.meetingLink ? <a href={a.meetingLink} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}>Abrir chamada</a> : '-'}</td><td>{a.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedActivityId(a.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeActivity(a)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table></Panel>;
+  return <Panel title={`Atividades (${list.length})`}>
+    <div className="activityViewBar">
+      <div className="activityViewSwitch" aria-label="Visualização de atividades">
+        <button className={view==='list'?'active':''} onClick={()=>setView('list')}><List size={16}/>Lista</button>
+        <button className={view==='calendar'?'active':''} onClick={()=>setView('calendar')}><CalendarDays size={16}/>Calendário</button>
+      </div>
+      {view==='calendar' && <div className="calendarNav">
+        <button className="iconBtn" title="Mês anterior" onClick={()=>changeMonth(-1)}><ChevronLeft size={18}/></button>
+        <button className="mini" onClick={()=>setMonth(new Date(`${today()}T12:00:00`))}>Hoje</button>
+        <button className="iconBtn" title="Próximo mês" onClick={()=>changeMonth(1)}><ChevronRight size={18}/></button>
+      </div>}
+    </div>
+
+    {view==='list' && <Table headers={['Status','Tipo','Atividade','Oportunidade','Data e hora','Link','Responsável','Ações']}>{list.map(a=><tr key={a.id} onClick={()=>setSelectedActivityId(a.id)} style={{cursor:'pointer'}}><td>{canWrite ? <button className="mini" onClick={(e)=>{e.stopPropagation(); toggle(a)}}>{a.status}</button> : a.status}</td><td>{a.type}</td><td><b>{a.title}</b><span>{a.notes}</span></td><td>{byId(deals,a.dealId)?.title}</td><td>{formatActivityDateTime(a)}</td><td>{a.meetingLink ? <a href={a.meetingLink} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}>Abrir chamada</a> : '-'}</td><td>{a.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedActivityId(a.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeActivity(a)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table>}
+
+    {view==='calendar' && <>
+      <div className="calendarFilters">
+        <label><span>Responsável</span><select value={calendarFilters.owner} onChange={e=>setCalendarFilters({...calendarFilters,owner:e.target.value})}><option value="">Todos</option>{owners.map(owner=><option value={owner} key={owner}>{owner}</option>)}</select></label>
+        <label><span>Tipo</span><select value={calendarFilters.type} onChange={e=>setCalendarFilters({...calendarFilters,type:e.target.value})}><option value="">Todos</option>{types.map(type=><option value={type} key={type}>{type}</option>)}</select></label>
+        <label><span>Status</span><select value={calendarFilters.status} onChange={e=>setCalendarFilters({...calendarFilters,status:e.target.value})}><option value="">Todos</option><option value="Pendente">Pendentes</option><option value="Concluída">Concluídas</option></select></label>
+      </div>
+      <div className="calendarTitle"><h3>{monthLabel}</h3><span>{monthActivityCount} atividade(s) neste mês</span></div>
+      <div className="calendarScroll">
+        <div className="activityCalendar">
+          {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(day=><div className="calendarWeekday" key={day}>{day}</div>)}
+          {calendarDays.map(date=>{
+            const key = dateKey(date);
+            const dayActivities = calendarActivities.filter(a=>a.dueDate===key).sort((a,b)=>String(a.dueTime||'').localeCompare(String(b.dueTime||'')));
+            return <div className={`calendarDay ${date.getMonth()!==monthIndex?'outsideMonth':''} ${key===today()?'today':''}`} key={key}>
+              <div className="calendarDayNumber"><span>{date.getDate()}</span>{key===today() && <small>Hoje</small>}</div>
+              <div className="calendarEvents">
+                {dayActivities.slice(0,3).map(a=><button className={`calendarEvent ${a.status==='Concluída'?'completed':''}`} style={{borderLeftColor:activityColor(a.type)}} title={`${formatActivityDateTime(a)} · ${a.title} · ${byId(deals,a.dealId)?.title || 'Sem oportunidade'}`} onClick={()=>setSelectedActivityId(a.id)} key={a.id}><b>{a.dueTime ? String(a.dueTime).slice(0,5) : 'Dia'} · {a.title}</b><span>{a.owner || 'Sem responsável'}</span></button>)}
+                {dayActivities.length>3 && <button className="calendarMore" onClick={()=>setSelectedActivityId(dayActivities[3].id)}>+ {dayActivities.length-3} atividade(s)</button>}
+              </div>
+            </div>;
+          })}
+        </div>
+      </div>
+    </>}
+  </Panel>;
 }
 
 function Companies({companies,setCompanies,query,setSelectedCompanyId,canWrite}){
