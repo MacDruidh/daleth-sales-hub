@@ -1571,17 +1571,36 @@ function GlobalSearch({query,companies,contacts,deals,setDeals,activities,contra
   const q = query.trim().toLowerCase();
   const includes = (...values) => values.join(' ').toLowerCase().includes(q);
   const companyResults = companies.filter(c => includes(c.name,c.segment,c.site,c.status,c.notes)).slice(0,8);
-  const contactResults = contacts.filter(c => includes(c.name,c.role,c.email,c.phone,c.whatsapp,c.notes)).slice(0,8);
-  const dealResults = deals
-    .filter(d => includes(d.title,d.product,d.owner,d.stage,d.description,d.nextStep,byId(companies,d.companyId)?.name))
+  const contactResults = contacts.filter(c => {
+    const company = byId(companies,c.companyId);
+    return includes(c.name,c.role,c.email,c.phone,c.whatsapp,c.notes,company?.name,company?.segment);
+  }).slice(0,8);
+  const matchingDeals = deals.filter(d => {
+    const company = byId(companies,d.companyId);
+    return includes(d.title,d.product,d.owner,d.stage,d.description,d.nextStep,company?.name,company?.segment);
+  });
+  const dealResults = matchingDeals
     .sort((a,b)=>String(a.title || '').localeCompare(String(b.title || ''),'pt-BR',{sensitivity:'base'}))
     .slice(0,12);
-  const contractResults = contracts.filter(c => {
+  const matchingContracts = contracts.filter(c => {
     const company = byId(companies,c.companyId);
     return includes(company?.name,c.product,c.owner,c.status,c.notes);
+  });
+  const contractResults = matchingContracts.slice(0,8);
+  const relatedProducts = new Set([
+    ...matchingDeals.map(d=>d.product),
+    ...matchingContracts.map(c=>c.product),
+  ].filter(Boolean).map(p=>String(p).trim().toLowerCase()));
+  const productResults = safeArray(products).filter(p => includes(p) || relatedProducts.has(String(p).trim().toLowerCase())).slice(0,8);
+  const activityResults = activities.filter(a => {
+    const deal = byId(deals,a.dealId);
+    const company = byId(companies,deal?.companyId);
+    return includes(
+      a.title,a.type,a.owner,a.status,a.notes,
+      deal?.title,deal?.product,deal?.owner,deal?.stage,deal?.description,deal?.nextStep,
+      company?.name,company?.segment
+    );
   }).slice(0,8);
-  const productResults = safeArray(products).filter(p => includes(p)).slice(0,8);
-  const activityResults = activities.filter(a => includes(a.title,a.type,a.owner,a.status,a.notes)).slice(0,8);
   const total = companyResults.length + contactResults.length + dealResults.length + contractResults.length + productResults.length + activityResults.length;
   const removeDealFromSearch = async (deal) => {
     if(!canWrite) return;
