@@ -2518,7 +2518,7 @@ function Activities({activities,setActivities,deals,query,setSelectedActivityId,
           {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(day=><div className="calendarWeekday" key={day}>{day}</div>)}
           {calendarDays.map(date=>{
             const key = dateKey(date);
-            const dayActivities = calendarActivities.filter(a=>a.dueDate===key).sort((a,b)=>String(a.dueTime||'').localeCompare(String(b.dueTime||'')));
+            const dayActivities = calendarActivities.filter(a=>String(a.dueDate||'').slice(0,10)===key).sort((a,b)=>String(a.dueTime||'').localeCompare(String(b.dueTime||'')));
             return <div className={`calendarDay ${date.getMonth()!==monthIndex?'outsideMonth':''} ${key===today()?'today':''}`} key={key}>
               <div className="calendarDayNumber"><span>{date.getDate()}</span>{key===today() && <small>Hoje</small>}</div>
               <div className="calendarEvents">
