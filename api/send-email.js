@@ -5,6 +5,7 @@ const DEFAULT_SUPABASE_URL = 'https://jcrberqxejgnpjmhufgw.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpjcmJlcnF4ZWpnbnBqbWh1Zmd3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMTU4NTksImV4cCI6MjA5NjY5MTg1OX0.Gskof5uTHTZK3waJ2f6klicRuDAJ_qZ6qylMK3KPX_w';
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+const EMAIL_SENDING_ENABLED = false;
 
 export const config = { maxDuration: 30 };
 
@@ -70,6 +71,7 @@ async function authenticatedUser(request){
 
 export default async function handler(request,response){
   if(request.method !== 'POST') return response.status(405).json({error:'Método não permitido.'});
+  if(!EMAIL_SENDING_ENABLED) return response.status(503).json({error:'O envio de e-mails pelo CRM está temporariamente desativado.'});
   try {
     const user = await authenticatedUser(request);
     if(!user?.email || !user.email.toLowerCase().endsWith('@daleth.com.br')) return response.status(401).json({error:'Sessão inválida ou sem permissão para enviar e-mails.'});
