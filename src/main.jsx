@@ -8,7 +8,6 @@ import { supabase } from './lib/supabase';
 const STAGES = ['Lead Captado','Primeiro Contato','Reunião Agendada','Levantamento','Proposta Enviada','Negociação','Ganho','Perdido'];
 const USERS = ['Sergio','Oyas','Katia','Paulo','Reserva'];
 const INITIAL_PRODUCTS = ['SAC+','SAC 24h','Inside Sales','Help Desk','Back Office','Ouvidorias','Custom'];
-const DROPBOX_APP_KEY = String(import.meta.env.VITE_DROPBOX_APP_KEY || '8vzktcmec9285zy').trim();
 const EMAIL_SENDING_ENABLED = false;
 const DOCUMENT_CATEGORIES = ['Proposta','Contrato','Briefing','Apresentação','Planilha','Escopo','Operacional','Financeiro','Outros'];
 const INITIAL_EMAIL_TEMPLATES = [
@@ -16,8 +15,6 @@ const INITIAL_EMAIL_TEMPLATES = [
   {id:'meeting-confirmation',name:'Confirmação de reunião',subject:'Confirmação de reunião | Daleth AC',body:'Olá {{contato}},\n\nConfirmamos nossa reunião para conversarmos sobre {{produto}}.\n\nCaso precise ajustar o horário, por favor, me avise.\n\nAtenciosamente,\n{{responsavel}}'},
   {id:'first-contact',name:'Primeiro contato',subject:'Daleth AC | {{empresa}}',body:'Olá {{contato}},\n\nMeu nome é {{responsavel}} e faço parte da Daleth AC. Gostaria de conversar sobre como podemos apoiar a operação da {{empresa}} com nossa solução {{produto}}.\n\nPodemos agendar uma breve conversa?\n\nAtenciosamente,\n{{responsavel}}'},
 ];
-let dropboxChooserPromise;
-
 const ACCESS_USERS = [
   { name: 'Sergio', role: 'CEO', canViewDashboard: true },
   { name: 'Katia', role: 'Comercial', canViewDashboard: false },
@@ -999,40 +996,6 @@ function normalizedDropboxLink(value){
 }
 function applyEmailVariables(text,values){
   return String(text || '').replace(/{{\s*(contato|empresa|produto|responsavel|oportunidade)\s*}}/gi,(_match,key)=>String(values[String(key).toLowerCase()] || ''));
-}
-function loadDropboxChooser(){
-  if(window.Dropbox?.choose) return Promise.resolve(window.Dropbox);
-  if(!DROPBOX_APP_KEY) return Promise.reject(new Error('A integração com o Dropbox ainda não foi configurada.'));
-  if(dropboxChooserPromise) return dropboxChooserPromise;
-  dropboxChooserPromise = new Promise((resolve,reject)=>{
-    const existing = document.getElementById('dropboxjs');
-    if(existing){
-      existing.addEventListener('load',()=>window.Dropbox?.choose ? resolve(window.Dropbox) : reject(new Error('O seletor do Dropbox não foi carregado.')),{once:true});
-      existing.addEventListener('error',()=>reject(new Error('Não foi possível abrir o Dropbox agora.')),{once:true});
-      return;
-    }
-    const script = document.createElement('script');
-    script.id = 'dropboxjs';
-    script.src = 'https://www.dropbox.com/static/api/2/dropins.js';
-    script.dataset.appKey = DROPBOX_APP_KEY;
-    script.onload = ()=>window.Dropbox?.choose ? resolve(window.Dropbox) : reject(new Error('O seletor do Dropbox não foi carregado.'));
-    script.onerror = ()=>reject(new Error('Não foi possível abrir o Dropbox agora.'));
-    document.head.appendChild(script);
-  });
-  return dropboxChooserPromise;
-}
-async function chooseFromDropbox(onSuccess){
-  try {
-    const Dropbox = await loadDropboxChooser();
-    Dropbox.choose({
-      success: files=>onSuccess(safeArray(files)),
-      linkType:'preview',
-      multiselect:true,
-      folderselect:true,
-    });
-  } catch (error) {
-    window.alert(error?.message || 'Não foi possível abrir o Dropbox agora.');
-  }
 }
 function companyForDeal(deal, companies, contacts){
   const direct = byId(companies, deal?.companyId);
@@ -2439,32 +2402,6 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
     }
     setFileDraft(emptyFile);
   };
-  const addFilesFromDropbox = (selectedFiles) => {
-    if(!canWrite || !setOpportunityFiles) return;
-    const knownLinks = new Set(dealFiles.map(file=>normalizedDropboxLink(file.url)));
-    const now = new Date().toISOString();
-    const additions = safeArray(selectedFiles).filter(file=>file?.link && !knownLinks.has(normalizedDropboxLink(file.link))).map((file,index)=>({
-      id:`file-${Date.now()}-${index}`,
-      dealId:deal.id,
-      companyId:company?.id || '',
-      name:file.name || (file.isDir ? 'Pasta do Dropbox' : 'Arquivo do Dropbox'),
-      url:dropboxHref(file.link),
-      category:fileDraft.category || 'Outros',
-      notes:fileDraft.notes || '',
-      owner:fileDraft.owner || currentUser?.name || deal.owner || 'Sergio',
-      isDir:file.isDir === true,
-      dropboxId:file.id || '',
-      bytes:Number(file.bytes || 0),
-      createdAt:now,
-      updatedAt:now,
-    }));
-    if(!additions.length){
-      window.alert('Os itens selecionados já estão vinculados a esta oportunidade.');
-      return;
-    }
-    setOpportunityFiles([...additions,...safeArray(opportunityFiles)]);
-    setFileDraft(emptyFile);
-  };
   const editFileLink = (file) => setFileDraft({id:file.id,name:file.name||'',url:file.url||'',category:file.category||'Outros',notes:file.notes||'',owner:file.owner||currentUser?.name||'Sergio'});
   const removeFileLink = (file) => {
     if(!canWrite || !setOpportunityFiles) return;
@@ -2660,7 +2597,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
     </>}
 
     {tab==='arquivos' && <>
-      {canWrite && <Panel title={fileDraft.id ? 'Editar vínculo de arquivo' : 'Novo vínculo de arquivo'}><div className="formGrid modalGrid"><Input label="Nome do arquivo" field="name" form={fileDraft} setForm={setFileDraft}/><Input label="Link do Dropbox" field="url" form={fileDraft} setForm={setFileDraft} type="url"/><Select label="Categoria" field="category" form={fileDraft} setForm={setFileDraft} options={DOCUMENT_CATEGORIES.map(x=>[x,x])}/><Select label="Responsável" field="owner" form={fileDraft} setForm={setFileDraft} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={fileDraft} setForm={setFileDraft}/><div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>{!fileDraft.id && <button className="saveBtn" onClick={()=>chooseFromDropbox(addFilesFromDropbox)}><FolderOpen size={16}/>Selecionar no Dropbox</button>}<button className={fileDraft.id ? 'saveBtn' : 'mini'} onClick={saveFileLink}><Link2 size={16}/>{fileDraft.id ? 'Salvar alterações' : 'Adicionar link manual'}</button>{fileDraft.id && <button className="mini" onClick={()=>setFileDraft(emptyFile)}><X size={15}/>Cancelar</button>}</div></div></Panel>}
+      {canWrite && <Panel title={fileDraft.id ? 'Editar vínculo de arquivo' : 'Novo vínculo de arquivo'}><div className="formGrid modalGrid"><Input label="Nome do arquivo" field="name" form={fileDraft} setForm={setFileDraft}/><Input label="Link compartilhado do Dropbox" field="url" form={fileDraft} setForm={setFileDraft} type="url"/><Select label="Categoria" field="category" form={fileDraft} setForm={setFileDraft} options={DOCUMENT_CATEGORIES.map(x=>[x,x])}/><Select label="Responsável" field="owner" form={fileDraft} setForm={setFileDraft} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={fileDraft} setForm={setFileDraft}/><div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}><button className="saveBtn" onClick={saveFileLink}><Link2 size={16}/>{fileDraft.id ? 'Salvar alterações' : 'Adicionar Link do Arquivo'}</button>{fileDraft.id && <button className="mini" onClick={()=>setFileDraft(emptyFile)}><X size={15}/>Cancelar</button>}</div></div></Panel>}
       <Panel title={`Arquivos vinculados (${dealFiles.length})`}>
         <Table headers={['Arquivo','Categoria','Observações','Responsável','Atualizado','Ações']}>{dealFiles.length ? dealFiles.map(file=><tr key={file.id}><td><b style={{display:'flex',alignItems:'center',gap:'7px'}}>{file.isDir ? <FolderOpen size={16}/> : <FileText size={16}/>} {file.name}</b></td><td><span className="pill">{file.category||'Outros'}</span></td><td>{file.notes||'-'}</td><td>{file.owner||'-'}</td><td>{formatDate(file.updatedAt||file.createdAt)}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><a className="mini" style={{textDecoration:'none'}} href={dropboxHref(file.url)} target="_blank" rel="noreferrer"><ExternalLink size={15}/>Abrir</a>{canWrite && <button className="mini" onClick={()=>editFileLink(file)}><Edit3 size={15}/>Editar</button>}{canWrite && <button className="mini" onClick={()=>removeFileLink(file)}><Trash2 size={15}/>Remover</button>}</div></td></tr>) : <tr><td>Nenhum arquivo vinculado</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}</Table>
       </Panel>
@@ -2794,34 +2731,6 @@ function Documents({opportunityFiles=[],setOpportunityFiles,companies=[],contact
     else setOpportunityFiles([{...next,id:`file-${Date.now()}`,createdAt:now},...safeArray(opportunityFiles)]);
     resetDraft();
   };
-  const addDropboxDocuments = (selectedFiles) => {
-    if(!canWrite || !setOpportunityFiles) return;
-    const knownLinks = new Set(safeArray(opportunityFiles).map(document=>normalizedDropboxLink(document.url)));
-    const now = new Date().toISOString();
-    const linkedDeal = byId(deals,draft.dealId);
-    const companyId = draft.companyId || companyForDeal(linkedDeal,companies,contacts)?.id || '';
-    const additions = safeArray(selectedFiles).filter(file=>file?.link && !knownLinks.has(normalizedDropboxLink(file.link))).map((file,index)=>({
-      id:`file-${Date.now()}-${index}`,
-      name:file.name || (file.isDir ? 'Pasta do Dropbox' : 'Arquivo do Dropbox'),
-      url:dropboxHref(file.link),
-      companyId,
-      dealId:draft.dealId || '',
-      category:draft.category || 'Outros',
-      owner:draft.owner || currentUser?.name || 'Sergio',
-      notes:draft.notes || '',
-      isDir:file.isDir === true,
-      dropboxId:file.id || '',
-      bytes:Number(file.bytes || 0),
-      createdAt:now,
-      updatedAt:now,
-    }));
-    if(!additions.length){
-      window.alert('Os itens selecionados já estão cadastrados no CRM.');
-      return;
-    }
-    setOpportunityFiles([...additions,...safeArray(opportunityFiles)]);
-    resetDraft();
-  };
   const editDocument = (document) => setDraft({
     id:document.id,name:document.name||'',url:document.url||'',companyId:companyOf(document)?.id||'',dealId:document.dealId||'',category:document.category||'Outros',owner:document.owner||currentUser?.name||'Sergio',notes:document.notes||'',isDir:document.isDir===true,
   });
@@ -2841,11 +2750,10 @@ function Documents({opportunityFiles=[],setOpportunityFiles,companies=[],contact
         <Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(user=>[user,user])}/>
         {draft.id && <label><span>Tipo</span><select value={draft.isDir ? 'folder' : 'file'} onChange={e=>setDraft({...draft,isDir:e.target.value==='folder'})}><option value="file">Arquivo</option><option value="folder">Pasta</option></select></label>}
         <Input label="Nome" field="name" form={draft} setForm={setDraft}/>
-        <Input label="Link do Dropbox" field="url" form={draft} setForm={setDraft} type="url"/>
+        <Input label="Link compartilhado do Dropbox" field="url" form={draft} setForm={setDraft} type="url"/>
         <Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/>
         <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
-          {!draft.id && <button className="saveBtn" onClick={()=>chooseFromDropbox(addDropboxDocuments)}><FolderOpen size={16}/>Selecionar no Dropbox</button>}
-          <button className={draft.id ? 'saveBtn' : 'mini'} onClick={saveManualDocument}><Link2 size={16}/>{draft.id ? 'Salvar alterações' : 'Adicionar link manual'}</button>
+          <button className="saveBtn" onClick={saveManualDocument}><Link2 size={16}/>{draft.id ? 'Salvar alterações' : 'Adicionar Link do Arquivo'}</button>
           {draft.id && <button className="mini" onClick={resetDraft}><X size={15}/>Cancelar</button>}
         </div>
       </div>
