@@ -1499,7 +1499,6 @@ function App(){
   const [opportunityFiles,setOpportunityFiles] = useStore('dsh-v1-opportunity-files', []);
   const [emailLogs,setEmailLogs] = useStore('dsh-v1-email-logs', []);
   const [emailTemplates,setEmailTemplates] = useStore('dsh-v1-email-templates', INITIAL_EMAIL_TEMPLATES);
-  const [emailSignatures,setEmailSignatures] = useStore('dsh-v1-email-signatures', {});
   const [contracts,setContracts] = useContracts();
   const [products,setProducts] = useProducts();
   const [pipedriveImportMeta,setPipedriveImportMeta] = useStore('dsh-v1-pipedrive-import-meta', null);
@@ -1511,6 +1510,10 @@ function App(){
   const [selectedActivityId,setSelectedActivityId] = useState(null);
   const [selectedProductName,setSelectedProductName] = useState(null);
   const [authReady,setAuthReady] = useState(false);
+
+  useEffect(() => {
+    if(!EMAIL_SENDING_ENABLED) localStorage.removeItem('dsh-v1-email-signatures');
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -1584,7 +1587,7 @@ function App(){
   ).length;
   const alertTotal = overdueCount + meetingsTodayCount + proposalsWithoutFollowup;
   const alertText = `${overdueCount} atividades vencidas · ${proposalsWithoutFollowup} propostas sem follow-up · ${meetingsTodayCount} reuniões hoje`;
-  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,emailLogs,setEmailLogs,emailTemplates,setEmailTemplates,emailSignatures,setEmailSignatures,contracts,setContracts,products,setProducts,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
+  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,emailLogs,setEmailLogs,emailTemplates,setEmailTemplates,contracts,setContracts,products,setProducts,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
   const logout = async () => {
     setQuery('');
     setSelectedDealId(null);
