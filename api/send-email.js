@@ -125,7 +125,9 @@ export default async function handler(request,response){
       html:`<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#132238">${escapeHtml(cleanBody).replace(/\n/g,'<br>')}${signatureBuffer ? `<br><br><img src="cid:${signatureCid}" alt="Assinatura" style="display:block;max-width:520px;max-height:180px;width:auto;height:auto">` : ''}</div>`,
       attachments:mailAttachments.length ? mailAttachments : undefined,
     });
-    return response.status(200).json({messageId:result.messageId,sender:smtpUser,attachments:downloadedAttachments.map(item=>item.filename)});
+    const acceptedCount = Array.isArray(result.accepted) ? result.accepted.length : 0;
+    if(!acceptedCount) return response.status(502).json({error:'O servidor de e-mail não aceitou nenhum destinatário.'});
+    return response.status(200).json({messageId:result.messageId,sender:smtpUser,attachments:downloadedAttachments.map(item=>item.filename),acceptedCount,status:'Aceito pelo servidor'});
   } catch (error) {
     console.error('Falha no envio SMTP:',error);
     return response.status(500).json({error:'O servidor de e-mail não aceitou o envio agora.'});
