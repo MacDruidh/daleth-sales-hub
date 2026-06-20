@@ -9,6 +9,7 @@ const STAGES = ['Lead Captado','Primeiro Contato','Reunião Agendada','Levantame
 const USERS = ['Sergio','Oyas','Katia','Paulo','Reserva'];
 const INITIAL_PRODUCTS = ['SAC+','SAC 24h','Inside Sales','Help Desk','Back Office','Ouvidorias','Custom'];
 const DROPBOX_APP_KEY = String(import.meta.env.VITE_DROPBOX_APP_KEY || '8vzktcmec9285zy').trim();
+const EMAIL_SENDING_ENABLED = false;
 const DOCUMENT_CATEGORIES = ['Proposta','Contrato','Briefing','Apresentação','Planilha','Escopo','Operacional','Financeiro','Outros'];
 const INITIAL_EMAIL_TEMPLATES = [
   {id:'proposal-followup',name:'Follow-up de proposta',subject:'Proposta Daleth AC | {{empresa}}',body:'Olá {{contato}},\n\nGostaria de saber se conseguiu avaliar nossa proposta para {{produto}}.\n\nFico à disposição para esclarecer qualquer ponto e alinharmos os próximos passos.\n\nAtenciosamente,\n{{responsavel}}'},
@@ -2628,7 +2629,8 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
     {tab==='atividades' && <Panel title="Atividades da oportunidade">{canWrite && <div className="formGrid"><Select label="Tipo" field="type" form={activity} setForm={setActivity} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={activity} setForm={setActivity}/><Input label="Data" field="dueDate" form={activity} setForm={setActivity} type="date"/><Input label="Hora" field="dueTime" form={activity} setForm={setActivity} type="time"/><Input label="Link chamada" field="meetingLink" form={activity} setForm={setActivity} type="url"/><Select label="Responsável" field="owner" form={activity} setForm={setActivity} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={activity} setForm={setActivity}/><button className="saveBtn" onClick={addActivity}><Plus size={16}/>Criar atividade</button></div>}<div className="timeline">{dealActivities.map(a=><div className="timelineItem" key={a.id}><div style={{display:'flex',justifyContent:'space-between',gap:'12px',alignItems:'flex-start',flexWrap:'wrap'}}><b>{a.type}: {a.title}</b>{canWrite && <button className="mini" onClick={()=>setSelectedActivityId?.(a.id)}><Edit3 size={15}/>Editar</button>}</div><span>{formatActivityDateTime(a)} · {a.owner} · {a.status}</span>{a.meetingLink && <p><a href={a.meetingLink} target="_blank" rel="noreferrer">Abrir chamada</a></p>}<p>{a.notes}</p></div>)}</div></Panel>}
 
     {tab==='emails' && <>
-      {canWrite && <Panel title="Novo e-mail"><div className="formGrid modalGrid">
+      {!EMAIL_SENDING_ENABLED && <Panel title="Envio temporariamente desativado"><p className="muted" style={{margin:0}}>O histórico permanece disponível. O envio pelo Daleth Sales Hub está pausado.</p></Panel>}
+      {canWrite && EMAIL_SENDING_ENABLED && <Panel title="Novo e-mail"><div className="formGrid modalGrid">
         <label><span>Modelo</span><select value={selectedEmailTemplate} onChange={e=>applyEmailTemplate(e.target.value)}><option value="">Sem modelo</option>{safeArray(emailTemplates).map(template=><option value={template.id} key={template.id}>{template.name}</option>)}</select></label>
         <Input label="Para" field="to" form={emailDraft} setForm={setEmailDraft} type="email"/>
         <Input label="Cc" field="cc" form={emailDraft} setForm={setEmailDraft} type="email"/>
