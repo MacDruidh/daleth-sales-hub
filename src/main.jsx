@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { LayoutDashboard, KanbanSquare, Building2, Users, BriefcaseBusiness, CalendarDays, Plus, Search, Edit3, Trash2, MessageSquare, CheckCircle2, Clock3, CircleDollarSign, X, Save, Sparkles, Phone, Mail, UserRound, Filter, BellRing, TrendingUp, AlertTriangle, Lock, Package, GripVertical, ChevronLeft, ChevronRight, List, ExternalLink, Link2, FileText } from 'lucide-react';
+import { LayoutDashboard, KanbanSquare, Building2, Users, BriefcaseBusiness, CalendarDays, Plus, Search, Edit3, Trash2, MessageSquare, CheckCircle2, Clock3, CircleDollarSign, X, Save, Sparkles, Phone, Mail, UserRound, Filter, BellRing, TrendingUp, AlertTriangle, Lock, Package, GripVertical, ChevronLeft, ChevronRight, List, ExternalLink, Link2, FileText, FolderOpen } from 'lucide-react';
 import './style.css';
 import './calendar.css';
 import { supabase } from './lib/supabase';
@@ -8,6 +8,9 @@ import { supabase } from './lib/supabase';
 const STAGES = ['Lead Captado','Primeiro Contato','Reunião Agendada','Levantamento','Proposta Enviada','Negociação','Ganho','Perdido'];
 const USERS = ['Sergio','Oyas','Katia','Paulo','Reserva'];
 const INITIAL_PRODUCTS = ['SAC+','SAC 24h','Inside Sales','Help Desk','Back Office','Ouvidorias','Custom'];
+const DROPBOX_APP_KEY = String(import.meta.env.VITE_DROPBOX_APP_KEY || '8vzktcmec9285zy').trim();
+const DOCUMENT_CATEGORIES = ['Proposta','Contrato','Briefing','Apresentação','Planilha','Escopo','Operacional','Financeiro','Outros'];
+let dropboxChooserPromise;
 
 const ACCESS_USERS = [
   { name: 'Sergio', role: 'CEO', canViewDashboard: true },
@@ -974,6 +977,40 @@ function isDropboxLink(value){
 function normalizedDropboxLink(value){
   return dropboxHref(value).toLowerCase().replace(/([?&])dl=[01](&|$)/,'$1').replace(/[?&]$/,'').replace(/\/$/,'');
 }
+function loadDropboxChooser(){
+  if(window.Dropbox?.choose) return Promise.resolve(window.Dropbox);
+  if(!DROPBOX_APP_KEY) return Promise.reject(new Error('A integração com o Dropbox ainda não foi configurada.'));
+  if(dropboxChooserPromise) return dropboxChooserPromise;
+  dropboxChooserPromise = new Promise((resolve,reject)=>{
+    const existing = document.getElementById('dropboxjs');
+    if(existing){
+      existing.addEventListener('load',()=>window.Dropbox?.choose ? resolve(window.Dropbox) : reject(new Error('O seletor do Dropbox não foi carregado.')),{once:true});
+      existing.addEventListener('error',()=>reject(new Error('Não foi possível abrir o Dropbox agora.')),{once:true});
+      return;
+    }
+    const script = document.createElement('script');
+    script.id = 'dropboxjs';
+    script.src = 'https://www.dropbox.com/static/api/2/dropins.js';
+    script.dataset.appKey = DROPBOX_APP_KEY;
+    script.onload = ()=>window.Dropbox?.choose ? resolve(window.Dropbox) : reject(new Error('O seletor do Dropbox não foi carregado.'));
+    script.onerror = ()=>reject(new Error('Não foi possível abrir o Dropbox agora.'));
+    document.head.appendChild(script);
+  });
+  return dropboxChooserPromise;
+}
+async function chooseFromDropbox(onSuccess){
+  try {
+    const Dropbox = await loadDropboxChooser();
+    Dropbox.choose({
+      success: files=>onSuccess(safeArray(files)),
+      linkType:'preview',
+      multiselect:true,
+      folderselect:true,
+    });
+  } catch (error) {
+    window.alert(error?.message || 'Não foi possível abrir o Dropbox agora.');
+  }
+}
 function companyForDeal(deal, companies, contacts){
   const direct = byId(companies, deal?.companyId);
   if(direct) return direct;
@@ -1506,7 +1543,7 @@ function App(){
   const canWrite = ['CEO','Comercial'].includes(currentUser?.role);
   const allMenu = [
     ['dashboard','Dashboard',LayoutDashboard], ['pipeline','Pipeline',KanbanSquare], ['deals','Oportunidades',BriefcaseBusiness],
-    ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['companies','Empresas',Building2], ['contacts','Contatos',UserRound], ['products','Produtos',Package], ['imports','Importação',Filter], ['profiles','Perfis',Lock], ['matrix','Matriz Daleth',Sparkles]
+    ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['documents','Documentos',FolderOpen], ['companies','Empresas',Building2], ['contacts','Contatos',UserRound], ['products','Produtos',Package], ['imports','Importação',Filter], ['profiles','Perfis',Lock], ['matrix','Matriz Daleth',Sparkles]
   ];
   const menu = allMenu.filter(([id]) => {
     if(id === 'dashboard') return canViewDashboard;
@@ -1555,7 +1592,7 @@ function App(){
     <main className="main">
       <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresas, contatos e oportunidades..."/></div><div className="notification"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></div><div className="notification" style={{minWidth:'150px'}}><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><button className="mini" onClick={logout}><X size={15}/>Sair</button></div></header>
       {selectedDeal ? <DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/> : (query.trim() ? <GlobalSearch {...context}/> : <>
-        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='companies' && <Companies {...context}/>} {activePage==='contacts' && <Contacts {...context}/>} {activePage==='products' && <Products {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>} {activePage==='matrix' && <Matrix {...context}/>}    
+        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='companies' && <Companies {...context}/>} {activePage==='contacts' && <Contacts {...context}/>} {activePage==='products' && <Products {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>} {activePage==='matrix' && <Matrix {...context}/>}
       </>)}
     </main>
     {selectedCompany && <CompanyModal company={selectedCompany} companies={companies} setCompanies={setCompanies} contacts={contacts} setSelectedContactId={setSelectedContactId} canWrite={canWrite} onClose={()=>setSelectedCompanyId(null)}/>}
@@ -2348,6 +2385,32 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
     }
     setFileDraft(emptyFile);
   };
+  const addFilesFromDropbox = (selectedFiles) => {
+    if(!canWrite || !setOpportunityFiles) return;
+    const knownLinks = new Set(dealFiles.map(file=>normalizedDropboxLink(file.url)));
+    const now = new Date().toISOString();
+    const additions = safeArray(selectedFiles).filter(file=>file?.link && !knownLinks.has(normalizedDropboxLink(file.link))).map((file,index)=>({
+      id:`file-${Date.now()}-${index}`,
+      dealId:deal.id,
+      companyId:company?.id || '',
+      name:file.name || (file.isDir ? 'Pasta do Dropbox' : 'Arquivo do Dropbox'),
+      url:dropboxHref(file.link),
+      category:fileDraft.category || 'Outros',
+      notes:fileDraft.notes || '',
+      owner:fileDraft.owner || currentUser?.name || deal.owner || 'Sergio',
+      isDir:file.isDir === true,
+      dropboxId:file.id || '',
+      bytes:Number(file.bytes || 0),
+      createdAt:now,
+      updatedAt:now,
+    }));
+    if(!additions.length){
+      window.alert('Os itens selecionados já estão vinculados a esta oportunidade.');
+      return;
+    }
+    setOpportunityFiles([...additions,...safeArray(opportunityFiles)]);
+    setFileDraft(emptyFile);
+  };
   const editFileLink = (file) => setFileDraft({id:file.id,name:file.name||'',url:file.url||'',category:file.category||'Outros',notes:file.notes||'',owner:file.owner||currentUser?.name||'Sergio'});
   const removeFileLink = (file) => {
     if(!canWrite || !setOpportunityFiles) return;
@@ -2414,9 +2477,9 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
     {tab==='atividades' && <Panel title="Atividades da oportunidade">{canWrite && <div className="formGrid"><Select label="Tipo" field="type" form={activity} setForm={setActivity} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={activity} setForm={setActivity}/><Input label="Data" field="dueDate" form={activity} setForm={setActivity} type="date"/><Input label="Hora" field="dueTime" form={activity} setForm={setActivity} type="time"/><Input label="Link chamada" field="meetingLink" form={activity} setForm={setActivity} type="url"/><Select label="Responsável" field="owner" form={activity} setForm={setActivity} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={activity} setForm={setActivity}/><button className="saveBtn" onClick={addActivity}><Plus size={16}/>Criar atividade</button></div>}<div className="timeline">{dealActivities.map(a=><div className="timelineItem" key={a.id}><div style={{display:'flex',justifyContent:'space-between',gap:'12px',alignItems:'flex-start',flexWrap:'wrap'}}><b>{a.type}: {a.title}</b>{canWrite && <button className="mini" onClick={()=>setSelectedActivityId?.(a.id)}><Edit3 size={15}/>Editar</button>}</div><span>{formatActivityDateTime(a)} · {a.owner} · {a.status}</span>{a.meetingLink && <p><a href={a.meetingLink} target="_blank" rel="noreferrer">Abrir chamada</a></p>}<p>{a.notes}</p></div>)}</div></Panel>}
 
     {tab==='arquivos' && <>
-      {canWrite && <Panel title={fileDraft.id ? 'Editar vínculo de arquivo' : 'Novo vínculo de arquivo'}><div className="formGrid modalGrid"><Input label="Nome do arquivo" field="name" form={fileDraft} setForm={setFileDraft}/><Input label="Link do Dropbox" field="url" form={fileDraft} setForm={setFileDraft} type="url"/><Select label="Categoria" field="category" form={fileDraft} setForm={setFileDraft} options={['Proposta','Contrato','Briefing','Apresentação','Planilha','Escopo','Outros'].map(x=>[x,x])}/><Select label="Responsável" field="owner" form={fileDraft} setForm={setFileDraft} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={fileDraft} setForm={setFileDraft}/><div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}><button className="saveBtn" onClick={saveFileLink}><Link2 size={16}/>{fileDraft.id ? 'Salvar alterações' : 'Adicionar link'}</button>{fileDraft.id && <button className="mini" onClick={()=>setFileDraft(emptyFile)}><X size={15}/>Cancelar</button>}</div></div></Panel>}
+      {canWrite && <Panel title={fileDraft.id ? 'Editar vínculo de arquivo' : 'Novo vínculo de arquivo'}><div className="formGrid modalGrid"><Input label="Nome do arquivo" field="name" form={fileDraft} setForm={setFileDraft}/><Input label="Link do Dropbox" field="url" form={fileDraft} setForm={setFileDraft} type="url"/><Select label="Categoria" field="category" form={fileDraft} setForm={setFileDraft} options={DOCUMENT_CATEGORIES.map(x=>[x,x])}/><Select label="Responsável" field="owner" form={fileDraft} setForm={setFileDraft} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={fileDraft} setForm={setFileDraft}/><div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>{!fileDraft.id && <button className="saveBtn" onClick={()=>chooseFromDropbox(addFilesFromDropbox)}><FolderOpen size={16}/>Selecionar no Dropbox</button>}<button className={fileDraft.id ? 'saveBtn' : 'mini'} onClick={saveFileLink}><Link2 size={16}/>{fileDraft.id ? 'Salvar alterações' : 'Adicionar link manual'}</button>{fileDraft.id && <button className="mini" onClick={()=>setFileDraft(emptyFile)}><X size={15}/>Cancelar</button>}</div></div></Panel>}
       <Panel title={`Arquivos vinculados (${dealFiles.length})`}>
-        <Table headers={['Arquivo','Categoria','Observações','Responsável','Atualizado','Ações']}>{dealFiles.length ? dealFiles.map(file=><tr key={file.id}><td><b style={{display:'flex',alignItems:'center',gap:'7px'}}><FileText size={16}/>{file.name}</b></td><td><span className="pill">{file.category||'Outros'}</span></td><td>{file.notes||'-'}</td><td>{file.owner||'-'}</td><td>{formatDate(file.updatedAt||file.createdAt)}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><a className="mini" style={{textDecoration:'none'}} href={dropboxHref(file.url)} target="_blank" rel="noreferrer"><ExternalLink size={15}/>Abrir</a>{canWrite && <button className="mini" onClick={()=>editFileLink(file)}><Edit3 size={15}/>Editar</button>}{canWrite && <button className="mini" onClick={()=>removeFileLink(file)}><Trash2 size={15}/>Remover</button>}</div></td></tr>) : <tr><td>Nenhum arquivo vinculado</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}</Table>
+        <Table headers={['Arquivo','Categoria','Observações','Responsável','Atualizado','Ações']}>{dealFiles.length ? dealFiles.map(file=><tr key={file.id}><td><b style={{display:'flex',alignItems:'center',gap:'7px'}}>{file.isDir ? <FolderOpen size={16}/> : <FileText size={16}/>} {file.name}</b></td><td><span className="pill">{file.category||'Outros'}</span></td><td>{file.notes||'-'}</td><td>{file.owner||'-'}</td><td>{formatDate(file.updatedAt||file.createdAt)}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><a className="mini" style={{textDecoration:'none'}} href={dropboxHref(file.url)} target="_blank" rel="noreferrer"><ExternalLink size={15}/>Abrir</a>{canWrite && <button className="mini" onClick={()=>editFileLink(file)}><Edit3 size={15}/>Editar</button>}{canWrite && <button className="mini" onClick={()=>removeFileLink(file)}><Trash2 size={15}/>Remover</button>}</div></td></tr>) : <tr><td>Nenhum arquivo vinculado</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}</Table>
       </Panel>
     </>}
 
@@ -2507,6 +2570,113 @@ function DealModal({deal,onClose,companies=[],contacts=[],deals=[],setDeals,acti
 
     {tab==='matriz' && <SolutionSuggestions deal={draft} companies={companies}/>}  
   </div></div>;
+}
+
+function Documents({opportunityFiles=[],setOpportunityFiles,companies=[],contacts=[],deals=[],currentUser,canWrite,setSelectedDealId,setSelectedCompanyId}){
+  const emptyDocument = {id:'',name:'',url:'',companyId:'',dealId:'',category:'Proposta',owner:currentUser?.name || 'Sergio',notes:'',isDir:false};
+  const [draft,setDraft] = useState(emptyDocument);
+  const [filters,setFilters] = useState({text:'',companyId:'',category:'',kind:''});
+  const companyOf = (document) => byId(companies,document.companyId) || companyForDeal(byId(deals,document.dealId),companies,contacts);
+  const dealOptions = safeArray(deals).filter(deal=>!draft.companyId || sameId(companyForDeal(deal,companies,contacts)?.id,draft.companyId));
+  const documents = safeArray(opportunityFiles).filter(document=>{
+    const company = companyOf(document);
+    const deal = byId(deals,document.dealId);
+    const text = `${document.name||''} ${document.category||''} ${document.owner||''} ${document.notes||''} ${company?.name||''} ${deal?.title||''}`.toLowerCase();
+    return (!filters.text || text.includes(filters.text.toLowerCase())) &&
+      (!filters.companyId || sameId(company?.id,filters.companyId)) &&
+      (!filters.category || document.category === filters.category) &&
+      (!filters.kind || (filters.kind === 'folder' ? document.isDir === true : document.isDir !== true));
+  }).sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
+
+  const resetDraft = () => setDraft({...emptyDocument,owner:currentUser?.name || 'Sergio'});
+  const saveManualDocument = () => {
+    if(!canWrite || !setOpportunityFiles) return;
+    if(!draft.name.trim() || !draft.url.trim()){
+      window.alert('Informe o nome e o link do Dropbox.');
+      return;
+    }
+    if(!isDropboxLink(draft.url)){
+      window.alert('Informe um link válido do Dropbox.');
+      return;
+    }
+    const duplicate = safeArray(opportunityFiles).find(document=>!sameId(document.id,draft.id) && normalizedDropboxLink(document.url) === normalizedDropboxLink(draft.url));
+    if(duplicate){
+      window.alert(`Este link já está cadastrado como "${duplicate.name}".`);
+      return;
+    }
+    const now = new Date().toISOString();
+    const linkedDeal = byId(deals,draft.dealId);
+    const next = {...draft,companyId:draft.companyId || companyForDeal(linkedDeal,companies,contacts)?.id || '',url:dropboxHref(draft.url),updatedAt:now};
+    if(draft.id) setOpportunityFiles(safeArray(opportunityFiles).map(document=>sameId(document.id,draft.id) ? {...document,...next} : document));
+    else setOpportunityFiles([{...next,id:`file-${Date.now()}`,createdAt:now},...safeArray(opportunityFiles)]);
+    resetDraft();
+  };
+  const addDropboxDocuments = (selectedFiles) => {
+    if(!canWrite || !setOpportunityFiles) return;
+    const knownLinks = new Set(safeArray(opportunityFiles).map(document=>normalizedDropboxLink(document.url)));
+    const now = new Date().toISOString();
+    const linkedDeal = byId(deals,draft.dealId);
+    const companyId = draft.companyId || companyForDeal(linkedDeal,companies,contacts)?.id || '';
+    const additions = safeArray(selectedFiles).filter(file=>file?.link && !knownLinks.has(normalizedDropboxLink(file.link))).map((file,index)=>({
+      id:`file-${Date.now()}-${index}`,
+      name:file.name || (file.isDir ? 'Pasta do Dropbox' : 'Arquivo do Dropbox'),
+      url:dropboxHref(file.link),
+      companyId,
+      dealId:draft.dealId || '',
+      category:draft.category || 'Outros',
+      owner:draft.owner || currentUser?.name || 'Sergio',
+      notes:draft.notes || '',
+      isDir:file.isDir === true,
+      dropboxId:file.id || '',
+      bytes:Number(file.bytes || 0),
+      createdAt:now,
+      updatedAt:now,
+    }));
+    if(!additions.length){
+      window.alert('Os itens selecionados já estão cadastrados no CRM.');
+      return;
+    }
+    setOpportunityFiles([...additions,...safeArray(opportunityFiles)]);
+    resetDraft();
+  };
+  const editDocument = (document) => setDraft({
+    id:document.id,name:document.name||'',url:document.url||'',companyId:companyOf(document)?.id||'',dealId:document.dealId||'',category:document.category||'Outros',owner:document.owner||currentUser?.name||'Sergio',notes:document.notes||'',isDir:document.isDir===true,
+  });
+  const removeDocument = (document) => {
+    if(!canWrite || !setOpportunityFiles) return;
+    if(!window.confirm(`Remover o vínculo "${document.name}" do CRM? O item não será excluído do Dropbox.`)) return;
+    setOpportunityFiles(safeArray(opportunityFiles).filter(item=>!sameId(item.id,document.id)));
+    if(sameId(draft.id,document.id)) resetDraft();
+  };
+
+  return <>
+    {canWrite && <Panel title={draft.id ? 'Editar documento' : 'Adicionar documentos'}>
+      <div className="formGrid modalGrid">
+        <label><span>Empresa</span><select value={draft.companyId} onChange={e=>setDraft({...draft,companyId:e.target.value,dealId:''})}><option value="">Sem empresa</option>{[...safeArray(companies)].sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'pt-BR')).map(company=><option value={company.id} key={company.id}>{company.name}</option>)}</select></label>
+        <label><span>Oportunidade</span><select value={draft.dealId} onChange={e=>{const deal=byId(deals,e.target.value);setDraft({...draft,dealId:e.target.value,companyId:draft.companyId||companyForDeal(deal,companies,contacts)?.id||''})}}><option value="">Sem oportunidade</option>{dealOptions.map(deal=><option value={deal.id} key={deal.id}>{deal.title}</option>)}</select></label>
+        <Select label="Categoria" field="category" form={draft} setForm={setDraft} options={DOCUMENT_CATEGORIES.map(category=>[category,category])}/>
+        <Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(user=>[user,user])}/>
+        {draft.id && <label><span>Tipo</span><select value={draft.isDir ? 'folder' : 'file'} onChange={e=>setDraft({...draft,isDir:e.target.value==='folder'})}><option value="file">Arquivo</option><option value="folder">Pasta</option></select></label>}
+        <Input label="Nome" field="name" form={draft} setForm={setDraft}/>
+        <Input label="Link do Dropbox" field="url" form={draft} setForm={setDraft} type="url"/>
+        <Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/>
+        <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+          {!draft.id && <button className="saveBtn" onClick={()=>chooseFromDropbox(addDropboxDocuments)}><FolderOpen size={16}/>Selecionar no Dropbox</button>}
+          <button className={draft.id ? 'saveBtn' : 'mini'} onClick={saveManualDocument}><Link2 size={16}/>{draft.id ? 'Salvar alterações' : 'Adicionar link manual'}</button>
+          {draft.id && <button className="mini" onClick={resetDraft}><X size={15}/>Cancelar</button>}
+        </div>
+      </div>
+    </Panel>}
+    <Panel title={`Documentos (${documents.length})`}>
+      <div className="formGrid" style={{marginBottom:'16px'}}>
+        <label><span>Buscar</span><input value={filters.text} onChange={e=>setFilters({...filters,text:e.target.value})} placeholder="Documento, cliente ou oportunidade"/></label>
+        <label><span>Empresa</span><select value={filters.companyId} onChange={e=>setFilters({...filters,companyId:e.target.value})}><option value="">Todas</option>{[...safeArray(companies)].sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'pt-BR')).map(company=><option value={company.id} key={company.id}>{company.name}</option>)}</select></label>
+        <label><span>Categoria</span><select value={filters.category} onChange={e=>setFilters({...filters,category:e.target.value})}><option value="">Todas</option>{DOCUMENT_CATEGORIES.map(category=><option value={category} key={category}>{category}</option>)}</select></label>
+        <label><span>Tipo</span><select value={filters.kind} onChange={e=>setFilters({...filters,kind:e.target.value})}><option value="">Todos</option><option value="folder">Pastas</option><option value="file">Arquivos</option></select></label>
+      </div>
+      <Table headers={['Documento','Empresa','Oportunidade','Categoria','Responsável','Atualizado','Ações']}>{documents.length ? documents.map(document=>{const company=companyOf(document);const deal=byId(deals,document.dealId);return <tr key={document.id}><td><b style={{display:'flex',alignItems:'center',gap:'7px'}}>{document.isDir ? <FolderOpen size={16}/> : <FileText size={16}/>} {document.name}</b><span>{document.notes||''}</span></td><td>{company ? <button className="mini" onClick={()=>setSelectedCompanyId?.(company.id)}>{company.name}</button> : '-'}</td><td>{deal ? <button className="mini" onClick={()=>setSelectedDealId?.(deal.id)}>{deal.title}</button> : '-'}</td><td><span className="pill">{document.category||'Outros'}</span></td><td>{document.owner||'-'}</td><td>{formatDate(document.updatedAt||document.createdAt)}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><a className="mini" style={{textDecoration:'none'}} href={dropboxHref(document.url)} target="_blank" rel="noreferrer"><ExternalLink size={15}/>Abrir</a>{canWrite && <button className="mini" onClick={()=>editDocument(document)}><Edit3 size={15}/>Editar</button>}{canWrite && <button className="mini" onClick={()=>removeDocument(document)}><Trash2 size={15}/>Remover</button>}</div></td></tr>}) : <tr><td>Nenhum documento encontrado</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}</Table>
+    </Panel>
+  </>;
 }
 
 function Activities({activities,setActivities,deals,query,setSelectedActivityId,canWrite}){
