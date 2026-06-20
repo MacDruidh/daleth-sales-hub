@@ -101,7 +101,11 @@ function useStore(key, initial){
 
   const save = (next) => {
     setValue(next);
-    localStorage.setItem(key, JSON.stringify(next));
+    try {
+      localStorage.setItem(key, JSON.stringify(next));
+    } catch (error) {
+      console.warn('Não foi possível atualizar o cache local:', key, error);
+    }
 
     supabase.from('crm_state').upsert({
       key,
@@ -1513,10 +1517,8 @@ function App(){
 
     async function restoreSession(){
       try {
-        const { data } = await Promise.race([
-          supabase.auth.getSession(),
-          new Promise(resolve => setTimeout(() => resolve({ data: { session: null } }), 4000))
-        ]);
+        const { data, error } = await supabase.auth.getSession();
+        if(error) throw error;
         const authUser = data?.session?.user;
         if(authUser){
           const profile = await loadUserProfile(authUser);
@@ -1533,7 +1535,7 @@ function App(){
 
     restoreSession();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if(!active) return;
       if(session?.user){
         try {
@@ -1542,7 +1544,7 @@ function App(){
         } catch (error) {
           console.warn('Falha ao carregar perfil Supabase:', error);
         }
-      } else {
+      } else if(event === 'SIGNED_OUT') {
         setCurrentUser(null);
       }
     });
