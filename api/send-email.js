@@ -1,6 +1,8 @@
 import nodemailer from 'nodemailer';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DEFAULT_SUPABASE_URL = 'https://jcrberqxejgnpjmhufgw.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpjcmJlcnF4ZWpnbnBqbWh1Zmd3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMTU4NTksImV4cCI6MjA5NjY5MTg1OX0.Gskof5uTHTZK3waJ2f6klicRuDAJ_qZ6qylMK3KPX_w';
 
 function parseAddresses(value){
   return String(value || '').split(/[;,]/).map(item=>item.trim()).filter(Boolean);
@@ -14,8 +16,8 @@ function escapeHtml(value){
 
 async function authenticatedUser(request){
   const token = String(request.headers.authorization || '').replace(/^Bearer\s+/i,'').trim();
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
   if(!token || !supabaseUrl || !anonKey) return null;
   const response = await fetch(`${supabaseUrl}/auth/v1/user`,{
     headers:{Authorization:`Bearer ${token}`,apikey:anonKey},
