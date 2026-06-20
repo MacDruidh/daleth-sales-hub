@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { LayoutDashboard, KanbanSquare, Building2, Users, BriefcaseBusiness, CalendarDays, Plus, Search, Edit3, Trash2, MessageSquare, CheckCircle2, Clock3, CircleDollarSign, X, Save, Sparkles, Phone, Mail, UserRound, Filter, BellRing, TrendingUp, AlertTriangle, Lock, Package, GripVertical, ChevronLeft, ChevronRight, List, ExternalLink, Link2, FileText, FolderOpen } from 'lucide-react';
+import { LayoutDashboard, KanbanSquare, Building2, Users, BriefcaseBusiness, CalendarDays, Plus, Search, Edit3, Trash2, MessageSquare, CheckCircle2, Clock3, CircleDollarSign, X, Save, Sparkles, Phone, Mail, UserRound, Filter, BellRing, TrendingUp, AlertTriangle, Lock, Package, GripVertical, ChevronLeft, ChevronRight, List, ExternalLink, Link2, FileText, FolderOpen, ImagePlus, Paperclip } from 'lucide-react';
 import './style.css';
 import './calendar.css';
 import { supabase } from './lib/supabase';
@@ -1484,6 +1484,7 @@ function App(){
   const [opportunityFiles,setOpportunityFiles] = useStore('dsh-v1-opportunity-files', []);
   const [emailLogs,setEmailLogs] = useStore('dsh-v1-email-logs', []);
   const [emailTemplates,setEmailTemplates] = useStore('dsh-v1-email-templates', INITIAL_EMAIL_TEMPLATES);
+  const [emailSignatures,setEmailSignatures] = useStore('dsh-v1-email-signatures', {});
   const [contracts,setContracts] = useContracts();
   const [products,setProducts] = useProducts();
   const [pipedriveImportMeta,setPipedriveImportMeta] = useStore('dsh-v1-pipedrive-import-meta', null);
@@ -1570,7 +1571,7 @@ function App(){
   ).length;
   const alertTotal = overdueCount + meetingsTodayCount + proposalsWithoutFollowup;
   const alertText = `${overdueCount} atividades vencidas · ${proposalsWithoutFollowup} propostas sem follow-up · ${meetingsTodayCount} reuniões hoje`;
-  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,emailLogs,setEmailLogs,emailTemplates,setEmailTemplates,contracts,setContracts,products,setProducts,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
+  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,emailLogs,setEmailLogs,emailTemplates,setEmailTemplates,emailSignatures,setEmailSignatures,contracts,setContracts,products,setProducts,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
   const logout = async () => {
     setQuery('');
     setSelectedDealId(null);
@@ -2257,7 +2258,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
   </>;
 }
 
-function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,opportunityFiles=[],setOpportunityFiles,emailLogs=[],setEmailLogs,emailTemplates=INITIAL_EMAIL_TEMPLATES,setEmailTemplates,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName}){
+function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,opportunityFiles=[],setOpportunityFiles,emailLogs=[],setEmailLogs,emailTemplates=INITIAL_EMAIL_TEMPLATES,setEmailTemplates,emailSignatures={},setEmailSignatures,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName}){
   const initialContact = byId(contacts, deal.contactId);
   const inferredCompany = companyForDeal(deal, companies, contacts);
   const [tab,setTab] = useState('dados');
@@ -2270,6 +2271,14 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
   const [emailDraft,setEmailDraft] = useState({to:initialContact?.email || inferredCompany?.email || '',cc:'',subject:'',body:''});
   const [selectedEmailTemplate,setSelectedEmailTemplate] = useState('');
   const [sendingEmail,setSendingEmail] = useState(false);
+  const [selectedAttachmentIds,setSelectedAttachmentIds] = useState([]);
+  const signatureKey = String(currentUser?.email || currentUser?.id || currentUser?.name || 'daleth').toLowerCase();
+  const emailSignature = emailSignatures?.[signatureKey] || null;
+  const [includeSignature,setIncludeSignature] = useState(Boolean(emailSignature));
+
+  useEffect(() => {
+    if(emailSignature) setIncludeSignature(true);
+  }, [emailSignature?.updatedAt]);
 
   const company = byId(companies, draft.companyId) || inferredCompany;
   const contact = initialContact;
@@ -2277,6 +2286,11 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
   const dealActivities = safeArray(activities).filter(a=>sameId(a.dealId, deal.id));
   const dealInteractions = safeArray(interactions).filter(i=>sameId(i.dealId, deal.id));
   const dealFiles = safeArray(opportunityFiles).filter(file=>sameId(file.dealId,deal.id)).sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
+  const attachableFiles = safeArray(opportunityFiles).filter(file=>file?.url && file.isDir !== true).sort((a,b)=>{
+    const aHere = sameId(a.dealId,deal.id) ? 1 : 0;
+    const bHere = sameId(b.dealId,deal.id) ? 1 : 0;
+    return bHere - aHere || String(a.name||'').localeCompare(String(b.name||''),'pt-BR');
+  });
   const dealEmails = safeArray(emailLogs).filter(email=>sameId(email.dealId,deal.id)).sort((a,b)=>String(b.sentAt||'').localeCompare(String(a.sentAt||'')));
 
   const timeline = [
@@ -2470,6 +2484,51 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
     setEmailTemplates(safeArray(emailTemplates).filter(item=>!sameId(item.id,selectedEmailTemplate)));
     setSelectedEmailTemplate('');
   };
+  const saveEmailSignature = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if(!file || !setEmailSignatures) return;
+    if(file.type !== 'image/png'){
+      window.alert('Selecione uma imagem no formato PNG.');
+      return;
+    }
+    if(file.size > 600 * 1024){
+      window.alert('A assinatura deve ter no máximo 600 KB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      setEmailSignatures({...emailSignatures,[signatureKey]:{name:file.name,dataUrl,updatedAt:new Date().toISOString()}});
+      setIncludeSignature(true);
+    };
+    reader.onerror = () => window.alert('Não foi possível ler a imagem da assinatura.');
+    reader.readAsDataURL(file);
+  };
+  const removeEmailSignature = () => {
+    if(!setEmailSignatures || !emailSignature || !window.confirm('Remover sua assinatura de e-mail?')) return;
+    const next = {...emailSignatures};
+    delete next[signatureKey];
+    setEmailSignatures(next);
+    setIncludeSignature(false);
+  };
+  const toggleEmailAttachment = (file) => {
+    const selected = selectedAttachmentIds.some(id=>sameId(id,file.id));
+    if(selected){
+      setSelectedAttachmentIds(selectedAttachmentIds.filter(id=>!sameId(id,file.id)));
+      return;
+    }
+    if(selectedAttachmentIds.length >= 5){
+      window.alert('Você pode enviar até 5 anexos por e-mail.');
+      return;
+    }
+    const selectedBytes = attachableFiles.filter(item=>selectedAttachmentIds.some(id=>sameId(id,item.id))).reduce((total,item)=>total+Number(item.bytes||0),0);
+    if(Number(file.bytes||0) > 10 * 1024 * 1024 || selectedBytes + Number(file.bytes||0) > 20 * 1024 * 1024){
+      window.alert('Cada arquivo pode ter até 10 MB e o total dos anexos até 20 MB.');
+      return;
+    }
+    setSelectedAttachmentIds([...selectedAttachmentIds,file.id]);
+  };
   const sendEmail = async () => {
     if(!canWrite || sendingEmail || !setEmailLogs) return;
     if(!emailDraft.to.trim() || !emailDraft.subject.trim() || !emailDraft.body.trim()){
@@ -2480,16 +2539,18 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
     try {
       const {data:{session}} = await supabase.auth.getSession();
       if(!session?.access_token) throw new Error('Sua sessão expirou. Entre novamente no CRM.');
+      const selectedAttachments = attachableFiles.filter(file=>selectedAttachmentIds.some(id=>sameId(id,file.id))).map(file=>({name:file.name,url:file.url,bytes:Number(file.bytes||0)}));
       const response = await fetch('/api/send-email',{
         method:'POST',
         headers:{'Content-Type':'application/json','Authorization':`Bearer ${session.access_token}`},
-        body:JSON.stringify({to:emailDraft.to.trim(),cc:emailDraft.cc.trim(),subject:emailDraft.subject.trim(),body:emailDraft.body.trim()}),
+        body:JSON.stringify({to:emailDraft.to.trim(),cc:emailDraft.cc.trim(),subject:emailDraft.subject.trim(),body:emailDraft.body.trim(),signature:includeSignature ? emailSignature?.dataUrl || '' : '',attachments:selectedAttachments}),
       });
       const result = await response.json().catch(()=>({}));
       if(!response.ok) throw new Error(result.error || 'Não foi possível enviar o e-mail.');
       const sentAt = new Date().toISOString();
-      setEmailLogs([{id:`email-${Date.now()}`,messageId:result.messageId||'',dealId:deal.id,companyId:company?.id||'',contactId:contact?.id||'',to:emailDraft.to.trim(),cc:emailDraft.cc.trim(),subject:emailDraft.subject.trim(),body:emailDraft.body.trim(),owner:currentUser?.name||draft.owner||'Daleth',sender:result.sender||'crm@daleth.com.br',sentAt,status:'Enviado'},...safeArray(emailLogs)]);
+      setEmailLogs([{id:`email-${Date.now()}`,messageId:result.messageId||'',dealId:deal.id,companyId:company?.id||'',contactId:contact?.id||'',to:emailDraft.to.trim(),cc:emailDraft.cc.trim(),subject:emailDraft.subject.trim(),body:emailDraft.body.trim(),attachments:selectedAttachments.map(item=>item.name),hasSignature:Boolean(includeSignature && emailSignature),owner:currentUser?.name||draft.owner||'Daleth',sender:result.sender||'crm@daleth.com.br',sentAt,status:'Enviado'},...safeArray(emailLogs)]);
       setEmailDraft({...emailDraft,subject:'',body:''});
+      setSelectedAttachmentIds([]);
       setSelectedEmailTemplate('');
       window.alert('E-mail enviado e registrado no histórico.');
     } catch (error) {
@@ -2563,9 +2624,22 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
         <Input label="Cc" field="cc" form={emailDraft} setForm={setEmailDraft} type="email"/>
         <Input label="Assunto" field="subject" form={emailDraft} setForm={setEmailDraft}/>
         <Textarea label="Mensagem" field="body" form={emailDraft} setForm={setEmailDraft}/>
+        <div style={{gridColumn:'1 / -1'}}>
+          <span style={{display:'block',fontWeight:900,fontSize:'13px',textTransform:'uppercase',color:'#64748b',marginBottom:'8px'}}>Assinatura PNG</span>
+          <div style={{display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap'}}>
+            {emailSignature && <img src={emailSignature.dataUrl} alt="Prévia da assinatura" style={{maxWidth:'320px',maxHeight:'110px',objectFit:'contain',border:'1px solid #dbe7f3',borderRadius:'8px',background:'#fff',padding:'6px'}}/>}
+            {emailSignature && <label style={{display:'inline-flex',alignItems:'center',gap:'7px',fontWeight:800}}><input type="checkbox" checked={includeSignature} onChange={e=>setIncludeSignature(e.target.checked)}/>Incluir neste e-mail</label>}
+            <label className="mini" style={{cursor:'pointer'}}><ImagePlus size={15}/>{emailSignature ? 'Trocar assinatura' : 'Adicionar assinatura'}<input type="file" accept="image/png" onChange={saveEmailSignature} style={{display:'none'}}/></label>
+            {emailSignature && <button className="mini" onClick={removeEmailSignature}><Trash2 size={15}/>Remover assinatura</button>}
+          </div>
+        </div>
+        <div style={{gridColumn:'1 / -1'}}>
+          <span style={{display:'block',fontWeight:900,fontSize:'13px',textTransform:'uppercase',color:'#64748b',marginBottom:'8px'}}>Anexos do Dropbox ({selectedAttachmentIds.length}/5)</span>
+          {attachableFiles.length ? <div style={{display:'grid',gap:'7px',maxHeight:'220px',overflowY:'auto',padding:'10px',border:'1px solid #dbe7f3',borderRadius:'10px',background:'#f8fbfd'}}>{attachableFiles.map(file=><label key={file.id} style={{display:'flex',alignItems:'center',gap:'9px',cursor:'pointer',fontWeight:700}}><input type="checkbox" checked={selectedAttachmentIds.some(id=>sameId(id,file.id))} onChange={()=>toggleEmailAttachment(file)}/><Paperclip size={15}/><span>{file.name}</span><small style={{marginLeft:'auto',color:'#64748b'}}>{sameId(file.dealId,deal.id) ? 'Nesta oportunidade' : 'Documentos'}</small></label>)}</div> : <p className="muted" style={{margin:0}}>Nenhum arquivo disponível. Adicione-o em Arquivos ou Documentos usando o Dropbox.</p>}
+        </div>
         <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}><button className="saveBtn" onClick={sendEmail} disabled={sendingEmail}><Mail size={16}/>{sendingEmail ? 'Enviando...' : 'Enviar e-mail'}</button><button className="mini" onClick={saveCurrentEmailAsTemplate}><Save size={15}/>Salvar como modelo</button>{selectedEmailTemplate && <button className="mini" onClick={removeSelectedEmailTemplate}><Trash2 size={15}/>Excluir modelo</button>}</div>
       </div></Panel>}
-      <Panel title={`E-mails enviados (${dealEmails.length})`}><Table headers={['Data','Destinatário','Assunto','Responsável','Status']}>{dealEmails.length ? dealEmails.map(email=><tr key={email.id}><td>{formatDateTime(email.sentAt)}</td><td><b>{email.to}</b>{email.cc && <span>Cc: {email.cc}</span>}</td><td><b>{email.subject}</b><span>{email.body}</span></td><td>{email.owner||'-'}</td><td><span className="pill">{email.status||'Enviado'}</span></td></tr>) : <tr><td>Nenhum e-mail enviado</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}</Table></Panel>
+      <Panel title={`E-mails enviados (${dealEmails.length})`}><Table headers={['Data','Destinatário','Assunto','Anexos','Responsável','Status']}>{dealEmails.length ? dealEmails.map(email=><tr key={email.id}><td>{formatDateTime(email.sentAt)}</td><td><b>{email.to}</b>{email.cc && <span>Cc: {email.cc}</span>}</td><td><b>{email.subject}</b><span>{email.body}</span></td><td>{safeArray(email.attachments).length ? safeArray(email.attachments).join(', ') : '-'}</td><td>{email.owner||'-'}</td><td><span className="pill">{email.status||'Enviado'}</span></td></tr>) : <tr><td>Nenhum e-mail enviado</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}</Table></Panel>
     </>}
 
     {tab==='arquivos' && <>
