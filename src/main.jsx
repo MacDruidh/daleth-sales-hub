@@ -936,7 +936,17 @@ function formatDate(value){
 }
 function formatDateTime(value){
   if(!value) return '-';
-  const [date, time=''] = String(value).replace('T',' ').split(' ');
+  const timestamp = String(value);
+  if(timestamp.includes('T')){
+    const parsed = new Date(timestamp);
+    if(!Number.isNaN(parsed.getTime())){
+      return new Intl.DateTimeFormat('pt-BR',{
+        timeZone:'America/Sao_Paulo',
+        day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'
+      }).format(parsed).replace(',', '');
+    }
+  }
+  const [date, time=''] = timestamp.replace('T',' ').split(' ');
   const formattedDate = formatDate(date);
   return time ? `${formattedDate} ${time.slice(0,5)}` : formattedDate;
 }
@@ -2548,7 +2558,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
       const result = await response.json().catch(()=>({}));
       if(!response.ok) throw new Error(result.error || 'Não foi possível enviar o e-mail.');
       const sentAt = new Date().toISOString();
-      setEmailLogs([{id:`email-${Date.now()}`,messageId:result.messageId||'',dealId:deal.id,companyId:company?.id||'',contactId:contact?.id||'',to:emailDraft.to.trim(),cc:emailDraft.cc.trim(),subject:emailDraft.subject.trim(),body:emailDraft.body.trim(),attachments:selectedAttachments.map(item=>item.name),hasSignature:Boolean(includeSignature && emailSignature),owner:currentUser?.name||draft.owner||'Daleth',sender:result.sender||'crm@daleth.com.br',sentAt,status:'Enviado'},...safeArray(emailLogs)]);
+      setEmailLogs([{id:`email-${Date.now()}`,messageId:result.messageId||'',dealId:deal.id,companyId:company?.id||'',contactId:contact?.id||'',to:emailDraft.to.trim(),cc:emailDraft.cc.trim(),subject:emailDraft.subject.trim(),body:emailDraft.body.trim(),attachments:selectedAttachments.map(item=>item.name),hasSignature:Boolean(includeSignature && emailSignature),owner:currentUser?.name||draft.owner||'Daleth',sender:result.sender||'crm@daleth.com.br',sentAt,status:result.status||'Aceito pelo servidor'},...safeArray(emailLogs)]);
       setEmailDraft({...emailDraft,subject:'',body:''});
       setSelectedAttachmentIds([]);
       setSelectedEmailTemplate('');
