@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { LayoutDashboard, KanbanSquare, Building2, Users, BriefcaseBusiness, CalendarDays, Plus, Search, Edit3, Trash2, MessageSquare, CheckCircle2, Clock3, CircleDollarSign, X, Save, Sparkles, Phone, Mail, UserRound, Filter, BellRing, TrendingUp, AlertTriangle, Lock, Package, GripVertical, ChevronLeft, ChevronRight, List, ExternalLink, Link2, FileText, FolderOpen, ImagePlus, Paperclip } from 'lucide-react';
+import { LayoutDashboard, KanbanSquare, Building2, Users, BriefcaseBusiness, CalendarDays, Plus, Search, Edit3, Trash2, MessageSquare, CheckCircle2, Clock3, CircleDollarSign, X, Save, Sparkles, Phone, Mail, UserRound, Filter, BellRing, TrendingUp, AlertTriangle, Lock, Package, GripVertical, ChevronLeft, ChevronRight, List, ExternalLink, Link2, FileText, FolderOpen } from 'lucide-react';
 import './style.css';
 import './calendar.css';
 import { supabase } from './lib/supabase';
@@ -8,13 +8,7 @@ import { supabase } from './lib/supabase';
 const STAGES = ['Lead Captado','Primeiro Contato','Reunião Agendada','Levantamento','Proposta Enviada','Negociação','Ganho','Perdido'];
 const USERS = ['Sergio','Oyas','Katia','Paulo','Reserva'];
 const INITIAL_PRODUCTS = ['SAC+','SAC 24h','Inside Sales','Help Desk','Back Office','Ouvidorias','Custom'];
-const EMAIL_SENDING_ENABLED = false;
 const DOCUMENT_CATEGORIES = ['Proposta','Contrato','Briefing','Apresentação','Planilha','Escopo','Operacional','Financeiro','Outros'];
-const INITIAL_EMAIL_TEMPLATES = [
-  {id:'proposal-followup',name:'Follow-up de proposta',subject:'Proposta Daleth AC | {{empresa}}',body:'Olá {{contato}},\n\nGostaria de saber se conseguiu avaliar nossa proposta para {{produto}}.\n\nFico à disposição para esclarecer qualquer ponto e alinharmos os próximos passos.\n\nAtenciosamente,\n{{responsavel}}'},
-  {id:'meeting-confirmation',name:'Confirmação de reunião',subject:'Confirmação de reunião | Daleth AC',body:'Olá {{contato}},\n\nConfirmamos nossa reunião para conversarmos sobre {{produto}}.\n\nCaso precise ajustar o horário, por favor, me avise.\n\nAtenciosamente,\n{{responsavel}}'},
-  {id:'first-contact',name:'Primeiro contato',subject:'Daleth AC | {{empresa}}',body:'Olá {{contato}},\n\nMeu nome é {{responsavel}} e faço parte da Daleth AC. Gostaria de conversar sobre como podemos apoiar a operação da {{empresa}} com nossa solução {{produto}}.\n\nPodemos agendar uma breve conversa?\n\nAtenciosamente,\n{{responsavel}}'},
-];
 const ACCESS_USERS = [
   { name: 'Sergio', role: 'CEO', canViewDashboard: true },
   { name: 'Katia', role: 'Comercial', canViewDashboard: false },
@@ -994,9 +988,6 @@ function isDropboxLink(value){
 function normalizedDropboxLink(value){
   return dropboxHref(value).toLowerCase().replace(/([?&])dl=[01](&|$)/,'$1').replace(/[?&]$/,'').replace(/\/$/,'');
 }
-function applyEmailVariables(text,values){
-  return String(text || '').replace(/{{\s*(contato|empresa|produto|responsavel|oportunidade)\s*}}/gi,(_match,key)=>String(values[String(key).toLowerCase()] || ''));
-}
 function companyForDeal(deal, companies, contacts){
   const direct = byId(companies, deal?.companyId);
   if(direct) return direct;
@@ -1530,8 +1521,6 @@ function App(){
   const [notes,setNotes] = useNotes();
   const [interactions,setInteractions] = useStore('dsh-v1-interactions', initialInteractions);
   const [opportunityFiles,setOpportunityFiles] = useStore('dsh-v1-opportunity-files', []);
-  const [emailLogs,setEmailLogs] = useStore('dsh-v1-email-logs', []);
-  const [emailTemplates,setEmailTemplates] = useStore('dsh-v1-email-templates', INITIAL_EMAIL_TEMPLATES);
   const [contracts,setContracts] = useContracts();
   const [products,setProducts] = useProducts();
   const [pipedriveImportMeta,setPipedriveImportMeta] = useStore('dsh-v1-pipedrive-import-meta', null);
@@ -1543,10 +1532,6 @@ function App(){
   const [selectedActivityId,setSelectedActivityId] = useState(null);
   const [selectedProductName,setSelectedProductName] = useState(null);
   const [authReady,setAuthReady] = useState(false);
-
-  useEffect(() => {
-    if(!EMAIL_SENDING_ENABLED) localStorage.removeItem('dsh-v1-email-signatures');
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -1620,7 +1605,7 @@ function App(){
   ).length;
   const alertTotal = overdueCount + meetingsTodayCount + proposalsWithoutFollowup;
   const alertText = `${overdueCount} atividades vencidas · ${proposalsWithoutFollowup} propostas sem follow-up · ${meetingsTodayCount} reuniões hoje`;
-  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,emailLogs,setEmailLogs,emailTemplates,setEmailTemplates,contracts,setContracts,products,setProducts,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
+  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,contracts,setContracts,products,setProducts,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
   const logout = async () => {
     setQuery('');
     setSelectedDealId(null);
@@ -2307,7 +2292,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
   </>;
 }
 
-function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,opportunityFiles=[],setOpportunityFiles,emailLogs=[],setEmailLogs,emailTemplates=INITIAL_EMAIL_TEMPLATES,setEmailTemplates,emailSignatures={},setEmailSignatures,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName}){
+function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,opportunityFiles=[],setOpportunityFiles,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName}){
   const initialContact = byId(contacts, deal.contactId);
   const inferredCompany = companyForDeal(deal, companies, contacts);
   const [tab,setTab] = useState('dados');
@@ -2317,30 +2302,12 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
   const [interaction,setInteraction] = useState({type:'Ligação',dateTime:new Date().toISOString().slice(0,16),owner:currentUser?.name || deal.owner || 'Sergio',description:'',nextAction:'',nextDueDate:''});
   const emptyFile = {id:'',name:'',url:'',category:'Proposta',notes:'',owner:currentUser?.name || deal.owner || 'Sergio'};
   const [fileDraft,setFileDraft] = useState(emptyFile);
-  const [emailDraft,setEmailDraft] = useState({to:initialContact?.email || inferredCompany?.email || '',cc:'',subject:'',body:''});
-  const [selectedEmailTemplate,setSelectedEmailTemplate] = useState('');
-  const [sendingEmail,setSendingEmail] = useState(false);
-  const [selectedAttachmentIds,setSelectedAttachmentIds] = useState([]);
-  const signatureKey = String(currentUser?.email || currentUser?.id || currentUser?.name || 'daleth').toLowerCase();
-  const emailSignature = emailSignatures?.[signatureKey] || null;
-  const [includeSignature,setIncludeSignature] = useState(Boolean(emailSignature));
-
-  useEffect(() => {
-    if(emailSignature) setIncludeSignature(true);
-  }, [emailSignature?.updatedAt]);
-
   const company = byId(companies, draft.companyId) || inferredCompany;
   const contact = initialContact;
   const dealNotes = safeArray(notes).filter(n=>sameId(n.dealId, deal.id));
   const dealActivities = safeArray(activities).filter(a=>sameId(a.dealId, deal.id));
   const dealInteractions = safeArray(interactions).filter(i=>sameId(i.dealId, deal.id));
   const dealFiles = safeArray(opportunityFiles).filter(file=>sameId(file.dealId,deal.id)).sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
-  const attachableFiles = safeArray(opportunityFiles).filter(file=>file?.url && file.isDir !== true).sort((a,b)=>{
-    const aHere = sameId(a.dealId,deal.id) ? 1 : 0;
-    const bHere = sameId(b.dealId,deal.id) ? 1 : 0;
-    return bHere - aHere || String(a.name||'').localeCompare(String(b.name||''),'pt-BR');
-  });
-  const dealEmails = safeArray(emailLogs).filter(email=>sameId(email.dealId,deal.id)).sort((a,b)=>String(b.sentAt||'').localeCompare(String(a.sentAt||'')));
 
   const timeline = [
     ...dealInteractions.map(i => ({
@@ -2360,16 +2327,6 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
       owner:n.user || n.userName || n.user_name || 'Daleth',
       date:n.date || n.noteDate || n.note_date || n.createdAt || n.created_at || '',
       description:n.text || n.note || n.content || '',
-      nextAction:'',
-      nextDueDate:''
-    })),
-    ...dealEmails.map(email => ({
-      id:`email-${email.id}`,
-      source:'email',
-      type:'E-mail enviado',
-      owner:email.owner || 'Daleth',
-      date:email.sentAt || '',
-      description:`${email.subject || 'Sem assunto'} · Para: ${email.to || '-'}`,
       nextAction:'',
       nextDueDate:''
     })),
@@ -2479,110 +2436,6 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
     setOpportunityFiles(safeArray(opportunityFiles).filter(item=>!sameId(item.id,file.id)));
     if(sameId(fileDraft.id,file.id)) setFileDraft(emptyFile);
   };
-  const emailVariables = {
-    contato:contact?.name || 'cliente',
-    empresa:company?.name || '',
-    produto:draft.product || '',
-    responsavel:currentUser?.name || draft.owner || 'Daleth AC',
-    oportunidade:draft.title || '',
-  };
-  const applyEmailTemplate = (templateId) => {
-    setSelectedEmailTemplate(templateId);
-    const template = safeArray(emailTemplates).find(item=>sameId(item.id,templateId));
-    if(!template) return;
-    setEmailDraft({...emailDraft,subject:applyEmailVariables(template.subject,emailVariables),body:applyEmailVariables(template.body,emailVariables)});
-  };
-  const saveCurrentEmailAsTemplate = () => {
-    if(!setEmailTemplates || !emailDraft.subject.trim() || !emailDraft.body.trim()) return;
-    const name = window.prompt('Nome do novo modelo de e-mail:');
-    if(!name?.trim()) return;
-    const template = {id:`email-template-${Date.now()}`,name:name.trim(),subject:emailDraft.subject,body:emailDraft.body};
-    setEmailTemplates([...safeArray(emailTemplates),template]);
-    setSelectedEmailTemplate(template.id);
-  };
-  const removeSelectedEmailTemplate = () => {
-    if(!setEmailTemplates || !selectedEmailTemplate) return;
-    const template = safeArray(emailTemplates).find(item=>sameId(item.id,selectedEmailTemplate));
-    if(!template || !window.confirm(`Excluir o modelo "${template.name}"?`)) return;
-    setEmailTemplates(safeArray(emailTemplates).filter(item=>!sameId(item.id,selectedEmailTemplate)));
-    setSelectedEmailTemplate('');
-  };
-  const saveEmailSignature = (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if(!file || !setEmailSignatures) return;
-    if(file.type !== 'image/png'){
-      window.alert('Selecione uma imagem no formato PNG.');
-      return;
-    }
-    if(file.size > 600 * 1024){
-      window.alert('A assinatura deve ter no máximo 600 KB.');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = String(reader.result || '');
-      setEmailSignatures({...emailSignatures,[signatureKey]:{name:file.name,dataUrl,updatedAt:new Date().toISOString()}});
-      setIncludeSignature(true);
-    };
-    reader.onerror = () => window.alert('Não foi possível ler a imagem da assinatura.');
-    reader.readAsDataURL(file);
-  };
-  const removeEmailSignature = () => {
-    if(!setEmailSignatures || !emailSignature || !window.confirm('Remover sua assinatura de e-mail?')) return;
-    const next = {...emailSignatures};
-    delete next[signatureKey];
-    setEmailSignatures(next);
-    setIncludeSignature(false);
-  };
-  const toggleEmailAttachment = (file) => {
-    const selected = selectedAttachmentIds.some(id=>sameId(id,file.id));
-    if(selected){
-      setSelectedAttachmentIds(selectedAttachmentIds.filter(id=>!sameId(id,file.id)));
-      return;
-    }
-    if(selectedAttachmentIds.length >= 5){
-      window.alert('Você pode enviar até 5 anexos por e-mail.');
-      return;
-    }
-    const selectedBytes = attachableFiles.filter(item=>selectedAttachmentIds.some(id=>sameId(id,item.id))).reduce((total,item)=>total+Number(item.bytes||0),0);
-    if(Number(file.bytes||0) > 10 * 1024 * 1024 || selectedBytes + Number(file.bytes||0) > 20 * 1024 * 1024){
-      window.alert('Cada arquivo pode ter até 10 MB e o total dos anexos até 20 MB.');
-      return;
-    }
-    setSelectedAttachmentIds([...selectedAttachmentIds,file.id]);
-  };
-  const sendEmail = async () => {
-    if(!canWrite || sendingEmail || !setEmailLogs) return;
-    if(!emailDraft.to.trim() || !emailDraft.subject.trim() || !emailDraft.body.trim()){
-      window.alert('Informe destinatário, assunto e mensagem.');
-      return;
-    }
-    setSendingEmail(true);
-    try {
-      const {data:{session}} = await supabase.auth.getSession();
-      if(!session?.access_token) throw new Error('Sua sessão expirou. Entre novamente no CRM.');
-      const selectedAttachments = attachableFiles.filter(file=>selectedAttachmentIds.some(id=>sameId(id,file.id))).map(file=>({name:file.name,url:file.url,bytes:Number(file.bytes||0)}));
-      const response = await fetch('/api/send-email',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':`Bearer ${session.access_token}`},
-        body:JSON.stringify({to:emailDraft.to.trim(),cc:emailDraft.cc.trim(),subject:emailDraft.subject.trim(),body:emailDraft.body.trim(),signature:includeSignature ? emailSignature?.dataUrl || '' : '',attachments:selectedAttachments}),
-      });
-      const result = await response.json().catch(()=>({}));
-      if(!response.ok) throw new Error(result.error || 'Não foi possível enviar o e-mail.');
-      const sentAt = new Date().toISOString();
-      setEmailLogs([{id:`email-${Date.now()}`,messageId:result.messageId||'',dealId:deal.id,companyId:company?.id||'',contactId:contact?.id||'',to:emailDraft.to.trim(),cc:emailDraft.cc.trim(),subject:emailDraft.subject.trim(),body:emailDraft.body.trim(),attachments:selectedAttachments.map(item=>item.name),hasSignature:Boolean(includeSignature && emailSignature),owner:currentUser?.name||draft.owner||'Daleth',sender:result.sender||'crm@daleth.com.br',sentAt,status:result.status||'Aceito pelo servidor'},...safeArray(emailLogs)]);
-      setEmailDraft({...emailDraft,subject:'',body:''});
-      setSelectedAttachmentIds([]);
-      setSelectedEmailTemplate('');
-      window.alert('E-mail enviado e registrado no histórico.');
-    } catch (error) {
-      window.alert(error?.message || 'Não foi possível enviar o e-mail.');
-    } finally {
-      setSendingEmail(false);
-    }
-  };
-
   const interactionIcon = (type) => {
     const t = String(type || '').toLowerCase();
     if(t.includes('liga')) return '📞';
@@ -2619,7 +2472,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
       <Kpi icon={Clock3} label="Próxima ação" value={latestNext?.nextAction || 'Não definida'}/>
     </section>
 
-    <div className="tabs" style={{marginBottom:'18px',overflowX:'auto'}}>{['dados','historico','atividades','emails','arquivos','contrato','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t === 'dados' ? 'Dados' : t === 'historico' ? 'Histórico' : t === 'atividades' ? 'Atividades' : t === 'emails' ? `E-mails (${dealEmails.length})` : t === 'arquivos' ? `Arquivos (${dealFiles.length})` : t === 'contrato' ? 'Contrato' : 'Matriz'}</button>)}</div>
+    <div className="tabs" style={{marginBottom:'18px',overflowX:'auto'}}>{['dados','historico','atividades','arquivos','contrato','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t === 'dados' ? 'Dados' : t === 'historico' ? 'Histórico' : t === 'atividades' ? 'Atividades' : t === 'arquivos' ? `Arquivos (${dealFiles.length})` : t === 'contrato' ? 'Contrato' : 'Matriz'}</button>)}</div>
 
     {tab==='dados' && <Panel title="Dados da oportunidade"><div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={optionsIncludingCurrent(products,draft.product).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><Input label="Probabilidade %" field="probability" form={draft} setForm={setDraft} type="number"/><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div></Panel>}
 
@@ -2639,32 +2492,6 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
     </>}
 
     {tab==='atividades' && <Panel title="Atividades da oportunidade">{canWrite && <div className="formGrid"><Select label="Tipo" field="type" form={activity} setForm={setActivity} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={activity} setForm={setActivity}/><Input label="Data" field="dueDate" form={activity} setForm={setActivity} type="date"/><Input label="Hora" field="dueTime" form={activity} setForm={setActivity} type="time"/><Input label="Link chamada" field="meetingLink" form={activity} setForm={setActivity} type="url"/><Select label="Responsável" field="owner" form={activity} setForm={setActivity} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={activity} setForm={setActivity}/><button className="saveBtn" onClick={addActivity}><Plus size={16}/>Criar atividade</button></div>}<div className="timeline">{dealActivities.map(a=><div className="timelineItem" key={a.id}><div style={{display:'flex',justifyContent:'space-between',gap:'12px',alignItems:'flex-start',flexWrap:'wrap'}}><b>{a.type}: {a.title}</b>{canWrite && <button className="mini" onClick={()=>setSelectedActivityId?.(a.id)}><Edit3 size={15}/>Editar</button>}</div><span>{formatActivityDateTime(a)} · {a.owner} · {a.status}</span>{a.meetingLink && <p><a href={a.meetingLink} target="_blank" rel="noreferrer">Abrir chamada</a></p>}<p>{a.notes}</p></div>)}</div></Panel>}
-
-    {tab==='emails' && <>
-      {!EMAIL_SENDING_ENABLED && <Panel title="Envio temporariamente desativado"><p className="muted" style={{margin:0}}>O histórico permanece disponível. O envio pelo Daleth Sales Hub está pausado.</p></Panel>}
-      {canWrite && EMAIL_SENDING_ENABLED && <Panel title="Novo e-mail"><div className="formGrid modalGrid">
-        <label><span>Modelo</span><select value={selectedEmailTemplate} onChange={e=>applyEmailTemplate(e.target.value)}><option value="">Sem modelo</option>{safeArray(emailTemplates).map(template=><option value={template.id} key={template.id}>{template.name}</option>)}</select></label>
-        <Input label="Para" field="to" form={emailDraft} setForm={setEmailDraft} type="email"/>
-        <Input label="Cc" field="cc" form={emailDraft} setForm={setEmailDraft} type="email"/>
-        <Input label="Assunto" field="subject" form={emailDraft} setForm={setEmailDraft}/>
-        <Textarea label="Mensagem" field="body" form={emailDraft} setForm={setEmailDraft}/>
-        <div style={{gridColumn:'1 / -1'}}>
-          <span style={{display:'block',fontWeight:900,fontSize:'13px',textTransform:'uppercase',color:'#64748b',marginBottom:'8px'}}>Assinatura PNG</span>
-          <div style={{display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap'}}>
-            {emailSignature && <img src={emailSignature.dataUrl} alt="Prévia da assinatura" style={{maxWidth:'320px',maxHeight:'110px',objectFit:'contain',border:'1px solid #dbe7f3',borderRadius:'8px',background:'#fff',padding:'6px'}}/>}
-            {emailSignature && <label style={{display:'inline-flex',alignItems:'center',gap:'7px',fontWeight:800}}><input type="checkbox" checked={includeSignature} onChange={e=>setIncludeSignature(e.target.checked)}/>Incluir neste e-mail</label>}
-            <label className="mini" style={{cursor:'pointer'}}><ImagePlus size={15}/>{emailSignature ? 'Trocar assinatura' : 'Adicionar assinatura'}<input type="file" accept="image/png" onChange={saveEmailSignature} style={{display:'none'}}/></label>
-            {emailSignature && <button className="mini" onClick={removeEmailSignature}><Trash2 size={15}/>Remover assinatura</button>}
-          </div>
-        </div>
-        <div style={{gridColumn:'1 / -1'}}>
-          <span style={{display:'block',fontWeight:900,fontSize:'13px',textTransform:'uppercase',color:'#64748b',marginBottom:'8px'}}>Anexos do Dropbox ({selectedAttachmentIds.length}/5)</span>
-          {attachableFiles.length ? <div style={{display:'grid',gap:'7px',maxHeight:'220px',overflowY:'auto',padding:'10px',border:'1px solid #dbe7f3',borderRadius:'10px',background:'#f8fbfd'}}>{attachableFiles.map(file=><label key={file.id} style={{display:'flex',alignItems:'center',gap:'9px',cursor:'pointer',fontWeight:700}}><input type="checkbox" checked={selectedAttachmentIds.some(id=>sameId(id,file.id))} onChange={()=>toggleEmailAttachment(file)}/><Paperclip size={15}/><span>{file.name}</span><small style={{marginLeft:'auto',color:'#64748b'}}>{sameId(file.dealId,deal.id) ? 'Nesta oportunidade' : 'Documentos'}</small></label>)}</div> : <p className="muted" style={{margin:0}}>Nenhum arquivo disponível. Adicione-o em Arquivos ou Documentos usando o Dropbox.</p>}
-        </div>
-        <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}><button className="saveBtn" onClick={sendEmail} disabled={sendingEmail}><Mail size={16}/>{sendingEmail ? 'Enviando...' : 'Enviar e-mail'}</button><button className="mini" onClick={saveCurrentEmailAsTemplate}><Save size={15}/>Salvar como modelo</button>{selectedEmailTemplate && <button className="mini" onClick={removeSelectedEmailTemplate}><Trash2 size={15}/>Excluir modelo</button>}</div>
-      </div></Panel>}
-      <Panel title={`E-mails enviados (${dealEmails.length})`}><Table headers={['Data','Destinatário','Assunto','Anexos','Responsável','Status']}>{dealEmails.length ? dealEmails.map(email=><tr key={email.id}><td>{formatDateTime(email.sentAt)}</td><td><b>{email.to}</b>{email.cc && <span>Cc: {email.cc}</span>}</td><td><b>{email.subject}</b><span>{email.body}</span></td><td>{safeArray(email.attachments).length ? safeArray(email.attachments).join(', ') : '-'}</td><td>{email.owner||'-'}</td><td><span className="pill">{email.status||'Enviado'}</span></td></tr>) : <tr><td>Nenhum e-mail enviado</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}</Table></Panel>
-    </>}
 
     {tab==='arquivos' && <>
       {canWrite && <Panel title={fileDraft.id ? 'Editar vínculo de arquivo' : 'Novo vínculo de arquivo'}><div className="formGrid modalGrid"><Input label="Nome do arquivo" field="name" form={fileDraft} setForm={setFileDraft}/><Input label="Link compartilhado do Dropbox" field="url" form={fileDraft} setForm={setFileDraft} type="url"/><Select label="Categoria" field="category" form={fileDraft} setForm={setFileDraft} options={DOCUMENT_CATEGORIES.map(x=>[x,x])}/><Select label="Responsável" field="owner" form={fileDraft} setForm={setFileDraft} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={fileDraft} setForm={setFileDraft}/><div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}><button className="saveBtn" onClick={saveFileLink}><Link2 size={16}/>{fileDraft.id ? 'Salvar alterações' : 'Adicionar Link do Arquivo'}</button>{fileDraft.id && <button className="mini" onClick={()=>setFileDraft(emptyFile)}><X size={15}/>Cancelar</button>}</div></div></Panel>}
