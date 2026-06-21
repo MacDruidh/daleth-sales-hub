@@ -1445,7 +1445,77 @@ function UXStyle(){
     .dealCard select{margin-top:8px!important;min-height:34px!important;font-size:12px!important;border-radius:10px!important;}
     .toolbar{gap:10px!important;}
     .mini,.saveBtn{border-radius:12px!important;}
-    @media(max-width:1100px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))!important;}.topbar{align-items:flex-start!important;flex-direction:column!important;}.topActions{width:100%!important;justify-content:flex-start!important;flex-wrap:wrap!important;}.search{min-width:100%!important;}}
+    @media(max-width:1100px){
+      .cards{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
+      .grid2{grid-template-columns:1fr!important;}
+      .topbar{align-items:flex-start!important;flex-direction:column!important;}
+      .topActions{width:100%!important;justify-content:flex-start!important;flex-wrap:wrap!important;}
+      .search{min-width:100%!important;}
+    }
+    @media(min-width:761px) and (max-width:1000px){
+      .app{display:grid!important;grid-template-columns:80px minmax(0,1fr)!important;}
+      .sidebar{position:sticky!important;top:0!important;width:80px!important;height:100vh!important;}
+      .main{padding:20px!important;}
+    }
+    @media(max-width:760px){
+      body{overflow-x:hidden!important;}
+      .app{display:block!important;min-width:0!important;}
+      .sidebar{position:sticky!important;top:0!important;z-index:40!important;width:100%!important;min-width:0!important;height:auto!important;padding:8px 10px!important;border-right:0!important;border-bottom:1px solid var(--ux-border)!important;box-shadow:0 8px 24px rgba(15,23,42,.08)!important;}
+      .brand,.sidebarBox{display:none!important;}
+      .sidebar nav{display:flex!important;flex-direction:row!important;align-items:center!important;gap:6px!important;width:100%!important;overflow-x:auto!important;overscroll-behavior-x:contain!important;scrollbar-width:none!important;padding:2px 0!important;}
+      .sidebar nav::-webkit-scrollbar{display:none!important;}
+      .sidebar nav button{flex:0 0 46px!important;width:46px!important;height:46px!important;min-height:46px!important;border-radius:13px!important;}
+      .sidebar nav button::after{display:none!important;}
+      .sidebar nav button svg{width:20px!important;height:20px!important;}
+      .main{width:100%!important;padding:12px 12px 24px!important;overflow:visible!important;}
+      .topbar{padding:14px!important;margin-bottom:14px!important;border-radius:18px!important;gap:14px!important;}
+      .uxHeaderTitle{min-width:0!important;width:100%!important;}
+      .uxHeaderTitle h1{font-size:22px!important;}
+      .uxHeaderTitle p{font-size:12px!important;}
+      .uxEyebrow{font-size:11px!important;margin-bottom:6px!important;}
+      .topActions{display:grid!important;grid-template-columns:1fr auto!important;gap:8px!important;align-items:stretch!important;}
+      .search{grid-column:1 / -1!important;width:100%!important;min-width:0!important;height:44px!important;}
+      .notification{min-width:0!important;width:100%!important;padding:9px 10px!important;border-radius:13px!important;}
+      .notification small{white-space:normal!important;font-size:10px!important;line-height:1.25!important;}
+      .notification b{font-size:12px!important;}
+      .topActions .mini{min-height:44px!important;justify-content:center!important;}
+      .cards{grid-template-columns:1fr!important;gap:10px!important;}
+      .kpi{padding:15px!important;}
+      .panel{padding:14px!important;border-radius:16px!important;overflow:hidden!important;}
+      .panel h2{font-size:18px!important;}
+      .grid2,.formGrid,.modalGrid,.compact{grid-template-columns:1fr!important;}
+      .dashboardHero{grid-template-columns:1fr!important;gap:12px!important;margin-bottom:12px!important;}
+      .dashboardHero>div{padding:18px!important;border-radius:18px!important;min-height:0!important;}
+      .dashboardHero h2{font-size:27px!important;}
+      .dashboardHeroMetrics{grid-template-columns:1fr!important;gap:8px!important;}
+      .dashboardHeroMetrics>div{padding:13px!important;}
+      .dashboardSummaryGrid{grid-template-columns:1fr!important;}
+      .wide{grid-column:auto!important;}
+      .toolbar{flex-wrap:wrap!important;align-items:stretch!important;}
+      .toolbar input{width:100%!important;min-width:0!important;}
+      .toolbar button,.toolbar .mini,.toolbar .saveBtn{flex:1 1 auto!important;justify-content:center!important;}
+      .tableWrap{width:100%!important;overflow-x:auto!important;overscroll-behavior-x:contain!important;-webkit-overflow-scrolling:touch!important;}
+      .tableWrap table{min-width:680px!important;}
+      .tabs{overflow-x:auto!important;overscroll-behavior-x:contain!important;scrollbar-width:none!important;}
+      .tabs::-webkit-scrollbar{display:none!important;}
+      .tabs button{flex:0 0 auto!important;padding:11px 10px!important;}
+      .kanban{display:flex!important;width:100%!important;overflow-x:auto!important;scroll-snap-type:x proximity!important;overscroll-behavior-x:contain!important;}
+      .column{flex:0 0 calc(100vw - 44px)!important;width:calc(100vw - 44px)!important;min-width:calc(100vw - 44px)!important;max-height:none!important;scroll-snap-align:start!important;}
+      .stageCards{max-height:none!important;overflow:visible!important;}
+      .bar{grid-template-columns:minmax(90px,130px) 1fr 28px!important;gap:8px!important;}
+      .modalBackdrop{padding:8px!important;align-items:end!important;}
+      .modal{width:100%!important;max-height:94vh!important;padding:16px!important;border-radius:22px 22px 12px 12px!important;}
+      .modalHead h2{font-size:20px!important;}
+      .timelineItem{padding:12px!important;}
+      .timelineNote:hover::after{left:8px!important;width:calc(100vw - 56px)!important;}
+      button,.mini,.saveBtn{touch-action:manipulation;}
+    }
+    @media(max-width:430px){
+      .topActions{grid-template-columns:1fr!important;}
+      .topActions .notification,.topActions .mini{grid-column:1!important;}
+      .topActions .mini{width:100%!important;}
+      .column{flex-basis:calc(100vw - 36px)!important;width:calc(100vw - 36px)!important;min-width:calc(100vw - 36px)!important;}
+    }
   `}</style>;
 }
 
@@ -1755,7 +1825,7 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
     .slice(0,5);
 
   return <>
-    <section style={{
+    <section className="dashboardHero" style={{
       display:'grid',
       gridTemplateColumns:'minmax(320px, 1.15fr) minmax(320px, .85fr)',
       gap:'20px',
@@ -1797,7 +1867,7 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
             Receita recorrente, contratos e oportunidades abertas em uma visão única para tomada de decisão.
           </p>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'14px',marginTop:'22px'}}>
+        <div className="dashboardHeroMetrics" style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'14px',marginTop:'22px'}}>
           <div style={{background:'#fff',border:'1px solid #e4edf7',borderRadius:'18px',padding:'16px'}}>
             <span style={{display:'block',fontSize:'12px',fontWeight:800,color:'#64748b',textTransform:'uppercase',letterSpacing:'.05em'}}>Receita mensal contratada</span>
             <strong style={{display:'block',fontSize:'25px',marginTop:'8px',color:'#061b34'}}>{moneyShort(activeContractMrr || wonMrr)}</strong>
@@ -1821,7 +1891,7 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
         padding:'24px'
       }}>
         <h2 style={{margin:'0 0 16px',fontSize:'20px',color:'#061b34'}}>Resumo operacional</h2>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'12px'}}>
+        <div className="dashboardSummaryGrid" style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'12px'}}>
           <MiniMetric icon={Clock3} label="Previsão 30 dias" value={moneyShort(forecast30)} />
           <MiniMetric icon={CalendarDays} label="Previsão 90 dias" value={moneyShort(forecast90)} />
           <MiniMetric icon={AlertTriangle} label="Receita em risco" value={moneyShort(revenueAtRisk90)} />
