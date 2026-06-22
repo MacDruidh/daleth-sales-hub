@@ -5,7 +5,18 @@ import './style.css';
 import './calendar.css';
 import { supabase } from './lib/supabase';
 
-const STAGES = ['Lead Captado','Primeiro Contato','Reunião Agendada','Levantamento','Proposta Enviada','Negociação','Ganho','Perdido'];
+const STAGES = ['Lead Captado','Primeiro Contato','Levantamento','Reunião Agendada','Proposta Enviada','Negociação','Contrato','Ganho','Perdido'];
+const STAGE_PROBABILITIES = {
+  'Lead Captado':10,
+  'Primeiro Contato':20,
+  'Levantamento':30,
+  'Reunião Agendada':50,
+  'Proposta Enviada':60,
+  'Negociação':70,
+  'Contrato':90,
+  'Ganho':100,
+  'Perdido':0,
+};
 const USERS = ['Sergio','Oyas','Katia','Paulo','Reserva'];
 const INITIAL_PRODUCTS = ['SAC+','SAC 24h','Inside Sales','Help Desk','Back Office','Ouvidorias','Custom'];
 const DOCUMENT_CATEGORIES = ['Proposta','Contrato','Briefing','Apresentação','Planilha','Escopo','Operacional','Financeiro','Outros'];
@@ -28,7 +39,7 @@ const initialContacts = [
 ];
 const initialDeals = [
   { id: 1, title: 'SAC+ para rede de franquias', companyId: 1, contactId: 1, product: 'SAC+', value: 18900, setup: 0, contractMonths: 12, stage: 'Proposta Enviada', owner: 'Sergio', probability: 60, closeDate: '2026-07-15', description: 'Proposta para atendimento multicanal da rede.', nextStep: 'Follow-up sobre proposta enviada.', priority: 'Alta' },
-  { id: 2, title: 'Atendimento ANAC 24/7', companyId: 2, contactId: '', product: 'SAC 24h', value: 45000, setup: 60000, contractMonths: 36, stage: 'Levantamento', owner: 'Oyas', probability: 40, closeDate: '2026-08-01', description: 'Discovery para operação de companhia aérea internacional.', nextStep: 'Mapear volumes e canais obrigatórios.', priority: 'Alta' },
+  { id: 2, title: 'Atendimento ANAC 24/7', companyId: 2, contactId: '', product: 'SAC 24h', value: 45000, setup: 60000, contractMonths: 36, stage: 'Levantamento', owner: 'Oyas', probability: 30, closeDate: '2026-08-01', description: 'Discovery para operação de companhia aérea internacional.', nextStep: 'Mapear volumes e canais obrigatórios.', priority: 'Alta' },
   { id: 3, title: 'Parceria Franquear', companyId: 3, contactId: 2, product: 'Custom', value: 12000, setup: 0, contractMonths: 24, stage: 'Negociação', owner: 'Sergio', probability: 70, closeDate: '2026-06-30', description: 'Modelo de indicação para redes de franquias.', nextStep: 'Formalizar contrato de parceria.', priority: 'Média' },
 ];
 const initialActivities = [
@@ -408,7 +419,7 @@ function mapDealFromDb(d){
     contractMonths: Number(d.contract_months || 12),
     stage: d.stage || 'Lead Captado',
     owner: d.owner || '',
-    probability: Number(d.probability || 0),
+    probability: probabilityForStage(d.stage || 'Lead Captado',Number(d.probability || 0)),
     closeDate: d.expected_close_date || '',
     description: d.description || '',
     nextStep: d.next_step || '',
@@ -426,7 +437,7 @@ function dealToDb(deal, companies, contacts){
     value: Number(deal.value || 0),
     setup_value: Number(deal.setup || 0),
     contract_months: Number(deal.contractMonths || 12),
-    probability: Number(deal.probability || 30),
+    probability: probabilityForStage(deal.stage,Number(deal.probability || 30)),
     expected_close_date: deal.closeDate || null,
     status: deal.status || null,
     stage: deal.stage || 'Lead Captado',
@@ -1014,7 +1025,8 @@ function dealSetup(d){ return Number(d?.setup || 0); }
 function dealMonths(d){ return Math.max(1, Number(d?.contractMonths || 12)); }
 function dealTcv(d){ return (dealMrr(d) * dealMonths(d)) + dealSetup(d); }
 function dealArr(d){ return dealMrr(d) * 12; }
-function dealWeightedTcv(d){ return dealTcv(d) * (Number(d?.probability || 0) / 100); }
+function probabilityForStage(stage,fallback=30){ return Object.prototype.hasOwnProperty.call(STAGE_PROBABILITIES,stage) ? STAGE_PROBABILITIES[stage] : Number(fallback || 0); }
+function dealWeightedTcv(d){ return dealTcv(d) * (probabilityForStage(d?.stage,d?.probability) / 100); }
 function dealSegment(d, companies, contacts=[]){ return companyForDeal(d,companies,contacts)?.segment || 'Sem segmento'; }
 
 function addMonths(dateString, months){
@@ -1537,6 +1549,14 @@ function App(){
   const [selectedActivityId,setSelectedActivityId] = useState(null);
   const [selectedProductName,setSelectedProductName] = useState(null);
   const [authReady,setAuthReady] = useState(false);
+
+  useEffect(() => {
+    if(stages.includes('Contrato')) return;
+    const gainIndex = stages.indexOf('Ganho');
+    const nextStages = [...stages];
+    nextStages.splice(gainIndex >= 0 ? gainIndex : nextStages.length,0,'Contrato');
+    setStages(nextStages);
+  }, [stages]);
 
   useEffect(() => {
     let active = true;
@@ -2134,7 +2154,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
   };
   const move = async (deal, stage) => {
     if(!canWrite) return;
-    const nextDeal = {...deal, stage};
+    const nextDeal = {...deal,stage,probability:probabilityForStage(stage,deal.probability)};
     setDeals(deals.map(d => sameId(d.id,deal.id) ? nextDeal : d));
     try {
       const saved = await saveDealToSupabase(nextDeal, companies, contacts);
@@ -2170,7 +2190,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
     }
 
     const nextStages = stages.map(stage => stage === oldStage ? nextName : stage);
-    const nextDeals = deals.map(deal => deal.stage === oldStage ? {...deal, stage: nextName} : deal);
+    const nextDeals = deals.map(deal => deal.stage === oldStage ? {...deal,stage:nextName,probability:probabilityForStage(nextName,deal.probability)} : deal);
     const changedDeals = nextDeals.filter(deal => deal.stage === nextName && deals.some(current => sameId(current.id, deal.id) && current.stage === oldStage));
 
     setStages(nextStages);
@@ -2276,7 +2296,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
 }
 
 function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,notes,setNotes,setSelectedDealId,setSelectedProductName,query,canWrite}){
-  const empty = { title:'', companyId:companies[0]?.id||'', contactId:'', product:'SAC+', value:0, setup:0, contractMonths:12, stage:stages[0], owner:'Sergio', probability:30, closeDate:'', description:'', nextStep:'', priority:'Média' };
+  const empty = { title:'', companyId:companies[0]?.id||'', contactId:'', product:'SAC+', value:0, setup:0, contractMonths:12, stage:stages[0], owner:'Sergio', probability:probabilityForStage(stages[0],30), closeDate:'', description:'', nextStep:'', priority:'Média' };
   const [form,setFormBase] = useState(empty);
   const [filters,setFilters] = useState({ companyId:'', product:'', stage:'', owner:'', closeBeforeMonth:'' });
   const [selectedDealIds,setSelectedDealIds] = useState([]);
@@ -2334,7 +2354,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
       value: Number(form.value),
       setup: Number(form.setup),
       contractMonths: Number(form.contractMonths || 12),
-      probability: Number(form.probability || 30)
+      probability: probabilityForStage(form.stage,form.probability)
     };
     try {
       const saved = await saveDealToSupabase(nextDeal, companies, contacts);
@@ -2393,7 +2413,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
   };
   const clearFilters = () => setFilters({ companyId:'', product:'', stage:'', owner:'', closeBeforeMonth:'' });
   return <>
-    {canWrite && <Panel title="Nova oportunidade"><div className="formGrid"><Input label="Título" field="title" form={form} setForm={setForm}/><Select label="Empresa" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Contato" field="contactId" form={form} setForm={setForm} options={[["", availableContacts.length ? "Selecione" : "Sem contatos desta empresa"],...availableContacts.map(c=>[c.id,c.name])]}/><Select label="Produto" field="product" form={form} setForm={setForm} options={safeArray(products).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={form} setForm={setForm} type="number"/><Input label="Implantação" field="setup" form={form} setForm={setForm} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/><Input label="Probabilidade %" field="probability" form={form} setForm={setForm} type="number"/><Select label="Etapa" field="stage" form={form} setForm={setForm} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={form} setForm={setForm} options={USERS.map(u=>[u,u])}/><Input label="Fechamento previsto" field="closeDate" form={form} setForm={setForm} type="date"/><label><span>Valor total do contrato</span><input value={money(dealTcv(form))} readOnly/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Criar oportunidade</button></div></Panel>}
+    {canWrite && <Panel title="Nova oportunidade"><div className="formGrid"><Input label="Título" field="title" form={form} setForm={setForm}/><Select label="Empresa" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Contato" field="contactId" form={form} setForm={setForm} options={[["", availableContacts.length ? "Selecione" : "Sem contatos desta empresa"],...availableContacts.map(c=>[c.id,c.name])]}/><Select label="Produto" field="product" form={form} setForm={setForm} options={safeArray(products).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={form} setForm={setForm} type="number"/><Input label="Implantação" field="setup" form={form} setForm={setForm} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(form.stage,form.probability)} readOnly/></label><Select label="Etapa" field="stage" form={form} setForm={setForm} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={form} setForm={setForm} options={USERS.map(u=>[u,u])}/><Input label="Fechamento previsto" field="closeDate" form={form} setForm={setForm} type="date"/><label><span>Valor total do contrato</span><input value={money(dealTcv(form))} readOnly/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Criar oportunidade</button></div></Panel>}
     <Panel title="Filtros de oportunidades"><div className="formGrid">
       <Select label="Empresa" field="companyId" form={filters} setForm={setFilters} options={[["","Todas"],...safeArray(companies).map(c=>[c.id,c.name])]}/>
       <Select label="Produto" field="product" form={filters} setForm={setFilters} options={[["","Todos"],...safeArray(products).map(p=>[p,p])]}/>
@@ -2417,7 +2437,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
   const initialContact = byId(contacts, deal.contactId);
   const inferredCompany = companyForDeal(deal, companies, contacts);
   const [tab,setTab] = useState('dados');
-  const [draft,setDraft] = useState({contractMonths:12, setup:0, probability:30, ...deal, companyId:inferredCompany?.id || deal.companyId});
+  const [draft,setDraft] = useState({contractMonths:12,setup:0,...deal,companyId:inferredCompany?.id || deal.companyId,probability:probabilityForStage(deal.stage,deal.probability)});
   const [note,setNote] = useState('');
   const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),dueTime:'',meetingLink:'',owner:deal.owner || currentUser?.name || 'Sergio',status:'Pendente',notes:''});
   const [interaction,setInteraction] = useState({type:'Ligação',dateTime:new Date().toISOString().slice(0,16),owner:currentUser?.name || deal.owner || 'Sergio',description:'',nextAction:'',nextDueDate:''});
@@ -2473,7 +2493,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
       value: Number(draft.value),
       setup: Number(draft.setup),
       contractMonths: Number(draft.contractMonths || 12),
-      probability: Number(draft.probability || 30)
+      probability: probabilityForStage(draft.stage,draft.probability)
     };
     try {
       const saved = await saveDealToSupabase(nextDeal, companies, contacts);
@@ -2595,7 +2615,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
 
     <div className="tabs" style={{marginBottom:'18px',overflowX:'auto'}}>{['dados','historico','atividades','arquivos','contrato','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t === 'dados' ? 'Dados' : t === 'historico' ? 'Histórico' : t === 'atividades' ? 'Atividades' : t === 'arquivos' ? `Arquivos (${dealFiles.length})` : t === 'contrato' ? 'Contrato' : 'Matriz'}</button>)}</div>
 
-    {tab==='dados' && <Panel title="Dados da oportunidade"><div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={optionsIncludingCurrent(products,draft.product).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><Input label="Probabilidade %" field="probability" form={draft} setForm={setDraft} type="number"/><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div></Panel>}
+    {tab==='dados' && <Panel title="Dados da oportunidade"><div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={optionsIncludingCurrent(products,draft.product).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(draft.stage,draft.probability)} readOnly/></label><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div></Panel>}
 
     {tab==='historico' && <>
       {canWrite && <Panel title="Nova interação"><div className="formGrid modalGrid">
@@ -2639,7 +2659,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
 function DealModal({deal,onClose,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES}){
   const inferredCompany = companyForDeal(deal, companies, contacts);
   const [tab,setTab] = useState('geral');
-  const [draft,setDraft] = useState({contractMonths:12, setup:0, probability:30, ...deal, companyId:inferredCompany?.id || deal.companyId});
+  const [draft,setDraft] = useState({contractMonths:12,setup:0,...deal,companyId:inferredCompany?.id || deal.companyId,probability:probabilityForStage(deal.stage,deal.probability)});
   const [note,setNote] = useState('');
   const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),dueTime:'',meetingLink:'',owner:deal.owner,status:'Pendente',notes:''});
   const save = async () => {
@@ -2648,7 +2668,7 @@ function DealModal({deal,onClose,companies=[],contacts=[],deals=[],setDeals,acti
       value: Number(draft.value),
       setup: Number(draft.setup),
       contractMonths: Number(draft.contractMonths || 12),
-      probability: Number(draft.probability || 30)
+      probability: probabilityForStage(draft.stage,draft.probability)
     };
     try {
       const saved = await saveDealToSupabase(nextDeal, companies, contacts);
@@ -2692,7 +2712,7 @@ function DealModal({deal,onClose,companies=[],contacts=[],deals=[],setDeals,acti
   const dealNotes = notes.filter(n=>String(n.dealId)===String(deal.id));
   const dealActivities = activities.filter(a=>String(a.dealId)===String(deal.id));
   return <div className="modalBackdrop"><div className="modal"><div className="modalHead"><div><h2>{deal.title}</h2><span>{companyForDeal(deal,companies,contacts)?.name || 'Sem empresa'} · Receita mensal {money(dealMrr(deal))} · Valor total {money(dealTcv(deal))}</span></div><button className="iconBtn" onClick={onClose}><X/></button></div><div className="tabs">{['geral','timeline','atividades','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t}</button>)}</div>
-    {tab==='geral' && <div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={optionsIncludingCurrent(products,draft.product).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><Input label="Probabilidade %" field="probability" form={draft} setForm={setDraft} type="number"/><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/><button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button></div>}
+    {tab==='geral' && <div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={optionsIncludingCurrent(products,draft.product).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(draft.stage,draft.probability)} readOnly/></label><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/><button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button></div>}
     {tab==='timeline' && <div><div className="noteBox"><textarea placeholder="Adicionar comentário, registro de reunião, ligação, WhatsApp..." value={note} onChange={e=>setNote(e.target.value)}></textarea><button onClick={addNote}><MessageSquare size={16}/>Adicionar comentário</button></div><div className="timeline">{dealNotes.map(n=><div className="timelineItem" key={n.id}><b>{n.user || n.userName || n.user_name || 'Daleth'}</b><span>{formatDate(n.date || n.noteDate || n.note_date)}</span><p>{n.text || n.note || ''}</p></div>)}</div></div>}
     {tab==='atividades' && <div><div className="formGrid"><Select label="Tipo" field="type" form={activity} setForm={setActivity} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={activity} setForm={setActivity}/><Input label="Data" field="dueDate" form={activity} setForm={setActivity} type="date"/><Input label="Hora" field="dueTime" form={activity} setForm={setActivity} type="time"/><Input label="Link chamada" field="meetingLink" form={activity} setForm={setActivity} type="url"/><Select label="Responsável" field="owner" form={activity} setForm={setActivity} options={USERS.map(u=>[u,u])}/><button className="saveBtn" onClick={addActivity}><Plus size={16}/>Criar atividade</button></div><div className="timeline">{dealActivities.map(a=><div className="timelineItem" key={a.id}><b>{a.type}: {a.title}</b><span>{formatActivityDateTime(a)} · {a.owner} · {a.status}</span>{a.meetingLink && <p><a href={a.meetingLink} target="_blank" rel="noreferrer">Abrir chamada</a></p>}<p>{a.notes}</p></div>)}</div></div>}
     {tab==='contrato' && <Panel title="Resumo Comercial"><div className="formGrid modalGrid">
@@ -3600,7 +3620,13 @@ function Select({label,field,form,setForm,options}){
   const current = form[field] ?? '';
   const hasCurrentOption = options.some(([value])=>sameId(value,current));
   const visibleOptions = hasCurrentOption ? options : [[current,current ? String(current) : 'Selecione'],...options];
-  return <label><span>{label}</span><select value={current} onChange={e=>setForm({...form,[field]:e.target.value})}>{visibleOptions.map(([v,t],index)=><option value={v} key={`${String(v)}-${index}`}>{t}</option>)}</select></label>;
+  const update = event => {
+    const value = event.target.value;
+    const next = {...form,[field]:value};
+    if(field === 'stage' && Object.prototype.hasOwnProperty.call(form,'probability')) next.probability = probabilityForStage(value,form.probability);
+    setForm(next);
+  };
+  return <label><span>{label}</span><select value={current} onChange={update}>{visibleOptions.map(([v,t],index)=><option value={v} key={`${String(v)}-${index}`}>{t}</option>)}</select></label>;
 }
 function Table({headers,children}){ return <div className="tableWrap"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
 
