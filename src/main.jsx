@@ -1592,7 +1592,7 @@ function App(){
   const isCEO = currentUser?.role === 'CEO';
   const canWrite = ['CEO','Comercial'].includes(currentUser?.role);
   const allMenu = [
-    ['dashboard','Dashboard',LayoutDashboard], ['quality','Qualidade do CRM',AlertTriangle], ['pipeline','Pipeline',KanbanSquare], ['deals','Oportunidades',BriefcaseBusiness],
+    ['dashboard','Dashboard',LayoutDashboard], ['pending','Pendências',BellRing], ['quality','Qualidade do CRM',AlertTriangle], ['pipeline','Pipeline',KanbanSquare], ['deals','Oportunidades',BriefcaseBusiness],
     ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['documents','Documentos',FolderOpen], ['companies','Empresas',Building2], ['contacts','Contatos',UserRound], ['products','Produtos',Package], ['imports','Importação',Filter], ['profiles','Perfis',Lock], ['matrix','Matriz Daleth',Sparkles]
   ];
   const menu = allMenu.filter(([id]) => {
@@ -1640,9 +1640,9 @@ function App(){
       <div className="sidebarBox"><b>Perfil ativo</b><span>{currentUser.name} · {currentUser.role}</span></div>
     </aside>
     <main className="main">
-      <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresas, contatos e oportunidades..."/></div><div className="notification"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></div><div className="notification" style={{minWidth:'150px'}}><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><button className="mini" onClick={logout}><X size={15}/>Sair</button></div></header>
+      <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresas, contatos e oportunidades..."/></div><button className="notification" style={{cursor:'pointer',textAlign:'left'}} onClick={()=>navigate('pending')} title="Abrir painel de pendências"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></button><div className="notification" style={{minWidth:'150px'}}><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><button className="mini" onClick={logout}><X size={15}/>Sair</button></div></header>
       {selectedDeal ? <DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/> : (query.trim() ? <GlobalSearch {...context}/> : <>
-        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='quality' && <CrmQuality {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='companies' && <Companies {...context}/>} {activePage==='contacts' && <Contacts {...context}/>} {activePage==='products' && <Products {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>} {activePage==='matrix' && <Matrix {...context}/>}
+        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <CrmQuality {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='companies' && <Companies {...context}/>} {activePage==='contacts' && <Contacts {...context}/>} {activePage==='products' && <Products {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>} {activePage==='matrix' && <Matrix {...context}/>}
       </>)}
     </main>
     {selectedCompany && <CompanyModal company={selectedCompany} companies={companies} setCompanies={setCompanies} contacts={contacts} setSelectedContactId={setSelectedContactId} canWrite={canWrite} onClose={()=>setSelectedCompanyId(null)}/>}
@@ -1971,6 +1971,59 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
       </DashboardTable>
     </Panel>
 
+  </>;
+}
+
+function PendingPanel({companies=[],contacts=[],deals=[],activities=[],contracts=[],setSelectedDealId,setSelectedActivityId,setSelectedContractId}){
+  const currentDate = today();
+  const pendingActivities = safeArray(activities).filter(activity=>activity.status !== 'Concluída');
+  const overdueActivities = pendingActivities.filter(activity=>activity.dueDate && activity.dueDate < currentDate).sort((a,b)=>(String(a.dueDate || '') + String(a.dueTime || '')).localeCompare(String(b.dueDate || '') + String(b.dueTime || '')));
+  const meetingsToday = pendingActivities.filter(activity=>activity.dueDate === currentDate && String(activity.type || '').toLowerCase().includes('reuni')).sort((a,b)=>String(a.dueTime || '').localeCompare(String(b.dueTime || '')));
+  const proposalsWithoutFollowup = safeArray(deals).filter(deal=>deal.stage === 'Proposta Enviada' && !pendingActivities.some(activity=>sameId(activity.dealId,deal.id) && activity.dueDate && activity.dueDate >= currentDate));
+  const dealsWithoutNextStep = safeArray(deals).filter(deal=>!['Ganho','Perdido'].includes(deal.stage) && !String(deal.nextStep || '').trim());
+  const expiringContracts = safeArray(contracts).map(contract=>({contract,days:daysUntil(contract.endDate)})).filter(({contract,days})=>contractStatus(contract) === 'Ativo' && days !== null && days >= 0 && days <= 90).sort((a,b)=>a.days-b.days);
+  const totalPendingItems = overdueActivities.length + meetingsToday.length + proposalsWithoutFollowup.length + dealsWithoutNextStep.length + expiringContracts.length;
+  const dealForActivity = activity => byId(deals,activity.dealId);
+  return <>
+    <Panel title="Painel de Pendências">
+      <p className="muted" style={{margin:'0 0 8px'}}>Acompanhe os itens que exigem ação comercial. Clique em uma linha para abrir o cadastro correspondente.</p>
+      {!totalPendingItems && <p style={{margin:0,color:'#1a9b6c',fontWeight:900}}>Nenhuma pendência comercial encontrada.</p>}
+    </Panel>
+    <section className="cards">
+      <Kpi icon={AlertTriangle} label="Atividades vencidas" value={overdueActivities.length}/>
+      <Kpi icon={BriefcaseBusiness} label="Propostas sem follow-up" value={proposalsWithoutFollowup.length}/>
+      <Kpi icon={CalendarDays} label="Reuniões hoje" value={meetingsToday.length}/>
+      <Kpi icon={Clock3} label="Contratos vencendo em 90 dias" value={expiringContracts.length}/>
+    </section>
+    <section className="grid2 compact">
+      <Panel title={`Atividades vencidas (${overdueActivities.length})`}>
+        <DashboardTable headers={['Atividade','Oportunidade','Vencimento','Responsável','Ações']}>
+          {overdueActivities.length ? overdueActivities.map(activity=>{const deal=dealForActivity(activity);return <tr key={activity.id} onClick={()=>setSelectedActivityId?.(activity.id)} style={{cursor:'pointer'}}><td><b>{activity.title}</b><span>{activity.type}</span></td><td>{deal?.title || '-'}</td><td><b style={{color:'#dc2626'}}>{formatActivityDateTime(activity)}</b></td><td>{activity.owner || '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedActivityId?.(activity.id)}}><Edit3 size={15}/>Resolver</button></td></tr>}) : <tr><td>Nenhuma atividade vencida</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+      <Panel title={`Propostas sem follow-up (${proposalsWithoutFollowup.length})`}>
+        <DashboardTable headers={['Oportunidade','Empresa','Responsável','Valor total','Ações']}>
+          {proposalsWithoutFollowup.length ? proposalsWithoutFollowup.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b><span>{deal.closeDate ? `Previsão: ${formatDate(deal.closeDate)}` : 'Sem previsão'}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{deal.owner || '-'}</td><td>{moneyShort(dealTcv(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Criar follow-up</button></td></tr>) : <tr><td>Nenhuma proposta sem follow-up</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+    </section>
+    <section className="grid2 compact">
+      <Panel title={`Reuniões de hoje (${meetingsToday.length})`}>
+        <DashboardTable headers={['Horário','Reunião','Oportunidade','Responsável','Ações']}>
+          {meetingsToday.length ? meetingsToday.map(activity=>{const deal=dealForActivity(activity);return <tr key={activity.id} onClick={()=>setSelectedActivityId?.(activity.id)} style={{cursor:'pointer'}}><td><b>{activity.dueTime ? String(activity.dueTime).slice(0,5) : 'Dia todo'}</b></td><td>{activity.title}</td><td>{deal?.title || '-'}</td><td>{activity.owner || '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedActivityId?.(activity.id)}}><Edit3 size={15}/>Abrir</button></td></tr>}) : <tr><td>Nenhuma reunião hoje</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+      <Panel title={`Contratos vencendo em 90 dias (${expiringContracts.length})`}>
+        <DashboardTable headers={['Cliente','Produto','Término','Prazo','Receita mensal','Ações']}>
+          {expiringContracts.length ? expiringContracts.map(({contract,days})=>{const company=byId(companies,contract.companyId);return <tr key={contract.id} onClick={()=>setSelectedContractId?.(contract.id)} style={{cursor:'pointer'}}><td><b>{company?.name || 'Sem cliente'}</b></td><td>{contract.product || '-'}</td><td>{formatDate(contract.endDate)}</td><td>{days} dias</td><td>{moneyShort(contractMrr(contract))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedContractId?.(contract.id)}}><Edit3 size={15}/>Abrir</button></td></tr>}) : <tr><td>Nenhum contrato vencendo</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+    </section>
+    <Panel title={`Oportunidades sem próximo passo (${dealsWithoutNextStep.length})`}>
+      <DashboardTable headers={['Oportunidade','Empresa','Etapa','Responsável','Valor total','Ações']}>
+        {dealsWithoutNextStep.length ? dealsWithoutNextStep.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{deal.stage || '-'}</td><td>{deal.owner || '-'}</td><td>{moneyShort(dealTcv(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Definir próximo passo</button></td></tr>) : <tr><td>Todas as oportunidades abertas possuem próximo passo</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+      </DashboardTable>
+    </Panel>
   </>;
 }
 
