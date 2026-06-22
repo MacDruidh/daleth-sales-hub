@@ -19,6 +19,7 @@ const STAGE_PROBABILITIES = {
 };
 const USERS = ['Sergio','Oyas','Katia','Paulo','Reserva'];
 const INITIAL_PRODUCTS = ['SAC+','SAC 24h','Inside Sales','Help Desk','Back Office','Ouvidorias','Custom'];
+const LOSS_REASONS = ['Preço','Sem orçamento','Concorrência','Projeto adiado','Sem retorno','Escopo não aderente','Decisão interna','Outro'];
 const DOCUMENT_CATEGORIES = ['Proposta','Contrato','Briefing','Apresentação','Planilha','Escopo','Operacional','Financeiro','Outros'];
 const ACCESS_USERS = [
   { name: 'Sergio', role: 'CEO', canViewDashboard: true },
@@ -1043,6 +1044,10 @@ function dealTcv(d){ return (dealMrr(d) * dealMonths(d)) + dealSetup(d); }
 function dealArr(d){ return dealMrr(d) * 12; }
 function probabilityForStage(stage,fallback=30){ return Object.prototype.hasOwnProperty.call(STAGE_PROBABILITIES,stage) ? STAGE_PROBABILITIES[stage] : Number(fallback || 0); }
 function dealWeightedTcv(d){ return dealTcv(d) * (probabilityForStage(d?.stage,d?.probability) / 100); }
+function appendStageHistory(history,deal,fromStage,toStage,owner){
+  if(!toStage || fromStage === toStage) return safeArray(history);
+  return [{id:`stage-${Date.now()}-${deal.id}`,dealId:deal.id,fromStage:fromStage || '',toStage,owner:owner || deal.owner || 'Daleth',changedAt:new Date().toISOString()},...safeArray(history)];
+}
 function dealSegment(d, companies, contacts=[]){ return companyForDeal(d,companies,contacts)?.segment || 'Sem segmento'; }
 
 function addMonths(dateString, months){
@@ -1558,6 +1563,8 @@ function App(){
   const [products,setProducts] = useProducts();
   const [pipedriveImportMeta,setPipedriveImportMeta] = useStore('dsh-v1-pipedrive-import-meta', null);
   const [stages,setStages] = useStore('dsh-v1-stages', STAGES);
+  const [stageHistory,setStageHistory] = useStore('dsh-v1-stage-history', []);
+  const [lossReasons,setLossReasons] = useStore('dsh-v1-loss-reasons', {});
   const [selectedDealId,setSelectedDealId] = useState(null);
   const [selectedCompanyId,setSelectedCompanyId] = useState(null);
   const [selectedContactId,setSelectedContactId] = useState(null);
@@ -1628,7 +1635,7 @@ function App(){
   const isCEO = currentUser?.role === 'CEO';
   const canWrite = ['CEO','Comercial'].includes(currentUser?.role);
   const allMenu = [
-    ['dashboard','Dashboard',LayoutDashboard], ['pending','Pendências',BellRing], ['quality','Qualidade do CRM',AlertTriangle], ['pipeline','Pipeline',KanbanSquare], ['deals','Oportunidades',BriefcaseBusiness],
+    ['dashboard','Dashboard',LayoutDashboard], ['funnel','Funil Comercial',TrendingUp], ['pending','Pendências',BellRing], ['quality','Qualidade do CRM',AlertTriangle], ['pipeline','Pipeline',KanbanSquare], ['deals','Oportunidades',BriefcaseBusiness],
     ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['documents','Documentos',FolderOpen], ['companies','Empresas',Building2], ['contacts','Contatos',UserRound], ['products','Produtos',Package], ['imports','Importação',Filter], ['profiles','Perfis',Lock], ['matrix','Matriz Daleth',Sparkles]
   ];
   const menu = allMenu.filter(([id]) => {
@@ -1646,7 +1653,7 @@ function App(){
   ).length;
   const alertTotal = overdueCount + meetingsTodayCount + proposalsWithoutFollowup;
   const alertText = `${overdueCount} atividades vencidas · ${proposalsWithoutFollowup} propostas sem follow-up · ${meetingsTodayCount} reuniões hoje`;
-  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,contracts,setContracts,products,setProducts,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
+  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,contracts,setContracts,products,setProducts,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,stageHistory,setStageHistory,lossReasons,setLossReasons,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
   const logout = async () => {
     setQuery('');
     setSelectedDealId(null);
@@ -1678,7 +1685,7 @@ function App(){
     <main className="main">
       <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresas, contatos e oportunidades..."/></div><button className="notification" style={{cursor:'pointer',textAlign:'left'}} onClick={()=>navigate('pending')} title="Abrir painel de pendências"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></button><div className="notification" style={{minWidth:'150px'}}><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><button className="mini" onClick={logout}><X size={15}/>Sair</button></div></header>
       {selectedDeal ? <DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/> : (query.trim() ? <GlobalSearch {...context}/> : <>
-        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <CrmQuality {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='companies' && <Companies {...context}/>} {activePage==='contacts' && <Contacts {...context}/>} {activePage==='products' && <Products {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>} {activePage==='matrix' && <Matrix {...context}/>}
+        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <CrmQuality {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='companies' && <Companies {...context}/>} {activePage==='contacts' && <Contacts {...context}/>} {activePage==='products' && <Products {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>} {activePage==='matrix' && <Matrix {...context}/>}
       </>)}
     </main>
     {selectedCompany && <CompanyModal company={selectedCompany} companies={companies} setCompanies={setCompanies} contacts={contacts} setSelectedContactId={setSelectedContactId} canWrite={canWrite} onClose={()=>setSelectedCompanyId(null)}/>}
@@ -2010,6 +2017,85 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
   </>;
 }
 
+function FunnelAnalytics({stages=STAGES,deals=[],companies=[],contacts=[],stageHistory=[],lossReasons={},setSelectedDealId}){
+  const openDeals = safeArray(deals).filter(deal=>!['Ganho','Perdido'].includes(deal.stage));
+  const wonDeals = safeArray(deals).filter(deal=>deal.stage === 'Ganho');
+  const lostDeals = safeArray(deals).filter(deal=>deal.stage === 'Perdido');
+  const finishedDeals = wonDeals.length + lostDeals.length;
+  const winRate = finishedDeals ? Math.round((wonDeals.length / finishedDeals) * 100) : 0;
+  const openValue = openDeals.reduce((total,deal)=>total+dealTcv(deal),0);
+  const weightedValue = openDeals.reduce((total,deal)=>total+dealWeightedTcv(deal),0);
+  const validHistory = safeArray(stageHistory).filter(entry=>byId(deals,entry.dealId));
+  const durationsByStage = {};
+  const historyByDeal = validHistory.reduce((groups,entry)=>{
+    const key = String(entry.dealId);
+    if(!groups[key]) groups[key] = [];
+    groups[key].push(entry);
+    return groups;
+  },{});
+  Object.values(historyByDeal).forEach(entries=>{
+    const sorted = entries.slice().sort((a,b)=>String(a.changedAt).localeCompare(String(b.changedAt)));
+    for(let index=0;index<sorted.length-1;index+=1){
+      const start = new Date(sorted[index].changedAt);
+      const end = new Date(sorted[index+1].changedAt);
+      const days = Math.max(0,(end-start)/86400000);
+      const stage = sorted[index].toStage;
+      if(!durationsByStage[stage]) durationsByStage[stage] = [];
+      if(Number.isFinite(days)) durationsByStage[stage].push(days);
+    }
+  });
+  const stageRows = safeArray(stages).map(stage=>{
+    const currentDeals = deals.filter(deal=>deal.stage === stage);
+    const entered = new Set(validHistory.filter(entry=>entry.toStage === stage).map(entry=>String(entry.dealId)));
+    const advanced = new Set(validHistory.filter(entry=>entry.fromStage === stage && stages.indexOf(entry.toStage) > stages.indexOf(stage)).map(entry=>String(entry.dealId)));
+    const durations = durationsByStage[stage] || [];
+    return {
+      stage,
+      count:currentDeals.length,
+      value:currentDeals.reduce((total,deal)=>total+dealTcv(deal),0),
+      weighted:currentDeals.reduce((total,deal)=>total+dealWeightedTcv(deal),0),
+      conversion:entered.size ? Math.round((advanced.size / entered.size) * 100) : null,
+      averageDays:durations.length ? durations.reduce((total,value)=>total+value,0) / durations.length : null,
+    };
+  });
+  const reasonRows = Object.entries(lostDeals.reduce((rows,deal)=>{
+    const reason = lossReasons?.[deal.id] || 'Não informado';
+    if(!rows[reason]) rows[reason] = {count:0,value:0};
+    rows[reason].count += 1;
+    rows[reason].value += dealTcv(deal);
+    return rows;
+  },{})).sort((a,b)=>b[1].count-a[1].count);
+  return <>
+    <Panel title="Funil Comercial Aprimorado">
+      <p className="muted" style={{margin:'0 0 8px'}}>Visão financeira e operacional do funil. Conversão e tempo por etapa passam a ser medidos a partir das novas movimentações.</p>
+      {!validHistory.length && <p style={{margin:0,color:'#b45309',fontWeight:800}}>O histórico de etapas começará a aparecer quando uma oportunidade mudar de etapa.</p>}
+    </Panel>
+    <section className="cards">
+      <Kpi icon={BriefcaseBusiness} label="Pipeline aberto" value={moneyShort(openValue)}/>
+      <Kpi icon={TrendingUp} label="Previsão ponderada" value={moneyShort(weightedValue)}/>
+      <Kpi icon={CheckCircle2} label="Taxa de ganho" value={`${winRate}%`}/>
+      <Kpi icon={CircleDollarSign} label="Oportunidades ganhas" value={wonDeals.length}/>
+    </section>
+    <Panel title="Desempenho por etapa">
+      <DashboardTable headers={['Etapa','Oportunidades','Valor total','Previsão ponderada','Conversão adiante','Tempo médio','Ações']}>
+        {stageRows.map(row=><tr key={row.stage}><td><span className="pill">{row.stage}</span></td><td>{row.count}</td><td><b>{moneyShort(row.value)}</b></td><td>{moneyShort(row.weighted)}</td><td>{row.conversion === null ? 'Aguardando histórico' : `${row.conversion}%`}</td><td>{row.averageDays === null ? 'Aguardando histórico' : `${row.averageDays.toFixed(1)} dias`}</td><td><button className="mini" disabled={!row.count} onClick={()=>{const deal=deals.find(item=>item.stage===row.stage);if(deal)setSelectedDealId?.(deal.id)}}>Abrir oportunidade</button></td></tr>)}
+      </DashboardTable>
+    </Panel>
+    <section className="grid2 compact">
+      <Panel title={`Oportunidades ganhas (${wonDeals.length})`}>
+        <DashboardTable headers={['Oportunidade','Empresa','Valor total','Responsável']}>
+          {wonDeals.length ? wonDeals.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{moneyShort(dealTcv(deal))}</td><td>{deal.owner || '-'}</td></tr>) : <tr><td>Nenhuma oportunidade ganha</td><td>-</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+      <Panel title={`Motivos de perda (${lostDeals.length})`}>
+        <DashboardTable headers={['Motivo','Oportunidades','Valor perdido']}>
+          {reasonRows.length ? reasonRows.map(([reason,data])=><tr key={reason}><td><b>{reason}</b></td><td>{data.count}</td><td>{moneyShort(data.value)}</td></tr>) : <tr><td>Nenhuma oportunidade perdida</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+    </section>
+  </>;
+}
+
 function PendingPanel({companies=[],contacts=[],deals=[],activities=[],contracts=[],setSelectedDealId,setSelectedActivityId,setSelectedContractId}){
   const currentDate = today();
   const pendingActivities = safeArray(activities).filter(activity=>activity.status !== 'Concluída');
@@ -2148,7 +2234,7 @@ function MiniMetric({icon:Icon,label,value,onClick,active=false}){
 function Panel({title,children}){ return <section className="panel"><h2>{title}</h2>{children}</section>; }
 function DashboardTable({headers,children}){ return <div className="tableWrap dashboardTable"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
 
-function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelectedDealId,canWrite}){
+function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelectedDealId,canWrite,currentUser,stageHistory,setStageHistory}){
   const [newStage,setNewStage] = useState('');
   const [selectedStage,setSelectedStage] = useState(null);
   const [editingStage,setEditingStage] = useState(null);
@@ -2171,6 +2257,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
   const move = async (deal, stage) => {
     if(!canWrite) return;
     const nextDeal = {...deal,stage,probability:probabilityForStage(stage,deal.probability)};
+    if(deal.stage !== stage) setStageHistory(appendStageHistory(stageHistory,deal,deal.stage,stage,currentUser?.name));
     setDeals(deals.map(d => sameId(d.id,deal.id) ? nextDeal : d));
     try {
       const saved = await saveDealToSupabase(nextDeal, companies, contacts);
@@ -2311,7 +2398,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
   </>;
 }
 
-function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,notes,setNotes,setSelectedDealId,setSelectedProductName,query,canWrite}){
+function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,notes,setNotes,setSelectedDealId,setSelectedProductName,query,canWrite,stageHistory,setStageHistory}){
   const empty = { title:'', companyId:companies[0]?.id||'', contactId:'', product:'SAC+', value:0, setup:0, contractMonths:12, stage:stages[0], owner:'Sergio', probability:probabilityForStage(stages[0],30), closeDate:'', description:'', nextStep:'', priority:'Média' };
   const [form,setFormBase] = useState(empty);
   const [filters,setFilters] = useState({ companyId:'', product:'', stage:'', owner:'', closeBeforeMonth:'' });
@@ -2376,12 +2463,14 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
       const saved = await saveDealToSupabase(nextDeal, companies, contacts);
       const nextDeals = [saved,...deals];
       setDeals(nextDeals);
+      setStageHistory(appendStageHistory(stageHistory,saved,'',saved.stage,currentUser?.name));
       await saveCreationNote(saved, nextDeals);
       setFormBase(empty);
     } catch (error) {
       console.warn('Falha ao salvar oportunidade no Supabase:', error);
       const localDeal = {...nextDeal,id:Date.now()};
       setDeals([localDeal,...deals]);
+      setStageHistory(appendStageHistory(stageHistory,localDeal,'',localDeal.stage,currentUser?.name));
       setNotes([{...creationNoteFor(localDeal),id:Date.now()+1},...safeArray(notes)]);
       setFormBase(empty);
       window.alert('Oportunidade salva localmente. O Supabase não aceitou a gravação agora.');
@@ -2449,11 +2538,11 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
   </>;
 }
 
-function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,opportunityFiles=[],setOpportunityFiles,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName}){
+function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,opportunityFiles=[],setOpportunityFiles,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,stageHistory=[],setStageHistory,lossReasons={},setLossReasons,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName}){
   const initialContact = byId(contacts, deal.contactId);
   const inferredCompany = companyForDeal(deal, companies, contacts);
   const [tab,setTab] = useState('dados');
-  const [draft,setDraft] = useState({contractMonths:12,setup:0,...deal,companyId:inferredCompany?.id || deal.companyId,probability:probabilityForStage(deal.stage,deal.probability)});
+  const [draft,setDraft] = useState({contractMonths:12,setup:0,...deal,companyId:inferredCompany?.id || deal.companyId,probability:probabilityForStage(deal.stage,deal.probability),lossReason:lossReasons?.[deal.id] || ''});
   const [note,setNote] = useState('');
   const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),dueTime:'',meetingLink:'',owner:deal.owner || currentUser?.name || 'Sergio',status:'Pendente',notes:''});
   const [interaction,setInteraction] = useState({type:'Ligação',dateTime:crmDateTimeInput(),owner:currentUser?.name || deal.owner || 'Sergio',description:'',nextAction:'',nextDueDate:''});
@@ -2511,10 +2600,12 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
       contractMonths: Number(draft.contractMonths || 12),
       probability: probabilityForStage(draft.stage,draft.probability)
     };
+    if(deal.stage !== nextDeal.stage) setStageHistory?.(appendStageHistory(stageHistory,deal,deal.stage,nextDeal.stage,currentUser?.name));
+    if(nextDeal.stage === 'Perdido') setLossReasons?.({...lossReasons,[deal.id]:nextDeal.lossReason || ''});
     try {
       const saved = await saveDealToSupabase(nextDeal, companies, contacts);
       setDeals(deals.map(d=>sameId(d.id,deal.id) ? saved : d));
-      setDraft(saved);
+      setDraft({...saved,lossReason:nextDeal.lossReason || ''});
       window.alert('Alterações salvas.');
     } catch (error) {
       console.warn('Falha ao atualizar oportunidade no Supabase:', error);
@@ -2631,7 +2722,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
 
     <div className="tabs" style={{marginBottom:'18px',overflowX:'auto'}}>{['dados','historico','atividades','arquivos','contrato','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t === 'dados' ? 'Dados' : t === 'historico' ? 'Histórico' : t === 'atividades' ? 'Atividades' : t === 'arquivos' ? `Arquivos (${dealFiles.length})` : t === 'contrato' ? 'Contrato' : 'Matriz'}</button>)}</div>
 
-    {tab==='dados' && <Panel title="Dados da oportunidade"><div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={optionsIncludingCurrent(products,draft.product).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(draft.stage,draft.probability)} readOnly/></label><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div></Panel>}
+    {tab==='dados' && <Panel title="Dados da oportunidade"><div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={optionsIncludingCurrent(products,draft.product).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(draft.stage,draft.probability)} readOnly/></label><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/>{draft.stage==='Perdido' && <Select label="Motivo da perda" field="lossReason" form={draft} setForm={setDraft} options={[["","Selecione"],...LOSS_REASONS.map(reason=>[reason,reason])]}/>}<label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div></Panel>}
 
     {tab==='historico' && <>
       {canWrite && <Panel title="Nova interação"><div className="formGrid modalGrid">
