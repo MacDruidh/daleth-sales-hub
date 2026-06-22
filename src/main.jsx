@@ -3543,7 +3543,12 @@ function SolutionSuggestions({deal,companies,contacts=[]}){
 
 function Input({label,field,form,setForm,type='text'}){ return <label><span>{label}</span><input type={type} value={form[field] ?? ''} onChange={e=>setForm({...form,[field]:e.target.value})}/></label>; }
 function Textarea({label,field,form,setForm}){ return <label className="wide"><span>{label}</span><textarea value={form[field] ?? ''} onChange={e=>setForm({...form,[field]:e.target.value})}></textarea></label>; }
-function Select({label,field,form,setForm,options}){ return <label><span>{label}</span><select value={form[field] ?? ''} onChange={e=>setForm({...form,[field]:e.target.value})}>{options.map(([v,t])=><option value={v} key={String(v)}>{t}</option>)}</select></label>; }
+function Select({label,field,form,setForm,options}){
+  const current = form[field] ?? '';
+  const hasCurrentOption = options.some(([value])=>sameId(value,current));
+  const visibleOptions = hasCurrentOption ? options : [[current,current ? String(current) : 'Selecione'],...options];
+  return <label><span>{label}</span><select value={current} onChange={e=>setForm({...form,[field]:e.target.value})}>{visibleOptions.map(([v,t],index)=><option value={v} key={`${String(v)}-${index}`}>{t}</option>)}</select></label>;
+}
 function Table({headers,children}){ return <div className="tableWrap"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
 
 createRoot(document.getElementById('root')).render(<App/>);
