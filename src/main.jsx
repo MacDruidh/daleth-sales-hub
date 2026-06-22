@@ -933,7 +933,21 @@ function moneyShort(v){
   if (abs >= 1000) return `R$ ${(n/1000).toLocaleString('pt-BR',{ minimumFractionDigits: 1, maximumFractionDigits: 1 })} mil`;
   return money(n);
 }
-function today(){ return new Date().toISOString().slice(0,10); }
+const CRM_TIME_ZONE = 'America/Sao_Paulo';
+function crmDateParts(value=new Date()){
+  return Object.fromEntries(new Intl.DateTimeFormat('en-US',{
+    timeZone:CRM_TIME_ZONE,
+    year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'
+  }).formatToParts(value).filter(part=>part.type !== 'literal').map(part=>[part.type,part.value]));
+}
+function today(){
+  const parts = crmDateParts();
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+function crmDateTimeInput(){
+  const parts = crmDateParts();
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
 function formatDate(value){
   if(!value) return '-';
   const raw = String(value).slice(0,10);
@@ -944,11 +958,13 @@ function formatDate(value){
 function formatDateTime(value){
   if(!value) return '-';
   const timestamp = String(value);
+  const localTimestamp = timestamp.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?$/);
+  if(localTimestamp) return `${formatDate(localTimestamp[1])} ${localTimestamp[2]}`;
   if(timestamp.includes('T')){
     const parsed = new Date(timestamp);
     if(!Number.isNaN(parsed.getTime())){
       return new Intl.DateTimeFormat('pt-BR',{
-        timeZone:'America/Sao_Paulo',
+        timeZone:CRM_TIME_ZONE,
         day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'
       }).format(parsed).replace(',', '');
     }
@@ -2440,7 +2456,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
   const [draft,setDraft] = useState({contractMonths:12,setup:0,...deal,companyId:inferredCompany?.id || deal.companyId,probability:probabilityForStage(deal.stage,deal.probability)});
   const [note,setNote] = useState('');
   const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),dueTime:'',meetingLink:'',owner:deal.owner || currentUser?.name || 'Sergio',status:'Pendente',notes:''});
-  const [interaction,setInteraction] = useState({type:'Ligação',dateTime:new Date().toISOString().slice(0,16),owner:currentUser?.name || deal.owner || 'Sergio',description:'',nextAction:'',nextDueDate:''});
+  const [interaction,setInteraction] = useState({type:'Ligação',dateTime:crmDateTimeInput(),owner:currentUser?.name || deal.owner || 'Sergio',description:'',nextAction:'',nextDueDate:''});
   const emptyFile = {id:'',name:'',url:'',category:'Proposta',notes:'',owner:currentUser?.name || deal.owner || 'Sergio'};
   const [fileDraft,setFileDraft] = useState(emptyFile);
   const company = byId(companies, draft.companyId) || inferredCompany;
@@ -2545,7 +2561,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
       setDeals(deals.map(d=>sameId(d.id,deal.id) ? {...d,nextStep:interaction.nextAction} : d));
       setDraft({...draft,nextStep:interaction.nextAction});
     }
-    setInteraction({type:'Ligação',dateTime:new Date().toISOString().slice(0,16),owner:currentUser?.name || deal.owner || 'Sergio',description:'',nextAction:'',nextDueDate:''});
+    setInteraction({type:'Ligação',dateTime:crmDateTimeInput(),owner:currentUser?.name || deal.owner || 'Sergio',description:'',nextAction:'',nextDueDate:''});
   };
   const saveFileLink = () => {
     if(!canWrite || !setOpportunityFiles) return;
@@ -3578,7 +3594,7 @@ function PipedriveImport({
 
       <Panel title="Resumo da última importação">
         {pipedriveImportMeta ? <div className="tableWrap"><table><tbody>
-          <tr><td><b>Data</b></td><td>{new Date(pipedriveImportMeta.importedAt).toLocaleString('pt-BR')}</td></tr>
+          <tr><td><b>Data</b></td><td>{formatDateTime(pipedriveImportMeta.importedAt)}</td></tr>
           <tr><td><b>Modo</b></td><td>{pipedriveImportMeta.mode === 'replace' ? 'Substituição da base' : 'Acrescentar sem duplicar'}</td></tr>
           <tr><td><b>Empresas</b></td><td>{pipedriveImportMeta.counts?.companies || 0}</td></tr>
           <tr><td><b>Contatos</b></td><td>{pipedriveImportMeta.counts?.contacts || 0}</td></tr>
