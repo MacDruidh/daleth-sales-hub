@@ -1592,7 +1592,7 @@ function App(){
   const isCEO = currentUser?.role === 'CEO';
   const canWrite = ['CEO','Comercial'].includes(currentUser?.role);
   const allMenu = [
-    ['dashboard','Dashboard',LayoutDashboard], ['pipeline','Pipeline',KanbanSquare], ['deals','Oportunidades',BriefcaseBusiness],
+    ['dashboard','Dashboard',LayoutDashboard], ['quality','Qualidade do CRM',AlertTriangle], ['pipeline','Pipeline',KanbanSquare], ['deals','Oportunidades',BriefcaseBusiness],
     ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['documents','Documentos',FolderOpen], ['companies','Empresas',Building2], ['contacts','Contatos',UserRound], ['products','Produtos',Package], ['imports','Importação',Filter], ['profiles','Perfis',Lock], ['matrix','Matriz Daleth',Sparkles]
   ];
   const menu = allMenu.filter(([id]) => {
@@ -1642,7 +1642,7 @@ function App(){
     <main className="main">
       <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresas, contatos e oportunidades..."/></div><div className="notification"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></div><div className="notification" style={{minWidth:'150px'}}><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><button className="mini" onClick={logout}><X size={15}/>Sair</button></div></header>
       {selectedDeal ? <DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/> : (query.trim() ? <GlobalSearch {...context}/> : <>
-        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='companies' && <Companies {...context}/>} {activePage==='contacts' && <Contacts {...context}/>} {activePage==='products' && <Products {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>} {activePage==='matrix' && <Matrix {...context}/>}
+        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='quality' && <CrmQuality {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='companies' && <Companies {...context}/>} {activePage==='contacts' && <Contacts {...context}/>} {activePage==='products' && <Products {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>} {activePage==='matrix' && <Matrix {...context}/>}
       </>)}
     </main>
     {selectedCompany && <CompanyModal company={selectedCompany} companies={companies} setCompanies={setCompanies} contacts={contacts} setSelectedContactId={setSelectedContactId} canWrite={canWrite} onClose={()=>setSelectedCompanyId(null)}/>}
@@ -1973,6 +1973,69 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
 
   </>;
 }
+
+function CrmQuality({companies=[],contacts=[],deals=[],setSelectedDealId,setSelectedCompanyId,setSelectedContactId}){
+  const opportunityIssues = safeArray(deals).map(deal=>{
+    const company = companyForDeal(deal,companies,contacts);
+    const issues = [];
+    if(!company) issues.push('Sem empresa');
+    if(!String(deal.owner || '').trim()) issues.push('Sem responsável');
+    if(!String(deal.product || '').trim()) issues.push('Sem produto');
+    if(!String(deal.nextStep || '').trim()) issues.push('Sem próximo passo');
+    return {deal,company,issues};
+  }).filter(item=>item.issues.length);
+  const companiesWithoutSegment = safeArray(companies).filter(company=>!String(company.segment || '').trim());
+  const contactsWithoutCompany = safeArray(contacts).filter(contact=>!byId(companies,contact.companyId));
+  const duplicatePairs = [];
+  for(let index=0;index<companies.length;index+=1){
+    for(let candidate=index+1;candidate<companies.length;candidate+=1){
+      const first = companies[index];
+      const second = companies[candidate];
+      const sameName = normalizedLookup(first.name) && normalizedLookup(first.name) === normalizedLookup(second.name);
+      const sameCnpj = digitsOnly(first.cnpj) && digitsOnly(first.cnpj) === digitsOnly(second.cnpj);
+      const sameSite = normalizedSite(first.site) && normalizedSite(first.site) === normalizedSite(second.site);
+      if(sameName || sameCnpj || sameSite){
+        duplicatePairs.push({first,second,reason:sameCnpj ? 'Mesmo CNPJ' : sameSite ? 'Mesmo site' : 'Mesmo nome'});
+      }
+    }
+  }
+  const totalIssues = opportunityIssues.length + companiesWithoutSegment.length + contactsWithoutCompany.length + duplicatePairs.length;
+  return <>
+    <Panel title="Qualidade do CRM">
+      <p className="muted" style={{margin:'0 0 8px'}}>Revise cadastros incompletos e possíveis duplicidades. Nenhum dado é alterado automaticamente.</p>
+      {!totalIssues && <p style={{margin:0,color:'#1a9b6c',fontWeight:900}}>Todos os cadastros verificados estão completos.</p>}
+    </Panel>
+    <section className="cards">
+      <Kpi icon={BriefcaseBusiness} label="Oportunidades incompletas" value={opportunityIssues.length}/>
+      <Kpi icon={Building2} label="Empresas sem segmento" value={companiesWithoutSegment.length}/>
+      <Kpi icon={UserRound} label="Contatos sem empresa" value={contactsWithoutCompany.length}/>
+      <Kpi icon={AlertTriangle} label="Possíveis duplicidades" value={duplicatePairs.length}/>
+    </section>
+    <Panel title={`Oportunidades para revisar (${opportunityIssues.length})`}>
+      <DashboardTable headers={['Oportunidade','Empresa identificada','Pendências','Ações']}>
+        {opportunityIssues.length ? opportunityIssues.map(({deal,company,issues})=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title || 'Sem título'}</b><span>{deal.stage || '-'}</span></td><td>{company?.name || '-'}</td><td>{issues.map(issue=><span className="pill" key={issue} style={{margin:'2px 4px 2px 0'}}>{issue}</span>)}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Corrigir</button></td></tr>) : <tr><td>Nenhuma oportunidade incompleta</td><td>-</td><td>-</td><td>-</td></tr>}
+      </DashboardTable>
+    </Panel>
+    <section className="grid2 compact">
+      <Panel title={`Empresas sem segmento (${companiesWithoutSegment.length})`}>
+        <DashboardTable headers={['Empresa','Status','Ações']}>
+          {companiesWithoutSegment.length ? companiesWithoutSegment.map(company=><tr key={company.id} onClick={()=>setSelectedCompanyId?.(company.id)} style={{cursor:'pointer'}}><td><b>{company.name}</b><span>{entityCode('E',company)}</span></td><td>{company.status || '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedCompanyId?.(company.id)}}><Edit3 size={15}/>Corrigir</button></td></tr>) : <tr><td>Todas as empresas possuem segmento</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+      <Panel title={`Contatos sem empresa (${contactsWithoutCompany.length})`}>
+        <DashboardTable headers={['Contato','Cargo','Ações']}>
+          {contactsWithoutCompany.length ? contactsWithoutCompany.map(contact=><tr key={contact.id} onClick={()=>setSelectedContactId?.(contact.id)} style={{cursor:'pointer'}}><td><b>{contact.name}</b><span>{contact.email || contact.phone || '-'}</span></td><td>{contact.role || '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedContactId?.(contact.id)}}><Edit3 size={15}/>Corrigir</button></td></tr>) : <tr><td>Todos os contatos possuem empresa</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+    </section>
+    <Panel title={`Possíveis empresas duplicadas (${duplicatePairs.length})`}>
+      <DashboardTable headers={['Primeiro cadastro','Segundo cadastro','Motivo','Ações']}>
+        {duplicatePairs.length ? duplicatePairs.map(({first,second,reason})=><tr key={`${first.id}-${second.id}`}><td><b>{first.name}</b><span>{entityCode('E',first)}</span></td><td><b>{second.name}</b><span>{entityCode('E',second)}</span></td><td>{reason}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={()=>setSelectedCompanyId?.(first.id)}>Abrir primeiro</button><button className="mini" onClick={()=>setSelectedCompanyId?.(second.id)}>Abrir segundo</button></div></td></tr>) : <tr><td>Nenhuma possível duplicidade encontrada</td><td>-</td><td>-</td><td>-</td></tr>}
+      </DashboardTable>
+    </Panel>
+  </>;
+}
+
 function Kpi({icon:Icon,label,value}){ return <div className="kpi"><Icon size={24}/><span>{label}</span><strong>{value}</strong></div>; }
 function MiniMetric({icon:Icon,label,value,onClick,active=false}){
   return <div onClick={onClick} title={onClick ? 'Clique para abrir' : undefined} style={{
