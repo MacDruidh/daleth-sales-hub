@@ -1033,6 +1033,20 @@ function companyForDeal(deal, companies, contacts){
     return name.length >= 4 && title.includes(name);
   });
 }
+function requiredDealFields(deal,companies,contacts){
+  const missing = [];
+  if(!byId(companies,deal?.companyId)) missing.push('empresa');
+  if(!String(deal?.owner || '').trim()) missing.push('responsável');
+  if(!String(deal?.product || '').trim()) missing.push('produto');
+  if(!String(deal?.nextStep || '').trim()) missing.push('próximo passo');
+  return missing;
+}
+function validateRequiredDealFields(deal,companies,contacts){
+  const missing = requiredDealFields(deal,companies,contacts);
+  if(!missing.length) return true;
+  window.alert(`Preencha os campos obrigatórios: ${missing.join(', ')}.`);
+  return false;
+}
 function optionsIncludingCurrent(values, current){
   const items = [current, ...safeArray(values)].map(value => String(value || '').trim()).filter(Boolean);
   return items.filter((value, index) => items.findIndex(item => item.toLowerCase() === value.toLowerCase()) === index);
@@ -2257,6 +2271,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
   const move = async (deal, stage) => {
     if(!canWrite) return;
     const nextDeal = {...deal,stage,probability:probabilityForStage(stage,deal.probability)};
+    if(!validateRequiredDealFields(nextDeal,companies,contacts)) return;
     if(deal.stage !== stage) setStageHistory(appendStageHistory(stageHistory,deal,deal.stage,stage,currentUser?.name));
     setDeals(deals.map(d => sameId(d.id,deal.id) ? nextDeal : d));
     try {
@@ -2459,6 +2474,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
       contractMonths: Number(form.contractMonths || 12),
       probability: probabilityForStage(form.stage,form.probability)
     };
+    if(!validateRequiredDealFields(nextDeal,companies,contacts)) return;
     try {
       const saved = await saveDealToSupabase(nextDeal, companies, contacts);
       const nextDeals = [saved,...deals];
@@ -2518,7 +2534,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
   };
   const clearFilters = () => setFilters({ companyId:'', product:'', stage:'', owner:'', closeBeforeMonth:'' });
   return <>
-    {canWrite && <Panel title="Nova oportunidade"><div className="formGrid"><Input label="Título" field="title" form={form} setForm={setForm}/><Select label="Empresa" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Contato" field="contactId" form={form} setForm={setForm} options={[["", availableContacts.length ? "Selecione" : "Sem contatos desta empresa"],...availableContacts.map(c=>[c.id,c.name])]}/><Select label="Produto" field="product" form={form} setForm={setForm} options={safeArray(products).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={form} setForm={setForm} type="number"/><Input label="Implantação" field="setup" form={form} setForm={setForm} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(form.stage,form.probability)} readOnly/></label><Select label="Etapa" field="stage" form={form} setForm={setForm} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={form} setForm={setForm} options={USERS.map(u=>[u,u])}/><Input label="Fechamento previsto" field="closeDate" form={form} setForm={setForm} type="date"/><label><span>Valor total do contrato</span><input value={money(dealTcv(form))} readOnly/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Criar oportunidade</button></div></Panel>}
+    {canWrite && <Panel title="Nova oportunidade"><div className="formGrid"><Input label="Título" field="title" form={form} setForm={setForm}/><Select label="Empresa *" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Contato" field="contactId" form={form} setForm={setForm} options={[["", availableContacts.length ? "Selecione" : "Sem contatos desta empresa"],...availableContacts.map(c=>[c.id,c.name])]}/><Select label="Produto *" field="product" form={form} setForm={setForm} options={safeArray(products).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={form} setForm={setForm} type="number"/><Input label="Implantação" field="setup" form={form} setForm={setForm} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(form.stage,form.probability)} readOnly/></label><Select label="Etapa" field="stage" form={form} setForm={setForm} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável *" field="owner" form={form} setForm={setForm} options={USERS.map(u=>[u,u])}/><Input label="Fechamento previsto" field="closeDate" form={form} setForm={setForm} type="date"/><Input label="Próximo passo *" field="nextStep" form={form} setForm={setForm}/><label><span>Valor total do contrato</span><input value={money(dealTcv(form))} readOnly/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Criar oportunidade</button></div></Panel>}
     <Panel title="Filtros de oportunidades"><div className="formGrid">
       <Select label="Empresa" field="companyId" form={filters} setForm={setFilters} options={[["","Todas"],...safeArray(companies).map(c=>[c.id,c.name])]}/>
       <Select label="Produto" field="product" form={filters} setForm={setFilters} options={[["","Todos"],...safeArray(products).map(p=>[p,p])]}/>
@@ -2600,6 +2616,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
       contractMonths: Number(draft.contractMonths || 12),
       probability: probabilityForStage(draft.stage,draft.probability)
     };
+    if(!validateRequiredDealFields(nextDeal,companies,contacts)) return;
     if(deal.stage !== nextDeal.stage) setStageHistory?.(appendStageHistory(stageHistory,deal,deal.stage,nextDeal.stage,currentUser?.name));
     if(nextDeal.stage === 'Perdido') setLossReasons?.({...lossReasons,[deal.id]:nextDeal.lossReason || ''});
     try {
@@ -2777,6 +2794,7 @@ function DealModal({deal,onClose,companies=[],contacts=[],deals=[],setDeals,acti
       contractMonths: Number(draft.contractMonths || 12),
       probability: probabilityForStage(draft.stage,draft.probability)
     };
+    if(!validateRequiredDealFields(nextDeal,companies,contacts)) return;
     try {
       const saved = await saveDealToSupabase(nextDeal, companies, contacts);
       setDeals(deals.map(d=>sameId(d.id,deal.id) ? saved : d));
@@ -3738,3 +3756,7 @@ function Select({label,field,form,setForm,options}){
 function Table({headers,children}){ return <div className="tableWrap"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
 
 createRoot(document.getElementById('root')).render(<App/>);
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(error=>console.warn('Falha ao registrar aplicativo instalável:',error)));
+}
