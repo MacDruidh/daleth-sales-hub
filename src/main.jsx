@@ -826,12 +826,24 @@ function useNotes(){
   return [notes, saveNotesToCrmState];
 }
 
-function mapContractFromDb(c){
+function mapContractFromDb(c, companies=[], deals=[]){
+  const company = safeArray(companies).find(item =>
+    sameId(item?.supabaseId, c.company_id) ||
+    sameId(item?.id, c.companies?.legacy_id || c.company_id) ||
+    sameId(item?.legacyId, c.companies?.legacy_id || c.company_id) ||
+    sameId(item?.legacy_id, c.companies?.legacy_id || c.company_id)
+  );
+  const deal = safeArray(deals).find(item =>
+    sameId(item?.supabaseId, c.opportunity_id) ||
+    sameId(item?.id, c.opportunities?.legacy_id || c.opportunity_id) ||
+    sameId(item?.legacyId, c.opportunities?.legacy_id || c.opportunity_id) ||
+    sameId(item?.legacy_id, c.opportunities?.legacy_id || c.opportunity_id)
+  );
   return {
     id: c.legacy_id || c.id,
     supabaseId: c.id,
-    companyId: c.companies?.legacy_id || c.company_id,
-    dealId: c.opportunities?.legacy_id || c.opportunity_id || '',
+    companyId: company?.id || c.companies?.legacy_id || c.company_id,
+    dealId: deal?.id || c.opportunities?.legacy_id || c.opportunity_id || '',
     product: c.product || '',
     owner: c.owner || '',
     mrr: Number(c.mrr || 0),
@@ -877,10 +889,10 @@ async function saveContractToSupabase(contract, companies, deals){
     ? supabase.from('contracts').update(payload).eq('id', contract.supabaseId)
     : supabase.from('contracts').insert(payload);
 
-  const { data, error } = await query.select(CONTRACT_SELECT).single();
+  const { data, error } = await query.select('*').single();
 
   if(error) throw error;
-  return mapContractFromDb(data);
+  return mapContractFromDb(data, companies, deals);
 }
 
 async function deleteContractFromSupabase(contract){
