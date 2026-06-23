@@ -991,6 +991,43 @@ function formatActivityDateTime(activity){
   const date = formatDate(activity?.dueDate);
   return activity?.dueTime ? `${date} ${String(activity.dueTime).slice(0,5)}` : date;
 }
+function dateOnlyFromCrmValue(value){
+  if(!value) return '';
+  const raw = String(value);
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if(match) return match[1];
+  const parsed = new Date(raw);
+  if(Number.isNaN(parsed.getTime())) return '';
+  const parts = crmDateParts(parsed);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+function daysSinceCrmDate(value){
+  const dateOnly = dateOnlyFromCrmValue(value);
+  if(!dateOnly) return null;
+  const start = new Date(`${dateOnly}T00:00:00`);
+  const end = new Date(`${today()}T00:00:00`);
+  return Math.max(0, Math.floor((end - start) / (1000 * 60 * 60 * 24)));
+}
+function latestInteractionForDeal(deal, interactions=[]){
+  return safeArray(interactions)
+    .filter(interaction=>sameId(interaction.dealId,deal?.id))
+    .sort((a,b)=>String(b.dateTime || b.createdAt || b.date || '').localeCompare(String(a.dateTime || a.createdAt || a.date || '')))[0] || null;
+}
+function interactionAgeText(days){
+  if(days === 0) return 'hoje';
+  if(days === 1) return 'há 1 dia';
+  return `há ${days} dias`;
+}
+function relationshipStatusForDeal(deal, interactions=[]){
+  const latestInteraction = latestInteractionForDeal(deal, interactions);
+  const lastDate = latestInteraction?.dateTime || latestInteraction?.createdAt || latestInteraction?.date || '';
+  const days = daysSinceCrmDate(lastDate);
+  if(days === null) return {tone:'none', label:'Sem interação registrada', shortLabel:'Sem interação', days:null};
+  const age = interactionAgeText(days);
+  if(days <= 4) return {tone:'good', label:`Última interação ${age}`, shortLabel:age, days};
+  if(days <= 9) return {tone:'warn', label:`Sem interação ${age}`, shortLabel:age, days};
+  return {tone:'danger', label:`Sem interação ${age}`, shortLabel:age, days};
+}
 function openLinkedEntity(setter, id){ if(setter && id) setter(id); }
 function sameId(a,b){ return String(a ?? '') === String(b ?? ''); }
 function byId(list,id){
@@ -1497,6 +1534,17 @@ function UXStyle(){
     .bulkActions{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important;flex-wrap:wrap!important;margin-bottom:12px!important;padding:10px 12px!important;border:1px solid var(--ux-border)!important;border-radius:14px!important;background:#f8fbfd!important;}
     .bulkActions span{color:var(--ux-muted)!important;font-size:13px!important;font-weight:800!important;}
     .rowSelect{width:18px!important;height:18px!important;accent-color:var(--ux-blue)!important;cursor:pointer!important;}
+    .dealHealthLine{display:flex!important;align-items:center!important;gap:8px!important;}
+    .dealHealthDot{display:inline-block!important;width:11px!important;height:11px!important;border-radius:999px!important;flex:0 0 11px!important;box-shadow:0 0 0 3px rgba(107,123,140,.12)!important;background:#94a3b8!important;}
+    .dealHealthDot.good{background:#1a9b6c!important;box-shadow:0 0 0 3px rgba(26,155,108,.14)!important;}
+    .dealHealthDot.warn{background:#d99714!important;box-shadow:0 0 0 3px rgba(217,151,20,.18)!important;}
+    .dealHealthDot.danger{background:#c94141!important;box-shadow:0 0 0 3px rgba(201,65,65,.16)!important;}
+    .dealHealthDot.none{background:#94a3b8!important;}
+    .relationshipPill{display:inline-flex!important;align-items:center!important;gap:8px!important;border-radius:999px!important;background:#f1f5f9!important;color:#475569!important;font-weight:800!important;padding:6px 10px!important;font-size:12px!important;}
+    .relationshipPill.good{background:#e8f7f1!important;color:#147856!important;}
+    .relationshipPill.warn{background:#fff5dc!important;color:#956000!important;}
+    .relationshipPill.danger{background:#fdecec!important;color:#a72f2f!important;}
+    .relationshipPill.none{background:#f1f5f9!important;color:#475569!important;}
     .timelineItem{position:relative!important;}
     .timelineNote:hover::after{content:attr(data-full-note);position:absolute;left:18px;top:calc(100% + 8px);width:min(520px,72vw);max-height:260px;overflow:auto;white-space:pre-wrap;background:#0f172a;color:#fff;border-radius:14px;padding:14px 16px;font-size:13px;line-height:1.5;font-weight:500;box-shadow:0 18px 44px rgba(15,23,42,.28);z-index:80;}
     .dealCard{padding:10px!important;margin-bottom:10px!important;border-radius:14px!important;}
@@ -2432,7 +2480,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
   </>;
 }
 
-function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,notes,setNotes,setSelectedDealId,setSelectedProductName,query,canWrite,stageHistory,setStageHistory}){
+function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,notes,setNotes,interactions=[],setSelectedDealId,setSelectedProductName,query,canWrite,stageHistory,setStageHistory}){
   const empty = { title:'', companyId:companies[0]?.id||'', contactId:'', product:'SAC+', value:0, setup:0, contractMonths:12, stage:stages[0], owner:'Sergio', probability:probabilityForStage(stages[0],30), closeDate:'', description:'', nextStep:'', priority:'Média' };
   const [form,setFormBase] = useState(empty);
   const [filters,setFilters] = useState({ companyId:'', product:'', stage:'', owner:'', closeBeforeMonth:'' });
@@ -2568,7 +2616,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
         <span>{selectedDeals.length} selecionada(s)</span>
         <button className="mini" onClick={removeSelectedDeals} disabled={!selectedDeals.length}><Trash2 size={15}/>Excluir selecionadas</button>
       </div>}
-      <Table headers={['Sel.','Oportunidade','Empresa','Produto','Receita mensal','Prazo','Valor total','Etapa','Responsável','Ações']}>{list.map(d=>{ const linkedCompany = companyForDeal(d,companies,contacts); return <tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><input className="rowSelect" type="checkbox" checked={selectedDealIds.some(id=>sameId(id,d.id))} onChange={(e)=>{e.stopPropagation(); toggleDealSelection(d.id);}} onClick={e=>e.stopPropagation()} disabled={!canWrite}/></td><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{linkedCompany?.name || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(d.product)}} disabled={!d.product}>{d.product || '-'}</button></td><td>{money(dealMrr(d))}</td><td>{dealMonths(d)} meses</td><td><b>{money(dealTcv(d))}</b></td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>})}</Table>
+      <Table headers={['Sel.','Oportunidade','Empresa','Produto','Receita mensal','Prazo','Valor total','Etapa','Responsável','Ações']}>{list.map(d=>{ const linkedCompany = companyForDeal(d,companies,contacts); const relationship = relationshipStatusForDeal(d, interactions); return <tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><input className="rowSelect" type="checkbox" checked={selectedDealIds.some(id=>sameId(id,d.id))} onChange={(e)=>{e.stopPropagation(); toggleDealSelection(d.id);}} onClick={e=>e.stopPropagation()} disabled={!canWrite}/></td><td><div className="dealHealthLine"><i className={`dealHealthDot ${relationship.tone}`} title={relationship.label}></i><b>{d.title}</b></div><span>{relationship.label}</span><span>{d.nextStep}</span></td><td>{linkedCompany?.name || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(d.product)}} disabled={!d.product}>{d.product || '-'}</button></td><td>{money(dealMrr(d))}</td><td>{dealMonths(d)} meses</td><td><b>{money(dealTcv(d))}</b></td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>})}</Table>
     </Panel>
   </>;
 }
@@ -2589,6 +2637,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
   const dealActivities = safeArray(activities).filter(a=>sameId(a.dealId, deal.id));
   const openDealActivities = dealActivities.filter(a=>String(a.status || '') !== 'Concluída');
   const dealInteractions = safeArray(interactions).filter(i=>sameId(i.dealId, deal.id));
+  const relationship = relationshipStatusForDeal(deal, interactions);
   const dealFiles = safeArray(opportunityFiles).filter(file=>sameId(file.dealId,deal.id)).sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
 
   const timeline = [
@@ -2743,6 +2792,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
           </p>
         </div>
         <div style={{display:'flex',gap:'10px',flexWrap:'wrap'}}>
+          <span className={`relationshipPill ${relationship.tone}`}><i className={`dealHealthDot ${relationship.tone}`}></i>{relationship.label}</span>
           <span className="pill">{draft.stage}</span>
           <span className="pill">{draft.owner || 'Sem responsável'}</span>
         </div>
