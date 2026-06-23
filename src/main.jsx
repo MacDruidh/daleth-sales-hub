@@ -18,6 +18,7 @@ const STAGE_PROBABILITIES = {
   'Perdido':0,
 };
 const USERS = ['Sergio','Oyas','Katia','Paulo','Reserva'];
+const INITIAL_COMPANY_SEGMENTS = ['Indústria','Varejo','Financeiro','Aviação','Turismo','Tecnologia'];
 const INITIAL_PRODUCTS = ['SAC+','SAC 24h','Inside Sales','Help Desk','Back Office','Ouvidorias','Custom'];
 const LOSS_REASONS = ['Preço','Sem orçamento','Concorrência','Projeto adiado','Sem retorno','Escopo não aderente','Decisão interna','Outro'];
 const DOCUMENT_CATEGORIES = ['Proposta','Contrato','Briefing','Apresentação','Planilha','Escopo','Operacional','Financeiro','Outros'];
@@ -1051,6 +1052,11 @@ function optionsIncludingCurrent(values, current){
   const items = [current, ...safeArray(values)].map(value => String(value || '').trim()).filter(Boolean);
   return items.filter((value, index) => items.findIndex(item => item.toLowerCase() === value.toLowerCase()) === index);
 }
+function mergeUniqueTextOptions(...groups){
+  return groups.flatMap(group => safeArray(group)).map(value => String(value || '').trim()).filter(Boolean).filter((value,index,items)=>
+    items.findIndex(item=>item.toLowerCase() === value.toLowerCase()) === index
+  );
+}
 function dealMrr(d){ return Number(d?.value || 0); }
 function dealSetup(d){ return Number(d?.setup || 0); }
 function dealMonths(d){ return Math.max(1, Number(d?.contractMonths || 12)); }
@@ -1575,6 +1581,7 @@ function App(){
   const [opportunityFiles,setOpportunityFiles] = useStore('dsh-v1-opportunity-files', []);
   const [contracts,setContracts] = useContracts();
   const [products,setProducts] = useProducts();
+  const [companySegments,setCompanySegments] = useStore('dsh-v1-company-segments', INITIAL_COMPANY_SEGMENTS);
   const [pipedriveImportMeta,setPipedriveImportMeta] = useStore('dsh-v1-pipedrive-import-meta', null);
   const [stages,setStages] = useStore('dsh-v1-stages', STAGES);
   const [stageHistory,setStageHistory] = useStore('dsh-v1-stage-history', []);
@@ -1667,7 +1674,7 @@ function App(){
   ).length;
   const alertTotal = overdueCount + meetingsTodayCount + proposalsWithoutFollowup;
   const alertText = `${overdueCount} atividades vencidas · ${proposalsWithoutFollowup} propostas sem follow-up · ${meetingsTodayCount} reuniões hoje`;
-  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,contracts,setContracts,products,setProducts,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,stageHistory,setStageHistory,lossReasons,setLossReasons,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
+  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,contracts,setContracts,products,setProducts,companySegments,setCompanySegments,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,stageHistory,setStageHistory,lossReasons,setLossReasons,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
   const logout = async () => {
     setQuery('');
     setSelectedDealId(null);
@@ -1702,7 +1709,7 @@ function App(){
         {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <CrmQuality {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='companies' && <Companies {...context}/>} {activePage==='contacts' && <Contacts {...context}/>} {activePage==='products' && <Products {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>} {activePage==='matrix' && <Matrix {...context}/>}
       </>)}
     </main>
-    {selectedCompany && <CompanyModal company={selectedCompany} companies={companies} setCompanies={setCompanies} contacts={contacts} setSelectedContactId={setSelectedContactId} canWrite={canWrite} onClose={()=>setSelectedCompanyId(null)}/>}
+    {selectedCompany && <CompanyModal company={selectedCompany} companies={companies} setCompanies={setCompanies} contacts={contacts} companySegments={companySegments} setCompanySegments={setCompanySegments} setSelectedContactId={setSelectedContactId} canWrite={canWrite} onClose={()=>setSelectedCompanyId(null)}/>}
     {selectedContact && <ContactModal contact={selectedContact} contacts={contacts} setContacts={setContacts} companies={companies} setSelectedCompanyId={setSelectedCompanyId} canWrite={canWrite} onClose={()=>setSelectedContactId(null)}/>}
     {selectedContract && <ContractModal contract={selectedContract} contracts={contracts} setContracts={setContracts} companies={companies} deals={deals} products={products} setSelectedCompanyId={setSelectedCompanyId} setSelectedDealId={setSelectedDealId} setSelectedProductName={setSelectedProductName} canWrite={canWrite} onClose={()=>setSelectedContractId(null)}/>}
     {selectedActivity && <ActivityModal activity={selectedActivity} activities={activities} setActivities={setActivities} deals={deals} canWrite={canWrite} onClose={()=>setSelectedActivityId(null)}/>}  
@@ -3142,7 +3149,33 @@ function Activities({activities,setActivities,deals,query,setSelectedActivityId,
   </Panel>;
 }
 
-function Companies({companies,setCompanies,query,setSelectedCompanyId,canWrite}){
+function SegmentField({label='Segmento',field='segment',form,setForm,segments,setSegments,companies=[]}){
+  const current = form[field] || '';
+  const companySegments = safeArray(companies).map(company=>company.segment);
+  const options = mergeUniqueTextOptions(INITIAL_COMPANY_SEGMENTS, segments, companySegments, [current]).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const chooseSegment = (value) => {
+    if(value !== '__new__'){
+      setForm({...form,[field]:value});
+      return;
+    }
+    const created = window.prompt('Digite o novo segmento:');
+    const clean = String(created || '').trim();
+    if(!clean) return;
+    const nextSegments = mergeUniqueTextOptions(segments, [clean]);
+    setSegments?.(nextSegments);
+    setForm({...form,[field]:clean});
+  };
+  return <label>
+    <span>{label}</span>
+    <select value={current} onChange={event=>chooseSegment(event.target.value)}>
+      <option value="">Selecione</option>
+      {options.map(segment=><option value={segment} key={segment}>{segment}</option>)}
+      <option value="__new__">Adicionar novo segmento...</option>
+    </select>
+  </label>;
+}
+
+function Companies({companies,setCompanies,query,setSelectedCompanyId,canWrite,companySegments,setCompanySegments}){
   const empty = { name:'', segment:'', cnpj:'', site:'', status:'Prospect', phone:'', email:'', notes:'' };
   const [form,setForm] = useState(empty);
   const list = companies.filter(c => (c.name+c.segment+c.site+c.status).toLowerCase().includes(query.toLowerCase())).sort((a,b)=>String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'));;
@@ -3183,7 +3216,7 @@ function Companies({companies,setCompanies,query,setSelectedCompanyId,canWrite})
       window.alert('Não foi possível excluir esta empresa no Supabase agora.');
     }
   };
-  return <>{canWrite && <Panel title="Nova empresa"><div className="formGrid"><Input label="Nome fantasia" field="name" form={form} setForm={setForm}/><Input label="Segmento" field="segment" form={form} setForm={setForm}/><Input label="Site" field="site" form={form} setForm={setForm}/><Input label="CNPJ" field="cnpj" form={form} setForm={setForm}/><button className="saveBtn" onClick={add}><Plus size={16}/>Salvar empresa</button></div></Panel>}<Panel title={`Empresas (${list.length})`}><Table headers={['Empresa','Segmento','Site','Status','Ações']}>{list.map(c=><tr key={c.id} onClick={()=>setSelectedCompanyId(c.id)} style={{cursor:'pointer'}}><td><b>{c.name}</b><span>{c.notes}</span></td><td>{c.segment}</td><td>{c.site ? <a href={websiteHref(c.site)} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}>{c.site}</a> : '-'}</td><td><span className="pill">{c.status}</span></td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedCompanyId(c.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeCompany(c)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table></Panel></>;
+  return <>{canWrite && <Panel title="Nova empresa"><div className="formGrid"><Input label="Nome fantasia" field="name" form={form} setForm={setForm}/><SegmentField form={form} setForm={setForm} segments={companySegments} setSegments={setCompanySegments} companies={companies}/><Input label="Site" field="site" form={form} setForm={setForm}/><Input label="CNPJ" field="cnpj" form={form} setForm={setForm}/><button className="saveBtn" onClick={add}><Plus size={16}/>Salvar empresa</button></div></Panel>}<Panel title={`Empresas (${list.length})`}><Table headers={['Empresa','Segmento','Site','Status','Ações']}>{list.map(c=><tr key={c.id} onClick={()=>setSelectedCompanyId(c.id)} style={{cursor:'pointer'}}><td><b>{c.name}</b><span>{c.notes}</span></td><td>{c.segment}</td><td>{c.site ? <a href={websiteHref(c.site)} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}>{c.site}</a> : '-'}</td><td><span className="pill">{c.status}</span></td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedCompanyId(c.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeCompany(c)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>)}</Table></Panel></>;
 }
 function Contacts({contacts,setContacts,companies,query,setSelectedContactId,canWrite}){
   const empty = { companyId:companies[0]?.id||'', name:'', role:'', email:'', phone:'', whatsapp:'', type:'Decisor', linkedin:'', notes:'' };
@@ -3421,7 +3454,7 @@ function ContractModal({contract,onClose,contracts,setContracts,companies,deals,
 
 
 
-function CompanyModal({company,onClose,companies,setCompanies,contacts=[],setSelectedContactId,canWrite}){
+function CompanyModal({company,onClose,companies,setCompanies,contacts=[],companySegments,setCompanySegments,setSelectedContactId,canWrite}){
   const [draft,setDraft] = useState({...company});
   const linkedContacts = safeArray(contacts).filter(c=>sameId(c.companyId, company.id));
   const save = async () => {
@@ -3443,7 +3476,7 @@ function CompanyModal({company,onClose,companies,setCompanies,contacts=[],setSel
     setSelectedContactId(id);
   };
   return <div className="modalBackdrop"><div className="modal"><div className="modalHead"><div><h2>{company.name}</h2><span>Cadastro da empresa</span></div><button className="iconBtn" onClick={onClose}><X/></button></div>
-    <div className="formGrid modalGrid"><Input label="Nome fantasia" field="name" form={draft} setForm={setDraft}/><Input label="Segmento" field="segment" form={draft} setForm={setDraft}/><Input label="CNPJ" field="cnpj" form={draft} setForm={setDraft}/><Input label="Site" field="site" form={draft} setForm={setDraft}/><Input label="Status" field="status" form={draft} setForm={setDraft}/><Input label="Telefone" field="phone" form={draft} setForm={setDraft}/><Input label="E-mail" field="email" form={draft} setForm={setDraft}/><Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div>
+    <div className="formGrid modalGrid"><Input label="Nome fantasia" field="name" form={draft} setForm={setDraft}/><SegmentField form={draft} setForm={setDraft} segments={companySegments} setSegments={setCompanySegments} companies={companies}/><Input label="CNPJ" field="cnpj" form={draft} setForm={setDraft}/><Input label="Site" field="site" form={draft} setForm={setDraft}/><Input label="Status" field="status" form={draft} setForm={setDraft}/><Input label="Telefone" field="phone" form={draft} setForm={setDraft}/><Input label="E-mail" field="email" form={draft} setForm={setDraft}/><Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div>
     <Panel title={`Contatos vinculados (${linkedContacts.length})`}>
       <DashboardTable headers={['Contato','Cargo','E-mail','Telefone / WhatsApp','Tipo','Ações']}>
         {linkedContacts.length ? linkedContacts.map(c=><tr key={c.id} onClick={()=>openContact(c.id)} style={{cursor:'pointer'}}><td><b>{c.name}</b><span>{c.notes}</span></td><td>{c.role || '-'}</td><td>{c.email || '-'}</td><td>{c.whatsapp || c.phone || '-'}</td><td>{c.type || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); openContact(c.id)}}><Edit3 size={15}/>Abrir contato</button></td></tr>) : <tr><td>Nenhum contato vinculado</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
