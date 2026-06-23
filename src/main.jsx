@@ -2937,6 +2937,7 @@ function Activities({activities,setActivities,deals,query,setSelectedActivityId,
   const [view,setView] = useState('list');
   const [month,setMonth] = useState(() => new Date(`${today()}T12:00:00`));
   const [calendarFilters,setCalendarFilters] = useState({owner:'',type:'',status:''});
+  const [calendarDraft,setCalendarDraft] = useState(null);
   const list = activities.filter(a => (a.title+a.type+a.owner+a.status).toLowerCase().includes(query.toLowerCase()));
   const calendarActivities = list.filter(a =>
     a.dueDate &&
@@ -2959,6 +2960,56 @@ function Activities({activities,setActivities,deals,query,setSelectedActivityId,
   const monthPrefix = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
   const monthActivityCount = calendarActivities.filter(a=>String(a.dueDate||'').startsWith(monthPrefix)).length;
   const changeMonth = (offset) => setMonth(new Date(year,monthIndex+offset,1,12));
+  const dealOptions = safeArray(deals).slice().sort((a,b)=>String(a.title || '').localeCompare(String(b.title || ''),'pt-BR'));
+  const openNewActivity = (date) => {
+    if(!canWrite) return;
+    setCalendarDraft({
+      dealId:'',
+      type:'Reunião',
+      title:'Reunião',
+      dueDate:dateKey(date),
+      dueTime:'',
+      meetingLink:'',
+      status:'Pendente',
+      owner:'',
+      notes:''
+    });
+  };
+  const updateCalendarDraft = (field,value) => {
+    setCalendarDraft(draft => {
+      const nextDraft = {...draft,[field]:value};
+      if(field === 'dealId'){
+        const deal = byId(deals,value);
+        if(deal){
+          nextDraft.owner = draft.owner || deal.owner || '';
+          nextDraft.title = draft.title && draft.title !== 'Reunião' ? draft.title : `Reunião - ${deal.title}`;
+        }
+      }
+      return nextDraft;
+    });
+  };
+  const saveCalendarActivity = async () => {
+    if(!canWrite || !calendarDraft) return;
+    if(!calendarDraft.dealId){ window.alert('Selecione a oportunidade.'); return; }
+    if(!calendarDraft.dueDate){ window.alert('Informe a data da atividade.'); return; }
+    if(!calendarDraft.dueTime){ window.alert('Informe o horário da atividade.'); return; }
+    const nextActivity = {
+      ...calendarDraft,
+      id:Date.now(),
+      title:String(calendarDraft.title || '').trim() || 'Reunião',
+      meetingLink:dropboxHref(calendarDraft.meetingLink),
+    };
+    try {
+      const saved = await saveActivityToSupabase(nextActivity, deals);
+      setActivities([saved,...activities]);
+      setCalendarDraft(null);
+    } catch (error) {
+      console.warn('Falha ao criar atividade pelo calendário no Supabase:', error);
+      setActivities([nextActivity,...activities]);
+      setCalendarDraft(null);
+      window.alert('Atividade salva localmente. O Supabase não aceitou a gravação agora.');
+    }
+  };
   const activityColor = (type) => {
     const normalized = String(type || '').toLowerCase();
     if(normalized.includes('reuni')) return '#007fa8';
@@ -3019,17 +3070,75 @@ function Activities({activities,setActivities,deals,query,setSelectedActivityId,
           {calendarDays.map(date=>{
             const key = dateKey(date);
             const dayActivities = calendarActivities.filter(a=>String(a.dueDate||'').slice(0,10)===key).sort((a,b)=>String(a.dueTime||'').localeCompare(String(b.dueTime||'')));
-            return <div className={`calendarDay ${date.getMonth()!==monthIndex?'outsideMonth':''} ${key===today()?'today':''}`} key={key}>
+            return <div className={`calendarDay ${date.getMonth()!==monthIndex?'outsideMonth':''} ${key===today()?'today':''} ${canWrite?'clickable':''}`} onClick={()=>openNewActivity(date)} title={canWrite ? 'Clique para criar uma atividade nesta data' : undefined} key={key}>
               <div className="calendarDayNumber"><span>{date.getDate()}</span>{key===today() && <small>Hoje</small>}</div>
               <div className="calendarEvents">
-                {dayActivities.slice(0,3).map(a=><button className={`calendarEvent ${a.status==='Concluída'?'completed':''}`} style={{borderLeftColor:activityColor(a.type)}} title={`${formatActivityDateTime(a)} · ${a.title} · ${byId(deals,a.dealId)?.title || 'Sem oportunidade'}`} onClick={()=>setSelectedActivityId(a.id)} key={a.id}><b>{a.dueTime ? String(a.dueTime).slice(0,5) : 'Dia'} · {a.title}</b><span>{a.owner || 'Sem responsável'}</span></button>)}
-                {dayActivities.length>3 && <button className="calendarMore" onClick={()=>setSelectedActivityId(dayActivities[3].id)}>+ {dayActivities.length-3} atividade(s)</button>}
+                {dayActivities.slice(0,3).map(a=><button className={`calendarEvent ${a.status==='Concluída'?'completed':''}`} style={{borderLeftColor:activityColor(a.type)}} title={`${formatActivityDateTime(a)} · ${a.title} · ${byId(deals,a.dealId)?.title || 'Sem oportunidade'}`} onClick={(event)=>{event.stopPropagation();setSelectedActivityId(a.id)}} key={a.id}><b>{a.dueTime ? String(a.dueTime).slice(0,5) : 'Dia'} · {a.title}</b><span>{a.owner || 'Sem responsável'}</span></button>)}
+                {dayActivities.length>3 && <button className="calendarMore" onClick={(event)=>{event.stopPropagation();setSelectedActivityId(dayActivities[3].id)}}>+ {dayActivities.length-3} atividade(s)</button>}
               </div>
             </div>;
           })}
         </div>
       </div>
     </>}
+    {calendarDraft && <div className="modalBackdrop">
+      <div className="modal">
+        <div className="modalHead">
+          <div>
+            <h2>Nova atividade</h2>
+            <span>{formatDate(calendarDraft.dueDate)} · criada pelo calendário</span>
+          </div>
+          <button className="iconBtn" onClick={()=>setCalendarDraft(null)}><X/></button>
+        </div>
+        <div className="formGrid modalGrid">
+          <label>
+            <span>Oportunidade</span>
+            <select value={calendarDraft.dealId} onChange={e=>updateCalendarDraft('dealId',e.target.value)}>
+              <option value="">Selecione</option>
+              {dealOptions.map(deal=><option value={deal.id} key={deal.id}>{deal.title}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Tipo</span>
+            <select value={calendarDraft.type} onChange={e=>updateCalendarDraft('type',e.target.value)}>
+              {['Reunião','Follow-up','Ligação','WhatsApp','Proposta'].map(type=><option value={type} key={type}>{type}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Título</span>
+            <input value={calendarDraft.title} onChange={e=>updateCalendarDraft('title',e.target.value)}/>
+          </label>
+          <label>
+            <span>Data</span>
+            <input type="date" value={calendarDraft.dueDate} onChange={e=>updateCalendarDraft('dueDate',e.target.value)}/>
+          </label>
+          <label>
+            <span>Hora</span>
+            <input type="time" value={calendarDraft.dueTime} onChange={e=>updateCalendarDraft('dueTime',e.target.value)}/>
+          </label>
+          <label>
+            <span>Link da reunião</span>
+            <input type="url" value={calendarDraft.meetingLink} onChange={e=>updateCalendarDraft('meetingLink',e.target.value)} placeholder="https://meet.google.com/..."/>
+          </label>
+          <label>
+            <span>Responsável</span>
+            <select value={calendarDraft.owner} onChange={e=>updateCalendarDraft('owner',e.target.value)}>
+              <option value="">Selecione</option>
+              {USERS.map(user=><option value={user} key={user}>{user}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Status</span>
+            <select value={calendarDraft.status} onChange={e=>updateCalendarDraft('status',e.target.value)}>
+              <option value="Pendente">Pendente</option>
+              <option value="Concluída">Concluída</option>
+            </select>
+          </label>
+          <Textarea label="Observações" field="notes" form={calendarDraft} setForm={setCalendarDraft}/>
+          <button className="saveBtn" onClick={saveCalendarActivity}><Save size={16}/>Salvar atividade</button>
+        </div>
+      </div>
+    </div>}
   </Panel>;
 }
 

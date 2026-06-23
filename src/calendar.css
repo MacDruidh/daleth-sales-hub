@@ -15,7 +15,10 @@
 .activityCalendar{display:grid;grid-template-columns:repeat(7,minmax(125px,1fr));min-width:875px;background:var(--line);gap:1px}
 .calendarWeekday{background:#edf4f8;color:var(--muted);font-size:12px;font-weight:900;text-align:center;text-transform:uppercase;padding:10px}
 .calendarDay{background:#fff;min-height:135px;padding:8px}
+.calendarDay.clickable{cursor:pointer;transition:background .15s ease,box-shadow .15s ease}
+.calendarDay.clickable:hover{background:#f8fcff;box-shadow:inset 0 0 0 2px rgba(0,160,209,.18)}
 .calendarDay.outsideMonth{background:#f7f9fb;color:#9aabba}
+.calendarDay.outsideMonth.clickable:hover{background:#eef6fb}
 .calendarDay.today{box-shadow:inset 0 0 0 2px var(--blue)}
 .calendarDayNumber{height:24px;display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:900}
 .calendarDayNumber small{color:var(--blue);font-size:10px;text-transform:uppercase}
