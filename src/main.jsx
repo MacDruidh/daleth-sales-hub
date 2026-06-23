@@ -17,13 +17,13 @@ const STAGE_PROBABILITIES = {
   'Ganho':100,
   'Perdido':0,
 };
-const USERS = ['Sergio','Oyas','Katia','Paulo','Reserva'];
+const USERS = ['Sergio Paulo','Oyas','Katia','Paulo','Reserva'];
 const INITIAL_COMPANY_SEGMENTS = ['Indústria','Varejo','Financeiro','Aviação','Turismo','Tecnologia'];
 const INITIAL_PRODUCTS = ['SAC+','SAC 24h','Inside Sales','Help Desk','Back Office','Ouvidorias','Custom'];
 const LOSS_REASONS = ['Preço','Sem orçamento','Concorrência','Projeto adiado','Sem retorno','Escopo não aderente','Decisão interna','Outro'];
 const DOCUMENT_CATEGORIES = ['Proposta','Contrato','Briefing','Apresentação','Planilha','Escopo','Operacional','Financeiro','Outros'];
 const ACCESS_USERS = [
-  { name: 'Sergio', role: 'CEO', canViewDashboard: true },
+  { name: 'Sergio Paulo', role: 'CEO', canViewDashboard: true },
   { name: 'Katia', role: 'Comercial', canViewDashboard: false },
   { name: 'Paulo', role: 'Comercial', canViewDashboard: false },
   { name: 'Oyas', role: 'Comercial', canViewDashboard: false },
@@ -40,17 +40,17 @@ const initialContacts = [
   { id: 2, companyId: 3, name: 'Contato Comercial', role: 'Parcerias', email: '', phone: '', whatsapp: '', type: 'Influenciador', linkedin: '', notes: '' },
 ];
 const initialDeals = [
-  { id: 1, title: 'SAC+ para rede de franquias', companyId: 1, contactId: 1, product: 'SAC+', value: 18900, setup: 0, contractMonths: 12, stage: 'Proposta Enviada', owner: 'Sergio', probability: 60, closeDate: '2026-07-15', description: 'Proposta para atendimento multicanal da rede.', nextStep: 'Follow-up sobre proposta enviada.', priority: 'Alta' },
+  { id: 1, title: 'SAC+ para rede de franquias', companyId: 1, contactId: 1, product: 'SAC+', value: 18900, setup: 0, contractMonths: 12, stage: 'Proposta Enviada', owner: 'Sergio Paulo', probability: 60, closeDate: '2026-07-15', description: 'Proposta para atendimento multicanal da rede.', nextStep: 'Follow-up sobre proposta enviada.', priority: 'Alta' },
   { id: 2, title: 'Atendimento ANAC 24/7', companyId: 2, contactId: '', product: 'SAC 24h', value: 45000, setup: 60000, contractMonths: 36, stage: 'Levantamento', owner: 'Oyas', probability: 30, closeDate: '2026-08-01', description: 'Discovery para operação de companhia aérea internacional.', nextStep: 'Mapear volumes e canais obrigatórios.', priority: 'Alta' },
-  { id: 3, title: 'Parceria Franquear', companyId: 3, contactId: 2, product: 'Custom', value: 12000, setup: 0, contractMonths: 24, stage: 'Negociação', owner: 'Sergio', probability: 70, closeDate: '2026-06-30', description: 'Modelo de indicação para redes de franquias.', nextStep: 'Formalizar contrato de parceria.', priority: 'Média' },
+  { id: 3, title: 'Parceria Franquear', companyId: 3, contactId: 2, product: 'Custom', value: 12000, setup: 0, contractMonths: 24, stage: 'Negociação', owner: 'Sergio Paulo', probability: 70, closeDate: '2026-06-30', description: 'Modelo de indicação para redes de franquias.', nextStep: 'Formalizar contrato de parceria.', priority: 'Média' },
 ];
 const initialActivities = [
-  { id: 1, dealId: 1, type: 'Follow-up', title: 'Ligar para Michele', dueDate: '2026-06-15', owner: 'Sergio', status: 'Pendente', notes: 'Confirmar se a proposta foi avaliada.' },
+  { id: 1, dealId: 1, type: 'Follow-up', title: 'Ligar para Michele', dueDate: '2026-06-15', owner: 'Sergio Paulo', status: 'Pendente', notes: 'Confirmar se a proposta foi avaliada.' },
   { id: 2, dealId: 2, type: 'Reunião', title: 'Discovery operacional', dueDate: '2026-06-20', owner: 'Oyas', status: 'Pendente', notes: 'Levantar volumes, idiomas e canais.' },
 ];
 const initialNotes = [
-  { id: 1, dealId: 1, user: 'Sergio', date: '2026-06-10', text: 'Cliente demonstrou interesse em SAC+ para franquias. Enviar proposta revisada com cenários por quantidade de unidades.' },
-  { id: 2, dealId: 3, user: 'Sergio', date: '2026-06-10', text: 'Parceria com comissão de 15% sobre faturamento bruto da rede indicada.' },
+  { id: 1, dealId: 1, user: 'Sergio Paulo', date: '2026-06-10', text: 'Cliente demonstrou interesse em SAC+ para franquias. Enviar proposta revisada com cenários por quantidade de unidades.' },
+  { id: 2, dealId: 3, user: 'Sergio Paulo', date: '2026-06-10', text: 'Parceria com comissão de 15% sobre faturamento bruto da rede indicada.' },
 ];
 
 const initialInteractions = [];
@@ -2481,7 +2481,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
 }
 
 function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,notes,setNotes,interactions=[],setSelectedDealId,setSelectedProductName,query,canWrite,stageHistory,setStageHistory}){
-  const empty = { title:'', companyId:companies[0]?.id||'', contactId:'', product:'SAC+', value:0, setup:0, contractMonths:12, stage:stages[0], owner:'Sergio', probability:probabilityForStage(stages[0],30), closeDate:'', description:'', nextStep:'', priority:'Média' };
+  const empty = { title:'', companyId:companies[0]?.id||'', contactId:'', product:'SAC+', value:0, setup:0, contractMonths:12, stage:stages[0], owner:'Sergio Paulo', probability:probabilityForStage(stages[0],30), closeDate:'', description:'', nextStep:'', priority:'Média' };
   const [form,setFormBase] = useState(empty);
   const [filters,setFilters] = useState({ companyId:'', product:'', stage:'', owner:'', closeBeforeMonth:'' });
   const [selectedDealIds,setSelectedDealIds] = useState([]);
@@ -2512,7 +2512,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
   }, [deals]);
   const creationNoteFor = (deal) => ({
     dealId: deal.id,
-    user: currentUser?.name || deal.owner || 'Sergio',
+    user: currentUser?.name || deal.owner || 'Sergio Paulo',
     date: today(),
     text: `Oportunidade criada em ${formatDate(today())}.`
   });
@@ -2627,9 +2627,9 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
   const [tab,setTab] = useState('dados');
   const [draft,setDraft] = useState({contractMonths:12,setup:0,...deal,companyId:inferredCompany?.id || deal.companyId,probability:probabilityForStage(deal.stage,deal.probability),lossReason:lossReasons?.[deal.id] || ''});
   const [note,setNote] = useState('');
-  const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),dueTime:'',meetingLink:'',owner:deal.owner || currentUser?.name || 'Sergio',status:'Pendente',notes:''});
-  const [interaction,setInteraction] = useState({type:'Ligação',dateTime:crmDateTimeInput(),owner:currentUser?.name || deal.owner || 'Sergio',description:'',nextAction:'',nextDueDate:''});
-  const emptyFile = {id:'',name:'',url:'',category:'Proposta',notes:'',owner:currentUser?.name || deal.owner || 'Sergio'};
+  const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),dueTime:'',meetingLink:'',owner:deal.owner || currentUser?.name || 'Sergio Paulo',status:'Pendente',notes:''});
+  const [interaction,setInteraction] = useState({type:'Ligação',dateTime:crmDateTimeInput(),owner:currentUser?.name || deal.owner || 'Sergio Paulo',description:'',nextAction:'',nextDueDate:''});
+  const emptyFile = {id:'',name:'',url:'',category:'Proposta',notes:'',owner:currentUser?.name || deal.owner || 'Sergio Paulo'};
   const [fileDraft,setFileDraft] = useState(emptyFile);
   const company = byId(companies, draft.companyId) || inferredCompany;
   const contact = initialContact;
@@ -2703,7 +2703,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
   const addNote = async () => {
     if(!canWrite) return;
     if(!note.trim()) return;
-    const nextNote = {dealId:deal.id,user:currentUser?.name || 'Sergio',date:today(),text:note};
+    const nextNote = {dealId:deal.id,user:currentUser?.name || 'Sergio Paulo',date:today(),text:note};
     try {
       const saved = await saveNoteToSupabase(nextNote, deals);
       setNotes([saved,...notes]);
@@ -2738,7 +2738,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
       setDeals(deals.map(d=>sameId(d.id,deal.id) ? {...d,nextStep:interaction.nextAction} : d));
       setDraft({...draft,nextStep:interaction.nextAction});
     }
-    setInteraction({type:'Ligação',dateTime:crmDateTimeInput(),owner:currentUser?.name || deal.owner || 'Sergio',description:'',nextAction:'',nextDueDate:''});
+    setInteraction({type:'Ligação',dateTime:crmDateTimeInput(),owner:currentUser?.name || deal.owner || 'Sergio Paulo',description:'',nextAction:'',nextDueDate:''});
   };
   const saveFileLink = () => {
     if(!canWrite || !setOpportunityFiles) return;
@@ -2763,7 +2763,7 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
     }
     setFileDraft(emptyFile);
   };
-  const editFileLink = (file) => setFileDraft({id:file.id,name:file.name||'',url:file.url||'',category:file.category||'Outros',notes:file.notes||'',owner:file.owner||currentUser?.name||'Sergio'});
+  const editFileLink = (file) => setFileDraft({id:file.id,name:file.name||'',url:file.url||'',category:file.category||'Outros',notes:file.notes||'',owner:file.owner||currentUser?.name||'Sergio Paulo'});
   const removeFileLink = (file) => {
     if(!canWrite || !setOpportunityFiles) return;
     if(!window.confirm(`Remover o vínculo "${file.name}" do CRM? O arquivo não será excluído do Dropbox.`)) return;
@@ -2878,7 +2878,7 @@ function DealModal({deal,onClose,companies=[],contacts=[],deals=[],setDeals,acti
   };
   const addNote = async () => {
     if(!note.trim()) return;
-    const nextNote = {dealId:deal.id,user:'Sergio',date:today(),text:note};
+    const nextNote = {dealId:deal.id,user:'Sergio Paulo',date:today(),text:note};
     try {
       const saved = await saveNoteToSupabase(nextNote, deals);
       setNotes([saved,...notes]);
@@ -2926,7 +2926,7 @@ function DealModal({deal,onClose,companies=[],contacts=[],deals=[],setDeals,acti
 }
 
 function Documents({opportunityFiles=[],setOpportunityFiles,companies=[],contacts=[],deals=[],currentUser,canWrite,setSelectedDealId,setSelectedCompanyId}){
-  const emptyDocument = {id:'',name:'',url:'',companyId:'',dealId:'',category:'Proposta',owner:currentUser?.name || 'Sergio',notes:'',isDir:false};
+  const emptyDocument = {id:'',name:'',url:'',companyId:'',dealId:'',category:'Proposta',owner:currentUser?.name || 'Sergio Paulo',notes:'',isDir:false};
   const [draft,setDraft] = useState(emptyDocument);
   const [filters,setFilters] = useState({text:'',companyId:'',category:'',kind:''});
   const companyOf = (document) => byId(companies,document.companyId) || companyForDeal(byId(deals,document.dealId),companies,contacts);
@@ -2941,7 +2941,7 @@ function Documents({opportunityFiles=[],setOpportunityFiles,companies=[],contact
       (!filters.kind || (filters.kind === 'folder' ? document.isDir === true : document.isDir !== true));
   }).sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
 
-  const resetDraft = () => setDraft({...emptyDocument,owner:currentUser?.name || 'Sergio'});
+  const resetDraft = () => setDraft({...emptyDocument,owner:currentUser?.name || 'Sergio Paulo'});
   const saveManualDocument = () => {
     if(!canWrite || !setOpportunityFiles) return;
     if(!draft.name.trim() || !draft.url.trim()){
@@ -2965,7 +2965,7 @@ function Documents({opportunityFiles=[],setOpportunityFiles,companies=[],contact
     resetDraft();
   };
   const editDocument = (document) => setDraft({
-    id:document.id,name:document.name||'',url:document.url||'',companyId:companyOf(document)?.id||'',dealId:document.dealId||'',category:document.category||'Outros',owner:document.owner||currentUser?.name||'Sergio',notes:document.notes||'',isDir:document.isDir===true,
+    id:document.id,name:document.name||'',url:document.url||'',companyId:companyOf(document)?.id||'',dealId:document.dealId||'',category:document.category||'Outros',owner:document.owner||currentUser?.name||'Sergio Paulo',notes:document.notes||'',isDir:document.isDir===true,
   });
   const removeDocument = (document) => {
     if(!canWrite || !setOpportunityFiles) return;
@@ -3315,7 +3315,7 @@ function Contacts({contacts,setContacts,companies,query,setSelectedContactId,can
 }
 
 function Contracts({contracts,setContracts,deals,companies,products,query,canWrite,setSelectedContractId}){
-  const empty = { companyId:companies[0]?.id||'', dealId:'', product:'SAC+', startDate:today(), endDate:addMonths(today(),12), mrr:0, setup:0, contractMonths:12, owner:'Sergio', status:'Ativo', notes:'' };
+  const empty = { companyId:companies[0]?.id||'', dealId:'', product:'SAC+', startDate:today(), endDate:addMonths(today(),12), mrr:0, setup:0, contractMonths:12, owner:'Sergio Paulo', status:'Ativo', notes:'' };
   const [form,setForm] = useState(empty);
   const calculatedEndDate = addMonths(form.startDate, Number(form.contractMonths || 12));
   const list = contracts.filter(c => {
