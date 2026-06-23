@@ -1728,7 +1728,7 @@ function App(){
   const isCEO = currentUser?.role === 'CEO';
   const canWrite = ['CEO','Comercial'].includes(currentUser?.role);
   const allMenu = [
-    ['dashboard','Dashboard',LayoutDashboard], ['funnel','Funil Comercial',TrendingUp], ['pending','Pendências',BellRing], ['quality','Qualidade do CRM',AlertTriangle], ['pipeline','Pipeline',KanbanSquare], ['deals','Oportunidades',BriefcaseBusiness],
+    ['dashboard','Dashboard',LayoutDashboard], ['insights','Insights Daleth',Sparkles], ['funnel','Funil Comercial',TrendingUp], ['pending','Pendências',BellRing], ['quality','Qualidade do CRM',AlertTriangle], ['pipeline','Pipeline',KanbanSquare], ['deals','Oportunidades',BriefcaseBusiness],
     ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['documents','Documentos',FolderOpen], ['companies','Empresas',Building2], ['contacts','Contatos',UserRound], ['products','Produtos',Package], ['imports','Importação',Filter], ['profiles','Perfis',Lock], ['matrix','Matriz Daleth',Sparkles]
   ];
   const menu = allMenu.filter(([id]) => {
@@ -1778,7 +1778,7 @@ function App(){
     <main className="main">
       <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresas, contatos e oportunidades..."/></div><button className="notification" style={{cursor:'pointer',textAlign:'left'}} onClick={()=>navigate('pending')} title="Abrir painel de pendências"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></button><div className="notification" style={{minWidth:'150px'}}><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><button className="mini" onClick={logout}><X size={15}/>Sair</button></div></header>
       {selectedDeal ? <DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/> : (query.trim() ? <GlobalSearch {...context}/> : <>
-        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <CrmQuality {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='companies' && <Companies {...context}/>} {activePage==='contacts' && <Contacts {...context}/>} {activePage==='products' && <Products {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>} {activePage==='matrix' && <Matrix {...context}/>}
+        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='insights' && <InsightsDaleth {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <CrmQuality {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='companies' && <Companies {...context}/>} {activePage==='contacts' && <Contacts {...context}/>} {activePage==='products' && <Products {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>} {activePage==='matrix' && <Matrix {...context}/>}
       </>)}
     </main>
     {selectedCompany && <CompanyModal company={selectedCompany} companies={companies} setCompanies={setCompanies} contacts={contacts} companySegments={companySegments} setCompanySegments={setCompanySegments} setSelectedContactId={setSelectedContactId} canWrite={canWrite} onClose={()=>setSelectedCompanyId(null)}/>}
@@ -2107,6 +2107,165 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
       </DashboardTable>
     </Panel>
 
+  </>;
+}
+
+function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contracts=[],interactions=[],stages=STAGES,lossReasons={},setSelectedDealId,setSelectedActivityId,setSelectedContractId}){
+  const [filters,setFilters] = useState({period:'all',owner:'',product:'',segment:''});
+  const currentMonth = today().slice(0,7);
+  const next90 = new Date(`${today()}T00:00:00`);
+  next90.setDate(next90.getDate()+90);
+  const owners = mergeUniqueTextOptions(deals.map(deal=>deal.owner),activities.map(activity=>activity.owner),contracts.map(contract=>contract.owner)).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const products = mergeUniqueTextOptions(deals.map(deal=>deal.product),contracts.map(contract=>contract.product)).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const segments = mergeUniqueTextOptions(companies.map(company=>company.segment),deals.map(deal=>dealSegment(deal,companies,contacts))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const periodIncludes = (dateValue) => {
+    if(filters.period === 'all') return true;
+    if(!dateValue) return false;
+    const date = String(dateValue).slice(0,10);
+    if(filters.period === 'month') return date.startsWith(currentMonth);
+    if(filters.period === 'next90'){
+      const parsed = new Date(`${date}T00:00:00`);
+      return !Number.isNaN(parsed.getTime()) && parsed <= next90;
+    }
+    if(filters.period === 'overdue') return date < today();
+    return true;
+  };
+  const dealMatches = (deal) =>
+    (!filters.owner || deal.owner === filters.owner) &&
+    (!filters.product || deal.product === filters.product) &&
+    (!filters.segment || dealSegment(deal,companies,contacts) === filters.segment) &&
+    periodIncludes(deal.closeDate || today());
+  const filteredDeals = safeArray(deals).filter(dealMatches);
+  const openDeals = filteredDeals.filter(deal=>!['Ganho','Perdido'].includes(deal.stage));
+  const wonDeals = filteredDeals.filter(deal=>deal.stage === 'Ganho');
+  const lostDeals = filteredDeals.filter(deal=>deal.stage === 'Perdido');
+  const filteredActivities = safeArray(activities).filter(activity=>{
+    const deal = byId(deals,activity.dealId);
+    return (!filters.owner || activity.owner === filters.owner || deal?.owner === filters.owner) &&
+      (!filters.product || deal?.product === filters.product) &&
+      (!filters.segment || dealSegment(deal,companies,contacts) === filters.segment) &&
+      periodIncludes(activity.dueDate || today());
+  });
+  const filteredContracts = safeArray(contracts).filter(contract=>{
+    const deal = byId(deals,contract.dealId);
+    const company = byId(companies,contract.companyId);
+    const segment = company?.segment || dealSegment(deal,companies,contacts);
+    return (!filters.owner || contract.owner === filters.owner || deal?.owner === filters.owner) &&
+      (!filters.product || contract.product === filters.product || deal?.product === filters.product) &&
+      (!filters.segment || segment === filters.segment) &&
+      periodIncludes(contract.startDate || contract.endDate || today());
+  });
+  const openValue = openDeals.reduce((total,deal)=>total+dealTcv(deal),0);
+  const weightedValue = openDeals.reduce((total,deal)=>total+dealWeightedTcv(deal),0);
+  const wonValue = wonDeals.reduce((total,deal)=>total+dealTcv(deal),0);
+  const lostValue = lostDeals.reduce((total,deal)=>total+dealTcv(deal),0);
+  const finishedCount = wonDeals.length + lostDeals.length;
+  const winRate = finishedCount ? Math.round((wonDeals.length / finishedCount) * 100) : 0;
+  const completedActivities = filteredActivities.filter(activity=>activity.status === 'Concluída');
+  const pendingActivities = filteredActivities.filter(activity=>activity.status !== 'Concluída');
+  const overdueActivities = pendingActivities.filter(activity=>activity.dueDate && activity.dueDate < today());
+  const staleDeals = openDeals
+    .map(deal=>({...deal,relationship:relationshipStatusForDeal(deal,interactions,activities)}))
+    .filter(deal=>deal.relationship.tone === 'danger' || deal.relationship.tone === 'none')
+    .sort((a,b)=>(b.relationship.days ?? 9999)-(a.relationship.days ?? 9999));
+  const ownerRows = Object.values(filteredDeals.reduce((rows,deal)=>{
+    const owner = deal.owner || 'Sem responsável';
+    if(!rows[owner]) rows[owner] = {owner,open:0,won:0,value:0,weighted:0};
+    if(deal.stage === 'Ganho') rows[owner].won += 1;
+    if(!['Ganho','Perdido'].includes(deal.stage)){
+      rows[owner].open += 1;
+      rows[owner].value += dealTcv(deal);
+      rows[owner].weighted += dealWeightedTcv(deal);
+    }
+    return rows;
+  },{})).sort((a,b)=>b.weighted-a.weighted);
+  const productRows = Object.values(filteredDeals.reduce((rows,deal)=>{
+    const product = deal.product || 'Sem produto';
+    if(!rows[product]) rows[product] = {product,count:0,value:0,weighted:0};
+    rows[product].count += 1;
+    rows[product].value += dealTcv(deal);
+    if(!['Ganho','Perdido'].includes(deal.stage)) rows[product].weighted += dealWeightedTcv(deal);
+    return rows;
+  },{})).sort((a,b)=>b.value-a.value);
+  const segmentRows = Object.values(filteredDeals.reduce((rows,deal)=>{
+    const segment = dealSegment(deal,companies,contacts);
+    if(!rows[segment]) rows[segment] = {segment,count:0,value:0};
+    rows[segment].count += 1;
+    rows[segment].value += dealTcv(deal);
+    return rows;
+  },{})).sort((a,b)=>b.value-a.value);
+  const reasonRows = Object.values(lostDeals.reduce((rows,deal)=>{
+    const reason = lossReasons?.[deal.id] || 'Não informado';
+    if(!rows[reason]) rows[reason] = {reason,count:0,value:0};
+    rows[reason].count += 1;
+    rows[reason].value += dealTcv(deal);
+    return rows;
+  },{})).sort((a,b)=>b.count-a.count);
+  const resetFilters = () => setFilters({period:'all',owner:'',product:'',segment:''});
+  return <>
+    <Panel title="Insights Daleth">
+      <p className="muted" style={{margin:'0 0 14px'}}>Análise comercial com filtros por período, responsável, produto e segmento. Use esta tela para enxergar previsão, produtividade, risco e concentração do pipeline.</p>
+      <div className="formGrid">
+        <label><span>Período</span><select value={filters.period} onChange={event=>setFilters({...filters,period:event.target.value})}><option value="all">Todos</option><option value="month">Este mês</option><option value="next90">Próximos 90 dias</option><option value="overdue">Fechamento vencido</option></select></label>
+        <label><span>Responsável</span><select value={filters.owner} onChange={event=>setFilters({...filters,owner:event.target.value})}><option value="">Todos</option>{owners.map(owner=><option value={owner} key={owner}>{owner}</option>)}</select></label>
+        <label><span>Produto</span><select value={filters.product} onChange={event=>setFilters({...filters,product:event.target.value})}><option value="">Todos</option>{products.map(product=><option value={product} key={product}>{product}</option>)}</select></label>
+        <label><span>Segmento</span><select value={filters.segment} onChange={event=>setFilters({...filters,segment:event.target.value})}><option value="">Todos</option>{segments.map(segment=><option value={segment} key={segment}>{segment}</option>)}</select></label>
+        <button className="saveBtn" onClick={resetFilters}><Filter size={16}/>Limpar filtros</button>
+      </div>
+    </Panel>
+    <section className="cards">
+      <Kpi icon={BriefcaseBusiness} label="Pipeline aberto" value={moneyShort(openValue)}/>
+      <Kpi icon={TrendingUp} label="Previsão ponderada" value={moneyShort(weightedValue)}/>
+      <Kpi icon={CheckCircle2} label="Taxa de ganho" value={`${winRate}%`}/>
+      <Kpi icon={CircleDollarSign} label="Valor ganho" value={moneyShort(wonValue)}/>
+    </section>
+    <section className="cards">
+      <Kpi icon={AlertTriangle} label="Valor perdido" value={moneyShort(lostValue)}/>
+      <Kpi icon={Clock3} label="Atividades abertas" value={pendingActivities.length}/>
+      <Kpi icon={CheckCircle2} label="Atividades concluídas" value={completedActivities.length}/>
+      <Kpi icon={AlertTriangle} label="Atividades vencidas" value={overdueActivities.length}/>
+    </section>
+    <section className="grid2 compact">
+      <Panel title="Desempenho por responsável">
+        <DashboardTable headers={['Responsável','Abertas','Ganhas','Pipeline','Previsão']}>
+          {ownerRows.length ? ownerRows.map(row=><tr key={row.owner}><td><b>{row.owner}</b></td><td>{row.open}</td><td>{row.won}</td><td>{moneyShort(row.value)}</td><td>{moneyShort(row.weighted)}</td></tr>) : <tr><td>Nenhum dado</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+      <Panel title="Pipeline por produto">
+        <DashboardTable headers={['Produto','Oportunidades','Valor total','Previsão']}>
+          {productRows.length ? productRows.map(row=><tr key={row.product}><td><b>{row.product}</b></td><td>{row.count}</td><td>{moneyShort(row.value)}</td><td>{moneyShort(row.weighted)}</td></tr>) : <tr><td>Nenhum dado</td><td>-</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+    </section>
+    <section className="grid2 compact">
+      <Panel title="Pipeline por segmento">
+        <DashboardTable headers={['Segmento','Oportunidades','Valor total']}>
+          {segmentRows.length ? segmentRows.map(row=><tr key={row.segment}><td><b>{row.segment}</b></td><td>{row.count}</td><td>{moneyShort(row.value)}</td></tr>) : <tr><td>Nenhum dado</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+      <Panel title="Motivos de perda">
+        <DashboardTable headers={['Motivo','Oportunidades','Valor perdido']}>
+          {reasonRows.length ? reasonRows.map(row=><tr key={row.reason}><td><b>{row.reason}</b></td><td>{row.count}</td><td>{moneyShort(row.value)}</td></tr>) : <tr><td>Nenhuma perda no filtro</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+    </section>
+    <section className="grid2 compact">
+      <Panel title="Oportunidades que exigem atenção">
+        <DashboardTable headers={['Oportunidade','Empresa','Status','Valor','Ações']}>
+          {staleDeals.length ? staleDeals.slice(0,12).map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b><span>{deal.nextStep}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td><span className={`relationshipPill ${deal.relationship.tone}`}><i className={`dealHealthDot ${deal.relationship.tone}`}></i>{deal.relationship.label}</span></td><td>{moneyShort(dealTcv(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade crítica</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+      <Panel title="Contratos filtrados">
+        <DashboardTable headers={['Cliente','Produto','Receita mensal','Status','Ações']}>
+          {filteredContracts.length ? filteredContracts.slice(0,12).map(contract=>{const company=byId(companies,contract.companyId);return <tr key={contract.id} onClick={()=>setSelectedContractId?.(contract.id)} style={{cursor:'pointer'}}><td><b>{company?.name || 'Sem cliente'}</b><span>{formatDate(contract.startDate)} a {formatDate(contract.endDate)}</span></td><td>{contract.product || '-'}</td><td>{moneyShort(contractMrr(contract))}</td><td>{contractStatus(contract)}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedContractId?.(contract.id)}}><Edit3 size={15}/>Abrir</button></td></tr>}) : <tr><td>Nenhum contrato no filtro</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+    </section>
+    <Panel title="Atividades vencidas no filtro">
+      <DashboardTable headers={['Atividade','Oportunidade','Vencimento','Responsável','Ações']}>
+        {overdueActivities.length ? overdueActivities.slice(0,12).map(activity=>{const deal=byId(deals,activity.dealId);return <tr key={activity.id} onClick={()=>setSelectedActivityId?.(activity.id)} style={{cursor:'pointer'}}><td><b>{activity.title}</b><span>{activity.type}</span></td><td>{deal?.title || '-'}</td><td><b style={{color:'#dc2626'}}>{formatActivityDateTime(activity)}</b></td><td>{activity.owner || '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedActivityId?.(activity.id)}}><Edit3 size={15}/>Abrir</button></td></tr>}) : <tr><td>Nenhuma atividade vencida no filtro</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+      </DashboardTable>
+    </Panel>
   </>;
 }
 
