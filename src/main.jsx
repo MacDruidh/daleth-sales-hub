@@ -1786,7 +1786,7 @@ function App(){
         {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='insights' && <InsightsDaleth {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <CrmQuality {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='registrations' && <Registrations {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>}
       </>)}
     </main>
-    {selectedDealAsModal && <div className="modalBackdrop"><div className="modal"><DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/></div></div>}
+    {selectedDealAsModal && <div className="modalBackdrop"><div className="modal"><DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)} closeAfterSave/></div></div>}
     {selectedCompany && <CompanyModal company={selectedCompany} companies={companies} setCompanies={setCompanies} contacts={contacts} companySegments={companySegments} setCompanySegments={setCompanySegments} setSelectedContactId={setSelectedContactId} canWrite={canWrite} onClose={()=>setSelectedCompanyId(null)}/>}
     {selectedContact && <ContactModal contact={selectedContact} contacts={contacts} setContacts={setContacts} companies={companies} setSelectedCompanyId={setSelectedCompanyId} canWrite={canWrite} onClose={()=>setSelectedContactId(null)}/>}
     {selectedContract && <ContractModal contract={selectedContract} contracts={contracts} setContracts={setContracts} companies={companies} deals={deals} products={products} setSelectedCompanyId={setSelectedCompanyId} setSelectedDealId={setSelectedDealId} setSelectedProductName={setSelectedProductName} canWrite={canWrite} onClose={()=>setSelectedContractId(null)}/>}
@@ -2804,7 +2804,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
   </>;
 }
 
-function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,opportunityFiles=[],setOpportunityFiles,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,stageHistory=[],setStageHistory,lossReasons={},setLossReasons,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName}){
+function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,opportunityFiles=[],setOpportunityFiles,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,stageHistory=[],setStageHistory,lossReasons={},setLossReasons,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName}){
   const initialContact = byId(contacts, deal.contactId);
   const inferredCompany = companyForDeal(deal, companies, contacts);
   const [tab,setTab] = useState('dados');
@@ -2875,12 +2875,14 @@ function DealDetailPage({deal,onBack,currentUser,canWrite,companies=[],contacts=
       const saved = await saveDealToSupabase(nextDeal, companies, contacts);
       setDeals(deals.map(d=>sameId(d.id,deal.id) ? saved : d));
       setDraft({...saved,lossReason:nextDeal.lossReason || ''});
-      window.alert('Alterações salvas.');
+      if(closeAfterSave) onBack?.();
+      else window.alert('Alterações salvas.');
     } catch (error) {
       console.warn('Falha ao atualizar oportunidade no Supabase:', error);
       setDeals(deals.map(d=>sameId(d.id,deal.id) ? nextDeal : d));
       setDraft(nextDeal);
-      window.alert('Alterações salvas localmente. O Supabase não aceitou a atualização agora.');
+      if(closeAfterSave) onBack?.();
+      else window.alert('Alterações salvas localmente. O Supabase não aceitou a atualização agora.');
     }
   };
   const addNote = async () => {
