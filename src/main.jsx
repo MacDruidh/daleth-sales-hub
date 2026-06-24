@@ -3175,7 +3175,7 @@ function Documents({opportunityFiles=[],setOpportunityFiles,companies=[],contact
 }
 
 function Activities({activities,setActivities,deals,query,setSelectedActivityId,canWrite}){
-  const [view,setView] = useState('list');
+  const [view,setView] = useState('calendar');
   const [month,setMonth] = useState(() => new Date(`${today()}T12:00:00`));
   const [calendarFilters,setCalendarFilters] = useState({owner:'',type:'',status:''});
   const [calendarDraft,setCalendarDraft] = useState(null);
