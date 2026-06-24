@@ -2117,6 +2117,7 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
 
 function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contracts=[],interactions=[],stages=STAGES,lossReasons={},setSelectedDealId,setSelectedActivityId,setSelectedContractId}){
   const [filters,setFilters] = useState({period:'all',owner:'',product:'',segment:''});
+  const [selectedBreakdown,setSelectedBreakdown] = useState(null);
   const currentMonth = today().slice(0,7);
   const next90 = new Date(`${today()}T00:00:00`);
   next90.setDate(next90.getDate()+90);
@@ -2206,7 +2207,25 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
     rows[reason].value += dealTcv(deal);
     return rows;
   },{})).sort((a,b)=>b.count-a.count);
-  const resetFilters = () => setFilters({period:'all',owner:'',product:'',segment:''});
+  const breakdownDeals = (() => {
+    if(!selectedBreakdown) return [];
+    const key = selectedBreakdown.key;
+    if(selectedBreakdown.type === 'owner') return openDeals.filter(deal=>(deal.owner || 'Sem responsável') === key);
+    if(selectedBreakdown.type === 'product') return filteredDeals.filter(deal=>(deal.product || 'Sem produto') === key);
+    if(selectedBreakdown.type === 'segment') return filteredDeals.filter(deal=>dealSegment(deal,companies,contacts) === key);
+    return [];
+  })().sort((a,b)=>dealTcv(b)-dealTcv(a));
+  const resetFilters = () => {
+    setFilters({period:'all',owner:'',product:'',segment:''});
+    setSelectedBreakdown(null);
+  };
+  const openBreakdown = (type,key,label) => setSelectedBreakdown({type,key,label});
+  useEffect(()=>{
+    if(!selectedBreakdown) return;
+    setTimeout(()=>{
+      document.getElementById('insightBreakdown')?.scrollIntoView({behavior:'smooth',block:'start'});
+    }, 0);
+  }, [selectedBreakdown?.type, selectedBreakdown?.key]);
   return <>
     <Panel title="Insights Daleth">
       <p className="muted" style={{margin:'0 0 14px'}}>Análise comercial com filtros por período, responsável, produto e segmento. Use esta tela para enxergar previsão, produtividade, risco e concentração do pipeline.</p>
@@ -2233,19 +2252,19 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
     <section className="grid2 compact">
       <Panel title="Desempenho por responsável">
         <DashboardTable headers={['Responsável','Abertas','Ganhas','Pipeline','Previsão']}>
-          {ownerRows.length ? ownerRows.map(row=><tr key={row.owner}><td><b>{row.owner}</b></td><td>{row.open}</td><td>{row.won}</td><td>{moneyShort(row.value)}</td><td>{moneyShort(row.weighted)}</td></tr>) : <tr><td>Nenhum dado</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+          {ownerRows.length ? ownerRows.map(row=><tr key={row.owner} onClick={()=>openBreakdown('owner',row.owner,`${row.owner} · oportunidades abertas`)} style={{cursor:'pointer'}}><td><b>{row.owner}</b><span>Clique para ver as abertas</span></td><td>{row.open}</td><td>{row.won}</td><td>{moneyShort(row.value)}</td><td>{moneyShort(row.weighted)}</td></tr>) : <tr><td>Nenhum dado</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
       <Panel title="Pipeline por produto">
         <DashboardTable headers={['Produto','Oportunidades','Valor total','Previsão']}>
-          {productRows.length ? productRows.map(row=><tr key={row.product}><td><b>{row.product}</b></td><td>{row.count}</td><td>{moneyShort(row.value)}</td><td>{moneyShort(row.weighted)}</td></tr>) : <tr><td>Nenhum dado</td><td>-</td><td>-</td><td>-</td></tr>}
+          {productRows.length ? productRows.map(row=><tr key={row.product} onClick={()=>openBreakdown('product',row.product,`Produto · ${row.product}`)} style={{cursor:'pointer'}}><td><b>{row.product}</b><span>Clique para ver oportunidades</span></td><td>{row.count}</td><td>{moneyShort(row.value)}</td><td>{moneyShort(row.weighted)}</td></tr>) : <tr><td>Nenhum dado</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
     </section>
     <section className="grid2 compact">
       <Panel title="Pipeline por segmento">
         <DashboardTable headers={['Segmento','Oportunidades','Valor total']}>
-          {segmentRows.length ? segmentRows.map(row=><tr key={row.segment}><td><b>{row.segment}</b></td><td>{row.count}</td><td>{moneyShort(row.value)}</td></tr>) : <tr><td>Nenhum dado</td><td>-</td><td>-</td></tr>}
+          {segmentRows.length ? segmentRows.map(row=><tr key={row.segment} onClick={()=>openBreakdown('segment',row.segment,`Segmento · ${row.segment}`)} style={{cursor:'pointer'}}><td><b>{row.segment}</b><span>Clique para ver oportunidades</span></td><td>{row.count}</td><td>{moneyShort(row.value)}</td></tr>) : <tr><td>Nenhum dado</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
       <Panel title="Motivos de perda">
@@ -2254,6 +2273,12 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
         </DashboardTable>
       </Panel>
     </section>
+    {selectedBreakdown && <Panel title={`Detalhe do insight: ${selectedBreakdown.label}`}><div id="insightBreakdown" style={{scrollMarginTop:'24px'}}>
+      <p className="muted" style={{margin:'0 0 12px'}}>{breakdownDeals.length} oportunidade(s) encontrada(s) dentro dos filtros atuais.</p>
+      <DashboardTable headers={['Oportunidade','Empresa','Etapa','Responsável','Valor total','Ações']}>
+        {breakdownDeals.length ? breakdownDeals.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title || 'Sem título'}</b><span>{deal.nextStep || '-'}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td><span className="pill">{deal.stage || '-'}</span></td><td>{deal.owner || '-'}</td><td>{moneyShort(dealTcv(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade encontrada</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+      </DashboardTable>
+    </div></Panel>}
     <section className="grid2 compact">
       <Panel title="Oportunidades que exigem atenção">
         <DashboardTable headers={['Oportunidade','Empresa','Status','Valor','Ações']}>
