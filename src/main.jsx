@@ -1729,7 +1729,7 @@ function App(){
   const canWrite = ['CEO','Comercial'].includes(currentUser?.role);
   const allMenu = [
     ['dashboard','Dashboard',LayoutDashboard], ['insights','Insights Daleth',Sparkles], ['funnel','Funil Comercial',TrendingUp], ['pending','Pendências',BellRing], ['quality','Qualidade do CRM',AlertTriangle], ['pipeline','Pipeline',KanbanSquare], ['deals','Oportunidades',BriefcaseBusiness],
-    ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['documents','Documentos',FolderOpen], ['companies','Empresas',Building2], ['contacts','Contatos',UserRound], ['products','Produtos',Package], ['imports','Importação',Filter], ['profiles','Perfis',Lock], ['matrix','Matriz Daleth',Sparkles]
+    ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['documents','Documentos',FolderOpen], ['registrations','Cadastros',Package], ['imports','Importação',Filter], ['profiles','Perfis',Lock]
   ];
   const menu = allMenu.filter(([id]) => {
     if(id === 'dashboard') return canViewDashboard;
@@ -1778,7 +1778,7 @@ function App(){
     <main className="main">
       <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresas, contatos e oportunidades..."/></div><button className="notification" style={{cursor:'pointer',textAlign:'left'}} onClick={()=>navigate('pending')} title="Abrir painel de pendências"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></button><div className="notification" style={{minWidth:'150px'}}><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><button className="mini" onClick={logout}><X size={15}/>Sair</button></div></header>
       {selectedDeal ? <DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/> : (query.trim() ? <GlobalSearch {...context}/> : <>
-        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='insights' && <InsightsDaleth {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <CrmQuality {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='companies' && <Companies {...context}/>} {activePage==='contacts' && <Contacts {...context}/>} {activePage==='products' && <Products {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>} {activePage==='matrix' && <Matrix {...context}/>}
+        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='insights' && <InsightsDaleth {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <CrmQuality {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='registrations' && <Registrations {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>}
       </>)}
     </main>
     {selectedCompany && <CompanyModal company={selectedCompany} companies={companies} setCompanies={setCompanies} contacts={contacts} companySegments={companySegments} setCompanySegments={setCompanySegments} setSelectedContactId={setSelectedContactId} canWrite={canWrite} onClose={()=>setSelectedCompanyId(null)}/>}
@@ -2266,6 +2266,7 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
         {overdueActivities.length ? overdueActivities.slice(0,12).map(activity=>{const deal=byId(deals,activity.dealId);return <tr key={activity.id} onClick={()=>setSelectedActivityId?.(activity.id)} style={{cursor:'pointer'}}><td><b>{activity.title}</b><span>{activity.type}</span></td><td>{deal?.title || '-'}</td><td><b style={{color:'#dc2626'}}>{formatActivityDateTime(activity)}</b></td><td>{activity.owner || '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedActivityId?.(activity.id)}}><Edit3 size={15}/>Abrir</button></td></tr>}) : <tr><td>Nenhuma atividade vencida no filtro</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
       </DashboardTable>
     </Panel>
+    <Matrix deals={filteredDeals} companies={companies} contacts={contacts}/>
   </>;
 }
 
@@ -3407,6 +3408,26 @@ function SegmentField({label='Segmento',field='segment',form,setForm,segments,se
       <option value="__new__">Adicionar novo segmento...</option>
     </select>
   </label>;
+}
+
+function Registrations(props){
+  const [tab,setTab] = useState('companies');
+  const tabs = [
+    ['companies','Empresas',Building2],
+    ['contacts','Contatos',UserRound],
+    ['products','Produtos',Package],
+  ];
+  return <>
+    <Panel title="Cadastros">
+      <p className="muted" style={{margin:'0 0 14px'}}>Central para manter as bases do CRM organizadas: empresas, contatos e produtos.</p>
+      <div className="tabs" style={{marginBottom:0,overflowX:'auto'}}>
+        {tabs.map(([id,label,Icon])=><button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}><Icon size={16}/>{label}</button>)}
+      </div>
+    </Panel>
+    {tab==='companies' && <Companies {...props}/>}
+    {tab==='contacts' && <Contacts {...props}/>}
+    {tab==='products' && <Products {...props}/>}
+  </>;
 }
 
 function Companies({companies,setCompanies,query,setSelectedCompanyId,canWrite,companySegments,setCompanySegments}){
