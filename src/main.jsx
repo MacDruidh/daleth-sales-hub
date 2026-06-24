@@ -1783,7 +1783,7 @@ function App(){
     <main className="main">
       <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresas, contatos e oportunidades..."/></div><button className="notification" style={{cursor:'pointer',textAlign:'left'}} onClick={()=>navigate('pending')} title="Abrir painel de pendências"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></button><div className="notification" style={{minWidth:'150px'}}><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><button className="mini" onClick={logout}><X size={15}/>Sair</button></div></header>
       {selectedDealAsPage ? <DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/> : (query.trim() ? <GlobalSearch {...context}/> : <>
-        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='insights' && <InsightsDaleth {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <><CrmQuality {...context}/>{selectedDealInQuality && <DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)} closeAfterSave/>}</>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='registrations' && <Registrations {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>}
+        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='insights' && <InsightsDaleth {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <CrmQuality {...context} selectedDeal={selectedDealInQuality ? selectedDeal : null}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='registrations' && <Registrations {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>}
       </>)}
     </main>
     {selectedCompany && <CompanyModal company={selectedCompany} companies={companies} setCompanies={setCompanies} contacts={contacts} companySegments={companySegments} setCompanySegments={setCompanySegments} setSelectedContactId={setSelectedContactId} canWrite={canWrite} onClose={()=>setSelectedCompanyId(null)}/>}
@@ -2407,7 +2407,7 @@ function PendingPanel({companies=[],contacts=[],deals=[],activities=[],contracts
   </>;
 }
 
-function CrmQuality({companies=[],contacts=[],deals=[],setSelectedDealId,setSelectedCompanyId,setSelectedContactId}){
+function CrmQuality({companies=[],contacts=[],deals=[],selectedDeal,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,...dealDetailContext}){
   const opportunityIssues = safeArray(deals).map(deal=>{
     const company = companyForDeal(deal,companies,contacts);
     const issues = [];
@@ -2433,6 +2433,12 @@ function CrmQuality({companies=[],contacts=[],deals=[],setSelectedDealId,setSele
     }
   }
   const totalIssues = opportunityIssues.length + companiesWithoutSegment.length + contactsWithoutCompany.length + duplicatePairs.length;
+  useEffect(()=>{
+    if(!selectedDeal) return;
+    setTimeout(()=>{
+      document.getElementById('qualityDealEditor')?.scrollIntoView({behavior:'smooth',block:'start'});
+    }, 0);
+  }, [selectedDeal?.id]);
   return <>
     <Panel title="Qualidade do CRM">
       <p className="muted" style={{margin:'0 0 8px'}}>Revise cadastros incompletos e possíveis duplicidades. Nenhum dado é alterado automaticamente.</p>
@@ -2449,6 +2455,12 @@ function CrmQuality({companies=[],contacts=[],deals=[],setSelectedDealId,setSele
         {opportunityIssues.length ? opportunityIssues.map(({deal,company,issues})=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title || 'Sem título'}</b><span>{deal.stage || '-'}</span></td><td>{company?.name || '-'}</td><td>{issues.map(issue=><span className="pill" key={issue} style={{margin:'2px 4px 2px 0'}}>{issue}</span>)}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Corrigir</button></td></tr>) : <tr><td>Nenhuma oportunidade incompleta</td><td>-</td><td>-</td><td>-</td></tr>}
       </DashboardTable>
     </Panel>
+    {selectedDeal && <section id="qualityDealEditor" style={{scrollMarginTop:'24px'}}>
+      <Panel title="Corrigir oportunidade selecionada">
+        <p className="muted" style={{margin:'0 0 12px'}}>Edite a pendência abaixo. Ao salvar, você volta automaticamente para a lista de qualidade.</p>
+      </Panel>
+      <DealDetailPage deal={selectedDeal} companies={companies} contacts={contacts} deals={deals} setSelectedCompanyId={setSelectedCompanyId} setSelectedContactId={setSelectedContactId} {...dealDetailContext} onBack={()=>setSelectedDealId?.(null)} closeAfterSave/>
+    </section>}
     <section className="grid2 compact">
       <Panel title={`Empresas sem segmento (${companiesWithoutSegment.length})`}>
         <DashboardTable headers={['Empresa','Status','Ações']}>
