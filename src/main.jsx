@@ -1728,8 +1728,8 @@ function App(){
   const isCEO = currentUser?.role === 'CEO';
   const canWrite = ['CEO','Comercial'].includes(currentUser?.role);
   const allMenu = [
-    ['dashboard','Dashboard',LayoutDashboard], ['insights','Insights Daleth',Sparkles], ['funnel','Funil Comercial',TrendingUp], ['pending','Pendências',BellRing], ['quality','Qualidade do CRM',AlertTriangle], ['pipeline','Pipeline',KanbanSquare], ['deals','Oportunidades',BriefcaseBusiness],
-    ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['documents','Documentos',FolderOpen], ['registrations','Cadastros',Package], ['imports','Importação',Filter], ['profiles','Perfis',Lock]
+    ['dashboard','Dashboard',LayoutDashboard], ['insights','Insights Daleth',Sparkles], ['funnel','Funil Comercial',TrendingUp], ['pending','Pendências',BellRing], ['quality','Qualidade do CRM',AlertTriangle], ['pipeline','Pipeline',KanbanSquare], ['registrations','Cadastros',Package], ['deals','Oportunidades',BriefcaseBusiness],
+    ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['documents','Documentos',FolderOpen], ['imports','Importação',Filter], ['profiles','Perfis',Lock]
   ];
   const menu = allMenu.filter(([id]) => {
     if(id === 'dashboard') return canViewDashboard;
