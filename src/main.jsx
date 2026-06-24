@@ -1025,6 +1025,9 @@ function latestRelationshipTouchForDeal(deal, interactions=[], activities=[]){
     .filter(touch=>touch.date)
     .sort((a,b)=>String(b.date || '').localeCompare(String(a.date || '')))[0] || null;
 }
+function relationshipSortDateForDeal(deal, interactions=[], activities=[]){
+  return latestRelationshipTouchForDeal(deal, interactions, activities)?.date || '';
+}
 function interactionAgeText(days){
   if(days === 0) return 'hoje';
   if(days === 1) return 'há 1 dia';
@@ -2675,7 +2678,12 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
     const matchesOwner = !filters.owner || d.owner === filters.owner;
     const matchesCloseBefore = !filters.closeBeforeMonth || (d.closeDate && d.closeDate < `${filters.closeBeforeMonth}-01`);
     return matchesQuery && matchesCompany && matchesProduct && matchesStage && matchesOwner && matchesCloseBefore;
-  }).sort((a,b)=>String(a.title || '').localeCompare(String(b.title || ''),'pt-BR',{sensitivity:'base'}));
+  }).sort((a,b)=>{
+    const dateA = relationshipSortDateForDeal(a, interactions, activities);
+    const dateB = relationshipSortDateForDeal(b, interactions, activities);
+    if(dateA || dateB) return String(dateB || '').localeCompare(String(dateA || ''));
+    return String(a.title || '').localeCompare(String(b.title || ''),'pt-BR',{sensitivity:'base'});
+  });
   const selectedDeals = deals.filter(deal => selectedDealIds.some(id => sameId(id, deal.id)));
   const visibleSelectedCount = list.filter(deal => selectedDealIds.some(id => sameId(id, deal.id))).length;
   const allVisibleSelected = list.length > 0 && visibleSelectedCount === list.length;
