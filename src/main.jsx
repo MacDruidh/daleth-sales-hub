@@ -1740,6 +1740,8 @@ function App(){
     return true;
   });
   const activePage = (!canViewDashboard && page === 'dashboard') ? 'deals' : page;
+  const selectedDealAsModal = selectedDeal && activePage === 'quality';
+  const selectedDealAsPage = selectedDeal && !selectedDealAsModal;
   const pendingActivities = activities.filter(a => a.status !== 'Concluída');
   const overdueCount = pendingActivities.filter(a => a.dueDate && a.dueDate < today()).length;
   const meetingsTodayCount = pendingActivities.filter(a => a.dueDate === today() && String(a.type || '').toLowerCase().includes('reuni')).length;
@@ -1780,10 +1782,11 @@ function App(){
     </aside>
     <main className="main">
       <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresas, contatos e oportunidades..."/></div><button className="notification" style={{cursor:'pointer',textAlign:'left'}} onClick={()=>navigate('pending')} title="Abrir painel de pendências"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></button><div className="notification" style={{minWidth:'150px'}}><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><button className="mini" onClick={logout}><X size={15}/>Sair</button></div></header>
-      {selectedDeal ? <DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/> : (query.trim() ? <GlobalSearch {...context}/> : <>
+      {selectedDealAsPage ? <DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/> : (query.trim() ? <GlobalSearch {...context}/> : <>
         {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='insights' && <InsightsDaleth {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <CrmQuality {...context}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='registrations' && <Registrations {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>}
       </>)}
     </main>
+    {selectedDealAsModal && <div className="modalBackdrop"><div className="modal"><DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/></div></div>}
     {selectedCompany && <CompanyModal company={selectedCompany} companies={companies} setCompanies={setCompanies} contacts={contacts} companySegments={companySegments} setCompanySegments={setCompanySegments} setSelectedContactId={setSelectedContactId} canWrite={canWrite} onClose={()=>setSelectedCompanyId(null)}/>}
     {selectedContact && <ContactModal contact={selectedContact} contacts={contacts} setContacts={setContacts} companies={companies} setSelectedCompanyId={setSelectedCompanyId} canWrite={canWrite} onClose={()=>setSelectedContactId(null)}/>}
     {selectedContract && <ContractModal contract={selectedContract} contracts={contracts} setContracts={setContracts} companies={companies} deals={deals} products={products} setSelectedCompanyId={setSelectedCompanyId} setSelectedDealId={setSelectedDealId} setSelectedProductName={setSelectedProductName} canWrite={canWrite} onClose={()=>setSelectedContractId(null)}/>}
