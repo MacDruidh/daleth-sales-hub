@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { LayoutDashboard, KanbanSquare, Building2, Users, BriefcaseBusiness, CalendarDays, Plus, Search, Edit3, Trash2, MessageSquare, CheckCircle2, Clock3, CircleDollarSign, X, Save, Sparkles, Phone, Mail, UserRound, Filter, BellRing, TrendingUp, AlertTriangle, Lock, Package, GripVertical, ChevronLeft, ChevronRight, List, ExternalLink, Link2, FileText, FolderOpen, Brain } from 'lucide-react';
+import { LayoutDashboard, KanbanSquare, Building2, Users, BriefcaseBusiness, CalendarDays, Plus, Search, Edit3, Trash2, MessageSquare, CheckCircle2, Clock3, CircleDollarSign, X, Save, Sparkles, Phone, Mail, UserRound, Filter, BellRing, TrendingUp, AlertTriangle, Lock, Package, GripVertical, ChevronLeft, ChevronRight, List, ExternalLink, Link2, FileText, FolderOpen } from 'lucide-react';
 import './style.css';
 import './calendar.css';
 import { supabase } from './lib/supabase';
@@ -1566,16 +1566,6 @@ function UXStyle(){
     .relationshipPill.warn{background:#fff5dc!important;color:#956000!important;}
     .relationshipPill.danger{background:#fdecec!important;color:#a72f2f!important;}
     .relationshipPill.none{background:#f1f5f9!important;color:#475569!important;}
-    .aiHero{display:grid!important;grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr)!important;gap:18px!important;align-items:stretch!important;}
-    .aiHero h2{font-size:clamp(24px,3vw,40px)!important;line-height:1.05!important;letter-spacing:-.05em!important;margin:0 0 10px!important;color:var(--ux-text)!important;}
-    .aiAskBox{display:grid!important;gap:10px!important;padding:16px!important;border:1px solid var(--ux-border)!important;border-radius:18px!important;background:#f8fbff!important;align-content:center!important;}
-    .aiQuestionGrid{display:flex!important;gap:10px!important;flex-wrap:wrap!important;margin-top:16px!important;}
-    .aiQuestionGrid button{border:1px solid #c9eef8!important;background:#fff!important;color:var(--ux-blue)!important;border-radius:999px!important;padding:10px 13px!important;font-weight:900!important;cursor:pointer!important;}
-    .aiQuestionGrid button.active{background:var(--ux-blue)!important;color:#fff!important;box-shadow:0 10px 22px rgba(0,160,209,.2)!important;}
-    .aiRecommendation{display:flex!important;gap:12px!important;align-items:flex-start!important;background:linear-gradient(135deg,#e6f8fd 0%,#ffffff 100%)!important;border:1px solid #c9eef8!important;border-radius:18px!important;padding:16px!important;margin-bottom:14px!important;}
-    .aiRecommendation svg{color:var(--ux-blue)!important;flex:0 0 auto!important;}
-    .aiRecommendation b{display:block!important;color:var(--ux-text)!important;margin-bottom:5px!important;}
-    .aiRecommendation p{margin:0!important;color:var(--ux-muted)!important;font-weight:650!important;line-height:1.45!important;}
     .timelineItem{position:relative!important;}
     .timelineNote:hover::after{content:attr(data-full-note);position:absolute;left:18px;top:calc(100% + 8px);width:min(520px,72vw);max-height:260px;overflow:auto;white-space:pre-wrap;background:#0f172a;color:#fff;border-radius:14px;padding:14px 16px;font-size:13px;line-height:1.5;font-weight:500;box-shadow:0 18px 44px rgba(15,23,42,.28);z-index:80;}
     .dealCard{padding:10px!important;margin-bottom:10px!important;border-radius:14px!important;}
@@ -1637,11 +1627,6 @@ function UXStyle(){
       .dashboardHeroMetrics{grid-template-columns:1fr!important;gap:8px!important;}
       .dashboardHeroMetrics>div{padding:13px!important;}
       .dashboardSummaryGrid{grid-template-columns:1fr!important;}
-      .aiHero{grid-template-columns:1fr!important;gap:12px!important;}
-      .aiAskBox{padding:12px!important;}
-      .aiQuestionGrid{gap:8px!important;overflow-x:auto!important;flex-wrap:nowrap!important;padding-bottom:4px!important;scrollbar-width:none!important;}
-      .aiQuestionGrid::-webkit-scrollbar{display:none!important;}
-      .aiQuestionGrid button{flex:0 0 auto!important;padding:10px 12px!important;}
       .wide{grid-column:auto!important;}
       .toolbar{flex-wrap:wrap!important;align-items:stretch!important;}
       .toolbar input{width:100%!important;min-width:0!important;}
@@ -1759,7 +1744,7 @@ function App(){
   const isCEO = currentUser?.role === 'CEO';
   const canWrite = ['CEO','Comercial'].includes(currentUser?.role);
   const allMenu = [
-    ['dashboard','Dashboard',LayoutDashboard], ['insights','Insights Daleth',Sparkles], ['ai','Daleth IA',Brain], ['funnel','Funil Comercial',TrendingUp], ['pending','Pendências',BellRing], ['quality','Qualidade do CRM',AlertTriangle], ['pipeline','Pipeline',KanbanSquare], ['registrations','Cadastros',Package], ['deals','Oportunidades',BriefcaseBusiness],
+    ['dashboard','Dashboard',LayoutDashboard], ['insights','Insights Daleth',Sparkles], ['funnel','Funil Comercial',TrendingUp], ['pending','Pendências',BellRing], ['quality','Qualidade do CRM',AlertTriangle], ['pipeline','Pipeline',KanbanSquare], ['registrations','Cadastros',Package], ['deals','Oportunidades',BriefcaseBusiness],
     ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['documents','Documentos',FolderOpen], ['imports','Importação',Filter], ['profiles','Perfis',Lock]
   ];
   const menu = allMenu.filter(([id]) => {
@@ -1811,7 +1796,7 @@ function App(){
     <main className="main">
       <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresas, contatos e oportunidades..."/></div><button className="notification" style={{cursor:'pointer',textAlign:'left'}} onClick={()=>navigate('pending')} title="Abrir painel de pendências"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></button><div className="notification topUserCard"><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><a className="mini topUtilityBtn" href="/Manual_do_Usuario_Daleth_Sales_Hub.pdf" target="_blank" rel="noreferrer" style={{textDecoration:'none'}}><FileText size={15}/>Manual</a><button className="mini topUtilityBtn" onClick={logout}><X size={15}/>Sair</button></div></header>
       {selectedDealAsPage ? <DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/> : (query.trim() ? <GlobalSearch {...context}/> : <>
-        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='insights' && <InsightsDaleth {...context}/>} {activePage==='ai' && <DalethAI {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <CrmQuality {...context} selectedDeal={selectedDealInQuality ? selectedDeal : null}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='registrations' && <Registrations {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>}
+        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='insights' && <InsightsDaleth {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <CrmQuality {...context} selectedDeal={selectedDealInQuality ? selectedDeal : null}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='registrations' && <Registrations {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>}
       </>)}
     </main>
     {selectedCompany && <CompanyModal company={selectedCompany} companies={companies} setCompanies={setCompanies} contacts={contacts} companySegments={companySegments} setCompanySegments={setCompanySegments} setSelectedContactId={setSelectedContactId} canWrite={canWrite} onClose={()=>setSelectedCompanyId(null)}/>}
@@ -2325,144 +2310,6 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
       </DashboardTable>
     </Panel>
     <Matrix deals={filteredDeals} companies={companies} contacts={contacts}/>
-  </>;
-}
-
-function DalethAI({currentUser,deals=[],companies=[],contacts=[],activities=[],interactions=[],setSelectedDealId,setSelectedActivityId}){
-  const [mode,setMode] = useState('prioridades');
-  const [question,setQuestion] = useState('');
-  const openDeals = safeArray(deals).filter(deal=>!['Ganho','Perdido'].includes(deal.stage));
-  const pendingActivities = safeArray(activities).filter(activity=>activity.status !== 'Concluída');
-  const todayDate = new Date(`${today()}T00:00:00`);
-  const datePlus = (days) => {
-    const date = new Date(todayDate);
-    date.setDate(date.getDate()+days);
-    return date.toISOString().slice(0,10);
-  };
-  const isBetween = (value,start,end) => {
-    const date = dateOnlyFromCrmValue(value);
-    return date && date >= start && date <= end;
-  };
-  const dealScore = (deal) => {
-    const days = daysUntil(deal.closeDate);
-    const closeness = days === null ? 0 : Math.max(0,30 - Math.max(0,days)) * 120;
-    const stageBoost = ['Contrato','Negociação','Proposta Enviada','Reunião Agendada'].includes(deal.stage) ? 4500 : 0;
-    const relationship = relationshipStatusForDeal(deal,interactions,activities);
-    const relationshipBoost = relationship.tone === 'good' ? 1800 : relationship.tone === 'warn' ? 700 : relationship.tone === 'danger' ? -900 : -1200;
-    return dealWeightedMrr(deal) + closeness + stageBoost + relationshipBoost;
-  };
-  const priorityDeals = [...openDeals].sort((a,b)=>dealScore(b)-dealScore(a)).slice(0,8);
-  const closingSoonDeals = openDeals
-    .filter(deal=>{
-      const days = daysUntil(deal.closeDate);
-      return days !== null && days >= 0 && days <= 21;
-    })
-    .sort((a,b)=>dealScore(b)-dealScore(a));
-  const futureFollowup = (deal) => pendingActivities.some(activity=>sameId(activity.dealId,deal.id) && activity.dueDate && activity.dueDate >= today());
-  const followupDeals = openDeals
-    .map(deal=>({...deal,relationship:relationshipStatusForDeal(deal,interactions,activities)}))
-    .filter(deal=>!futureFollowup(deal) || ['warn','danger','none'].includes(deal.relationship.tone))
-    .sort((a,b)=>dealMrr(b)-dealMrr(a));
-  const riskDeals = openDeals
-    .map(deal=>({...deal,relationship:relationshipStatusForDeal(deal,interactions,activities),daysToClose:daysUntil(deal.closeDate)}))
-    .filter(deal=>deal.daysToClose < 0 || ['danger','none'].includes(deal.relationship.tone) || !String(deal.nextStep || '').trim())
-    .sort((a,b)=>dealMrr(b)-dealMrr(a));
-  const meetingsNext2 = pendingActivities
-    .filter(activity=>String(activity.type || '').toLowerCase().includes('reuni') && isBetween(activity.dueDate,today(),datePlus(2)))
-    .sort((a,b)=>String(a.dueDate || '').localeCompare(String(b.dueDate || '')) || String(a.dueTime || '').localeCompare(String(b.dueTime || '')));
-  const bestDeal = priorityDeals[0];
-  const questionOptions = [
-    ['prioridades','O que priorizar hoje?'],
-    ['fechamento','Quais oportunidades têm mais chance de fechar?'],
-    ['abordagem','Qual abordagem comercial usar?'],
-    ['reunioes','Quais reuniões tenho nos próximos 2 dias?'],
-    ['followup','Quais propostas precisam de follow-up?'],
-    ['risco','Quais oportunidades estão em risco?'],
-  ];
-  const classifyQuestion = (text) => {
-    const normalized = normalizedLookup(text);
-    if(!normalized) return mode;
-    if(normalized.includes('reuniao') || normalized.includes('agenda') || normalized.includes('proximos2')) return 'reunioes';
-    if(normalized.includes('follow') || normalized.includes('contato') || normalized.includes('interacao')) return 'followup';
-    if(normalized.includes('risco') || normalized.includes('atras') || normalized.includes('vencid')) return 'risco';
-    if(normalized.includes('approach') || normalized.includes('abordagem') || normalized.includes('como fechar') || normalized.includes('estrategia')) return 'abordagem';
-    if(normalized.includes('fech') || normalized.includes('proposta') || normalized.includes('chance')) return 'fechamento';
-    return 'prioridades';
-  };
-  const ask = () => setMode(classifyQuestion(question));
-  const approachFor = (deal) => {
-    if(!deal) return 'Ainda não há oportunidade aberta suficiente para sugerir abordagem.';
-    const company = companyForDeal(deal,companies,contacts);
-    const relationship = relationshipStatusForDeal(deal,interactions,activities);
-    if(deal.stage === 'Contrato') return `Foco em remover fricção final: confirme responsáveis pela assinatura, prazo desejado de início e qualquer pendência jurídica. Para ${company?.name || deal.title}, a conversa deve ser objetiva e orientada ao cronograma.`;
-    if(deal.stage === 'Negociação') return `Foco em decisão: retome o valor mensal de ${money(dealMrr(deal))}, valide objeções de preço ou escopo e proponha um próximo passo com data fechada. O status de relacionamento é: ${relationship.label}.`;
-    if(deal.stage === 'Proposta Enviada') return `Foco em resposta: pergunte se a proposta atende ao problema principal, confirme o decisor e transforme a próxima conversa em reunião de fechamento. Evite deixar o retorno aberto.`;
-    return `Foco em avanço de etapa: confirme dor, impacto financeiro e urgência. O melhor próximo passo é registrar uma atividade com data e responsável.`;
-  };
-  const renderDealRows = (list,emptyText='Nenhuma oportunidade encontrada') => (
-    <DashboardTable headers={['Oportunidade','Empresa','Etapa','Receita mensal','Previsão','Ações']}>
-      {list.length ? list.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title || 'Sem título'}</b><span>{deal.nextStep || 'Sem próximo passo registrado'}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td><span className="pill">{deal.stage || '-'}</span></td><td>{moneyShort(dealMrr(deal))}</td><td>{deal.closeDate ? formatDate(deal.closeDate) : '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>{emptyText}</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
-    </DashboardTable>
-  );
-  const answerTitle = {
-    prioridades:'Prioridades recomendadas para hoje',
-    fechamento:'Oportunidades com maior chance de fechamento',
-    abordagem:'Abordagem comercial sugerida',
-    reunioes:'Reuniões dos próximos 2 dias',
-    followup:'Follow-ups recomendados',
-    risco:'Oportunidades em risco',
-  }[mode];
-  return <>
-    <Panel title="Daleth IA">
-      <div className="aiHero">
-        <div>
-          <span className="uxEyebrow"><Brain size={14}/>Fase 1 · sem custo</span>
-          <h2>Olá, {currentUser?.name || 'Daleth'}. Eu já consigo ler o CRM e apontar onde sua atenção comercial vale mais hoje.</h2>
-          <p className="muted">Esta versão não usa ChatGPT nem API paga. As respostas são calculadas com oportunidades, atividades, etapas, datas de fechamento e interações registradas no Daleth Sales Hub.</p>
-        </div>
-        <div className="aiAskBox">
-          <label><span>Pergunte para a Daleth IA</span><input value={question} onChange={event=>setQuestion(event.target.value)} onKeyDown={event=>{if(event.key==='Enter') ask();}} placeholder="Ex.: quais propostas estão próximas de fechar?"/></label>
-          <button className="saveBtn" onClick={ask}><MessageSquare size={16}/>Responder</button>
-        </div>
-      </div>
-      <div className="aiQuestionGrid">
-        {questionOptions.map(([id,label])=><button key={id} className={mode===id ? 'active' : ''} onClick={()=>setMode(id)}>{label}</button>)}
-      </div>
-    </Panel>
-    <section className="cards">
-      <Kpi icon={CircleDollarSign} label="Pipeline mensal aberto" value={moneyShort(openDeals.reduce((total,deal)=>total+dealMrr(deal),0))}/>
-      <Kpi icon={TrendingUp} label="Previsão mensal ponderada" value={moneyShort(openDeals.reduce((total,deal)=>total+dealWeightedMrr(deal),0))}/>
-      <Kpi icon={CheckCircle2} label="Fechamento até 21 dias" value={closingSoonDeals.length}/>
-      <Kpi icon={AlertTriangle} label="Atenção comercial" value={riskDeals.length}/>
-    </section>
-    <Panel title={answerTitle}>
-      {mode === 'prioridades' && <>
-        <p className="muted" style={{marginTop:0}}>Minha leitura: comece pelas oportunidades com boa etapa, maior receita mensal, fechamento próximo e relacionamento mais recente.</p>
-        {renderDealRows(priorityDeals)}
-      </>}
-      {mode === 'fechamento' && <>
-        <p className="muted" style={{marginTop:0}}>Estas oportunidades têm data prevista nos próximos 21 dias. A ordem prioriza etapa avançada, probabilidade e receita mensal.</p>
-        {renderDealRows(closingSoonDeals,'Nenhuma oportunidade com fechamento previsto nos próximos 21 dias')}
-      </>}
-      {mode === 'abordagem' && <>
-        <div className="aiRecommendation">
-          <Brain size={22}/>
-          <div><b>{bestDeal ? `${bestDeal.title} · ${companyForDeal(bestDeal,companies,contacts)?.name || 'Sem empresa'}` : 'Sem oportunidade aberta'}</b><p>{approachFor(bestDeal)}</p></div>
-        </div>
-        {renderDealRows(priorityDeals.slice(0,5))}
-      </>}
-      {mode === 'reunioes' && <DashboardTable headers={['Reunião','Oportunidade','Data e hora','Responsável','Link','Ações']}>
-        {meetingsNext2.length ? meetingsNext2.map(activity=>{const deal=byId(deals,activity.dealId);return <tr key={activity.id} onClick={()=>setSelectedActivityId?.(activity.id)} style={{cursor:'pointer'}}><td><b>{activity.title}</b><span>{activity.notes || activity.type}</span></td><td>{deal?.title || '-'}</td><td>{formatActivityDateTime(activity)}</td><td>{activity.owner || '-'}</td><td>{activity.meetingLink ? <a href={activity.meetingLink} target="_blank" rel="noreferrer" onClick={event=>event.stopPropagation()}>Abrir chamada</a> : '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedActivityId?.(activity.id)}}><Edit3 size={15}/>Abrir</button></td></tr>}) : <tr><td>Nenhuma reunião aberta nos próximos 2 dias</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
-      </DashboardTable>}
-      {mode === 'followup' && <>
-        <p className="muted" style={{marginTop:0}}>Aqui entram oportunidades sem atividade futura registrada ou com interação antiga. É a lista para evitar proposta parada.</p>
-        {renderDealRows(followupDeals)}
-      </>}
-      {mode === 'risco' && <>
-        <p className="muted" style={{marginTop:0}}>Risco considera fechamento vencido, ausência de interação/atividade concluída recente e falta de próximo passo.</p>
-        {renderDealRows(riskDeals,'Nenhuma oportunidade crítica encontrada')}
-      </>}
-    </Panel>
   </>;
 }
 
