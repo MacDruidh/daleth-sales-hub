@@ -57,9 +57,34 @@ const initialInteractions = [];
 
 const initialContracts = [];
 
+function isSameSeedCollection(value, seed, field){
+  if(!Array.isArray(value) || value.length !== seed.length || !seed.length) return false;
+  return seed.every(seedItem => value.some(item => sameId(item?.id,seedItem.id) && String(item?.[field] || '') === String(seedItem[field] || '')));
+}
+function isDemoCrmSeed(key, value){
+  if(key === 'dsh-v1-companies') return isSameSeedCollection(value,initialCompanies,'name');
+  if(key === 'dsh-v1-contacts') return isSameSeedCollection(value,initialContacts,'name');
+  if(key === 'dsh-v1-deals') return isSameSeedCollection(value,initialDeals,'title');
+  if(key === 'dsh-v1-activities') return isSameSeedCollection(value,initialActivities,'title');
+  if(key === 'dsh-v1-notes') return isSameSeedCollection(value,initialNotes,'text');
+  return false;
+}
+function readStoredCrmValue(key){
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key));
+    if(isDemoCrmSeed(key, parsed)){
+      localStorage.removeItem(key);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 function useStore(key, initial){
   const [value, setValue] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(key)) ?? initial; } catch { return initial; }
+    return readStoredCrmValue(key) ?? initial;
   });
 
   useEffect(() => {
@@ -75,18 +100,17 @@ function useStore(key, initial){
 
         if(error) throw error;
 
-        const localValue = (() => {
-          try { return JSON.parse(localStorage.getItem(key)); } catch { return null; }
-        })();
+        const remoteValue = isDemoCrmSeed(key, data?.data) ? null : data?.data;
+        const localValue = readStoredCrmValue(key);
 
-        const nextValue = data?.data ?? localValue ?? initial;
+        const nextValue = remoteValue ?? localValue ?? initial;
 
         if(!cancelled){
           setValue(nextValue);
           localStorage.setItem(key, JSON.stringify(nextValue));
         }
 
-        if(!data?.data){
+        if(!remoteValue){
           await supabase.from('crm_state').upsert({
             key,
             data: nextValue,
@@ -242,7 +266,7 @@ async function deleteCompanyFromSupabase(company){
 }
 
 function useCompanies(){
-  const [companies, saveCompaniesToCrmState] = useStore('dsh-v1-companies', initialCompanies);
+  const [companies, saveCompaniesToCrmState] = useStore('dsh-v1-companies', []);
 
   useEffect(() => {
     let cancelled = false;
@@ -354,7 +378,7 @@ async function deleteContactFromSupabase(contact){
 }
 
 function useContacts(){
-  const [contacts, saveContactsToCrmState] = useStore('dsh-v1-contacts', initialContacts);
+  const [contacts, saveContactsToCrmState] = useStore('dsh-v1-contacts', []);
 
   useEffect(() => {
     let cancelled = false;
@@ -501,7 +525,7 @@ async function deleteDealFromSupabase(deal){
 }
 
 function useDeals(){
-  const [deals, saveDealsToCrmState] = useStore('dsh-v1-deals', initialDeals);
+  const [deals, saveDealsToCrmState] = useStore('dsh-v1-deals', []);
 
   useEffect(() => {
     let cancelled = false;
@@ -749,7 +773,7 @@ async function saveNoteToSupabase(note, deals){
 }
 
 function useActivities(){
-  const [activities, saveActivitiesToCrmState] = useStore('dsh-v1-activities', initialActivities);
+  const [activities, saveActivitiesToCrmState] = useStore('dsh-v1-activities', []);
 
   useEffect(() => {
     let cancelled = false;
@@ -792,7 +816,7 @@ function useActivities(){
   return [activities, saveActivitiesToCrmState];
 }
 function useNotes(){
-  const [notes, saveNotesToCrmState] = useStore('dsh-v1-notes', initialNotes);
+  const [notes, saveNotesToCrmState] = useStore('dsh-v1-notes', []);
 
   useEffect(() => {
     let cancelled = false;
