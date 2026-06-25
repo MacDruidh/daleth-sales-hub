@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { LayoutDashboard, KanbanSquare, Building2, Users, BriefcaseBusiness, CalendarDays, Plus, Search, Edit3, Trash2, MessageSquare, CheckCircle2, Clock3, CircleDollarSign, X, Save, Sparkles, Phone, Mail, UserRound, Filter, BellRing, TrendingUp, AlertTriangle, Lock, Package, GripVertical, ChevronLeft, ChevronRight, List, ExternalLink, Link2, FileText, FolderOpen } from 'lucide-react';
 import './style.css';
@@ -1090,6 +1090,81 @@ function relationshipStatusForDeal(deal, interactions=[], activities=[]){
   if(days <= 4) return {tone:'good', label:`${prefix} ${age}`, shortLabel:age, days};
   return {tone:days <= 9 ? 'warn' : 'danger', label:`Sem interação ${age}`, shortLabel:age, days};
 }
+function escapeRegExp(value){ return String(value || '').replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+function textMentionsUser(value,user){
+  const name = String(user || '').trim();
+  if(!name) return false;
+  const pattern = new RegExp(`(^|\\s)@${escapeRegExp(name)}(?=\\s|$|[.,;:!?\\)])`,'i');
+  return pattern.test(String(value || ''));
+}
+function mentionTextPreview(...values){
+  const text = values.map(value=>String(value || '').trim()).find(Boolean) || '-';
+  return text.length > 120 ? `${text.slice(0,117)}...` : text;
+}
+function mentionsForUser({currentUser,deals=[],activities=[],notes=[],interactions=[]}){
+  const user = currentUser?.name;
+  if(!user) return [];
+  const items = [];
+  safeArray(deals).forEach(deal=>{
+    const mentioned = [deal.title,deal.description,deal.nextStep].some(value=>textMentionsUser(value,user));
+    if(mentioned) items.push({
+      id:`deal-${deal.id}`,
+      type:'Oportunidade',
+      title:deal.title || 'Oportunidade',
+      deal,
+      dealId:deal.id,
+      date:deal.updatedAt || deal.createdAt || deal.closeDate || '',
+      text:mentionTextPreview(deal.description,deal.nextStep,deal.title)
+    });
+  });
+  safeArray(activities).forEach(activity=>{
+    const mentioned = [activity.title,activity.notes].some(value=>textMentionsUser(value,user));
+    if(mentioned) {
+      const deal = byId(deals,activity.dealId);
+      items.push({
+        id:`activity-${activity.id}`,
+        type:isMeetingActivity(activity) ? 'Reunião' : 'Atividade',
+        title:activity.title || 'Atividade',
+        deal,
+        dealId:activity.dealId,
+        activityId:activity.id,
+        date:activity.dueDate || activity.createdAt || '',
+        text:mentionTextPreview(activity.notes,activity.title)
+      });
+    }
+  });
+  safeArray(interactions).forEach(interaction=>{
+    const mentioned = [interaction.description,interaction.nextAction].some(value=>textMentionsUser(value,user));
+    if(mentioned) {
+      const deal = byId(deals,interaction.dealId);
+      items.push({
+        id:`interaction-${interaction.id}`,
+        type:'Interação',
+        title:interaction.type || 'Interação',
+        deal,
+        dealId:interaction.dealId,
+        date:interaction.dateTime || interaction.createdAt || interaction.date || '',
+        text:mentionTextPreview(interaction.description,interaction.nextAction)
+      });
+    }
+  });
+  safeArray(notes).forEach(note=>{
+    const text = note.text || note.note || note.content || '';
+    if(textMentionsUser(text,user)) {
+      const deal = byId(deals,note.dealId);
+      items.push({
+        id:`note-${note.id}`,
+        type:'Histórico',
+        title:'Histórico',
+        deal,
+        dealId:note.dealId,
+        date:note.date || note.createdAt || note.created_at || '',
+        text:mentionTextPreview(text)
+      });
+    }
+  });
+  return items.sort((a,b)=>String(b.date || '').localeCompare(String(a.date || '')));
+}
 function openLinkedEntity(setter, id){ if(setter && id) setter(id); }
 function sameId(a,b){ return String(a ?? '') === String(b ?? ''); }
 function byId(list,id){
@@ -1851,8 +1926,9 @@ function App(){
     d.stage === 'Proposta Enviada' &&
     !pendingActivities.some(a => sameId(a.dealId, d.id) && a.dueDate && a.dueDate >= today())
   ).length;
-  const alertTotal = overdueCount + meetingsTodayCount + proposalsWithoutFollowup;
-  const alertText = `${overdueCount} atividades vencidas · ${proposalsWithoutFollowup} propostas sem follow-up · ${meetingsTodayCount} reuniões hoje`;
+  const mentionCount = mentionsForUser({currentUser,deals,activities,notes,interactions}).length;
+  const alertTotal = overdueCount + meetingsTodayCount + proposalsWithoutFollowup + mentionCount;
+  const alertText = `${overdueCount} atividades vencidas · ${proposalsWithoutFollowup} propostas sem follow-up · ${meetingsTodayCount} reuniões hoje · ${mentionCount} menções`;
   const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,contracts,setContracts,products,setProducts,companySegments,setCompanySegments,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,stageHistory,setStageHistory,lossReasons,setLossReasons,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
   const logout = async () => {
     setQuery('');
@@ -2496,7 +2572,7 @@ function FunnelAnalytics({stages=STAGES,deals=[],companies=[],contacts=[],stageH
   </>;
 }
 
-function PendingPanel({companies=[],contacts=[],deals=[],activities=[],contracts=[],setSelectedDealId,setSelectedActivityId,setSelectedContractId}){
+function PendingPanel({currentUser,companies=[],contacts=[],deals=[],activities=[],notes=[],interactions=[],contracts=[],setSelectedDealId,setSelectedActivityId,setSelectedContractId}){
   const currentDate = today();
   const pendingActivities = safeArray(activities).filter(activity=>activity.status !== 'Concluída');
   const overdueActivities = pendingActivities.filter(activity=>activity.dueDate && activity.dueDate < currentDate).sort((a,b)=>(String(a.dueDate || '') + String(a.dueTime || '')).localeCompare(String(b.dueDate || '') + String(b.dueTime || '')));
@@ -2504,7 +2580,8 @@ function PendingPanel({companies=[],contacts=[],deals=[],activities=[],contracts
   const proposalsWithoutFollowup = safeArray(deals).filter(deal=>deal.stage === 'Proposta Enviada' && !pendingActivities.some(activity=>sameId(activity.dealId,deal.id) && activity.dueDate && activity.dueDate >= currentDate));
   const dealsWithoutNextStep = safeArray(deals).filter(deal=>!['Ganho','Perdido'].includes(deal.stage) && !String(deal.nextStep || '').trim());
   const expiringContracts = safeArray(contracts).map(contract=>({contract,days:daysUntil(contract.endDate)})).filter(({contract,days})=>contractStatus(contract) === 'Ativo' && days !== null && days >= 0 && days <= 90).sort((a,b)=>a.days-b.days);
-  const totalPendingItems = overdueActivities.length + meetingsToday.length + proposalsWithoutFollowup.length + dealsWithoutNextStep.length + expiringContracts.length;
+  const userMentions = mentionsForUser({currentUser,deals,activities,notes,interactions});
+  const totalPendingItems = overdueActivities.length + meetingsToday.length + proposalsWithoutFollowup.length + dealsWithoutNextStep.length + expiringContracts.length + userMentions.length;
   const dealForActivity = activity => byId(deals,activity.dealId);
   return <>
     <Panel title="Painel de Pendências">
@@ -2516,7 +2593,13 @@ function PendingPanel({companies=[],contacts=[],deals=[],activities=[],contracts
       <Kpi icon={BriefcaseBusiness} label="Propostas sem follow-up" value={proposalsWithoutFollowup.length}/>
       <Kpi icon={CalendarDays} label="Reuniões hoje" value={meetingsToday.length}/>
       <Kpi icon={Clock3} label="Contratos vencendo em 90 dias" value={expiringContracts.length}/>
+      <Kpi icon={MessageSquare} label="Menções para mim" value={userMentions.length}/>
     </section>
+    <Panel title={`Menções para mim (${userMentions.length})`}>
+      <DashboardTable headers={['Origem','Oportunidade','Trecho','Data','Ações']}>
+        {userMentions.length ? userMentions.map(item=><tr key={item.id} onClick={()=>item.activityId ? setSelectedActivityId?.(item.activityId) : setSelectedDealId?.(item.dealId)} style={{cursor:'pointer'}}><td><b>{item.title}</b><span>{item.type}</span></td><td>{item.deal?.title || '-'}</td><td>{item.text}</td><td>{item.date ? formatDateTime(item.date) : '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation(); item.activityId ? setSelectedActivityId?.(item.activityId) : setSelectedDealId?.(item.dealId)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma menção encontrada</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+      </DashboardTable>
+    </Panel>
     <section className="grid2 compact">
       <Panel title={`Atividades vencidas (${overdueActivities.length})`}>
         <DashboardTable headers={['Atividade','Oportunidade','Vencimento','Responsável','Ações']}>
@@ -3258,7 +3341,7 @@ function DealModal({deal,onClose,companies=[],contacts=[],deals=[],setDeals,acti
   const dealActivities = activities.filter(a=>String(a.dealId)===String(deal.id));
   return <div className="modalBackdrop"><div className="modal"><div className="modalHead"><div><h2>{deal.title}</h2><span>{companyForDeal(deal,companies,contacts)?.name || 'Sem empresa'} · Receita mensal {money(dealMrr(deal))} · Valor total {money(dealTcv(deal))}</span></div><button className="iconBtn" onClick={onClose}><X/></button></div><div className="tabs">{['geral','timeline','atividades','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t}</button>)}</div>
     {tab==='geral' && <div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={optionsIncludingCurrent(products,draft.product).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(draft.stage,draft.probability)} readOnly/></label><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/><button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button></div>}
-    {tab==='timeline' && <div><div className="noteBox"><textarea placeholder="Adicionar comentário, registro de reunião, ligação, WhatsApp..." value={note} onChange={e=>setNote(e.target.value)}></textarea><button onClick={addNote}><MessageSquare size={16}/>Adicionar comentário</button></div><div className="timeline">{dealNotes.map(n=><div className="timelineItem" key={n.id}><b>{n.user || n.userName || n.user_name || 'Daleth'}</b><span>{formatDate(n.date || n.noteDate || n.note_date)}</span><p>{n.text || n.note || ''}</p></div>)}</div></div>}
+    {tab==='timeline' && <div><div className="noteBox"><MentionTextInput value={note} onChange={setNote} multiline bare placeholder="Adicionar comentário, registro de reunião, ligação, WhatsApp..."/><button onClick={addNote}><MessageSquare size={16}/>Adicionar comentário</button></div><div className="timeline">{dealNotes.map(n=><div className="timelineItem" key={n.id}><b>{n.user || n.userName || n.user_name || 'Daleth'}</b><span>{formatDate(n.date || n.noteDate || n.note_date)}</span><p>{n.text || n.note || ''}</p></div>)}</div></div>}
     {tab==='atividades' && <div><div className="formGrid"><Select label="Tipo" field="type" form={activity} setForm={setActivity} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={activity} setForm={setActivity}/><Input label="Data" field="dueDate" form={activity} setForm={setActivity} type="date"/><Input label="Hora" field="dueTime" form={activity} setForm={setActivity} type="time"/><Input label="Link chamada" field="meetingLink" form={activity} setForm={setActivity} type="url"/><Select label="Responsável" field="owner" form={activity} setForm={setActivity} options={USERS.map(u=>[u,u])}/><button className="saveBtn" onClick={addActivity}><Plus size={16}/>Criar atividade</button></div><div className="timeline">{dealActivities.map(a=><div className="timelineItem" key={a.id}><b>{a.type}: {a.title}</b><span>{formatActivityDateTime(a)} · {a.owner} · {a.status}</span>{a.meetingLink && <p><a href={a.meetingLink} target="_blank" rel="noreferrer">Abrir chamada</a></p>}<p>{a.notes}</p></div>)}</div></div>}
     {tab==='contrato' && <Panel title="Resumo Comercial"><div className="formGrid modalGrid">
 <label><span>Empresa</span><input value={company?.name || ''} readOnly/></label>
@@ -4481,8 +4564,67 @@ function SolutionSuggestions({deal,companies,contacts=[]}){
   return <div className="solutions">{items.map(i=><span key={i}><Sparkles size={14}/>{i}</span>)}</div>;
 }
 
-function Input({label,field,form,setForm,type='text'}){ return <label><span>{label}</span><input type={type} value={form[field] ?? ''} onChange={e=>setForm({...form,[field]:e.target.value})}/></label>; }
-function Textarea({label,field,form,setForm}){ return <label className="wide"><span>{label}</span><textarea value={form[field] ?? ''} onChange={e=>setForm({...form,[field]:e.target.value})}></textarea></label>; }
+function shouldEnableMentions(label,field,type){
+  if(type !== 'text') return false;
+  const blocked = normalizedLookup(`${label} ${field}`);
+  return !['email','mail','site','url','link','telefone','phone','whatsapp','cnpj','linkedin'].some(term=>blocked.includes(term));
+}
+function activeMentionQuery(value, caret){
+  const beforeCaret = String(value || '').slice(0,caret);
+  const atIndex = beforeCaret.lastIndexOf('@');
+  if(atIndex < 0) return null;
+  const between = beforeCaret.slice(atIndex + 1);
+  if(/\s/.test(between) && !USERS.some(user=>user.toLowerCase().startsWith(between.toLowerCase()))) return null;
+  if(/[^\p{L}\p{N}\s._-]/u.test(between)) return null;
+  return {start:atIndex,query:between};
+}
+function MentionTextInput({label='',value,onChange,type='text',multiline=false,wide=false,placeholder='',enableMentions=true,bare=false}){
+  const ref = useRef(null);
+  const [mention,setMention] = useState(null);
+  const updateMention = (nextValue, caret) => {
+    if(!enableMentions) {
+      setMention(null);
+      return;
+    }
+    setMention(activeMentionQuery(nextValue,caret));
+  };
+  const handleChange = event => {
+    const nextValue = event.target.value;
+    onChange(nextValue);
+    updateMention(nextValue,event.target.selectionStart ?? nextValue.length);
+  };
+  const handleKeyUp = event => updateMention(event.currentTarget.value,event.currentTarget.selectionStart ?? event.currentTarget.value.length);
+  const chooseUser = user => {
+    const current = String(value || '');
+    const caret = ref.current?.selectionStart ?? current.length;
+    const currentMention = mention || activeMentionQuery(current,caret);
+    if(!currentMention) return;
+    const next = `${current.slice(0,currentMention.start)}@${user} ${current.slice(caret)}`;
+    onChange(next);
+    setMention(null);
+    window.setTimeout(()=>{
+      const pos = currentMention.start + user.length + 2;
+      ref.current?.focus();
+      ref.current?.setSelectionRange?.(pos,pos);
+    },0);
+  };
+  const matches = mention ? USERS.filter(user=>user.toLowerCase().includes(mention.query.toLowerCase())).slice(0,5) : [];
+  const field = multiline
+    ? <textarea ref={ref} placeholder={placeholder} value={value ?? ''} onChange={handleChange} onKeyUp={handleKeyUp} onClick={handleKeyUp}></textarea>
+    : <input ref={ref} type={type} placeholder={placeholder} value={value ?? ''} onChange={handleChange} onKeyUp={handleKeyUp} onClick={handleKeyUp}/>;
+  const picker = Boolean(matches.length) && <div style={{position:'absolute',zIndex:40,left:0,right:'auto',top:'calc(100% + 4px)',minWidth:'220px',background:'#fff',border:'1px solid #d7e8f5',borderRadius:'14px',boxShadow:'0 18px 36px rgba(6,27,52,.16)',padding:'6px'}}>
+    {matches.map(user=><button key={user} type="button" onMouseDown={event=>{event.preventDefault();chooseUser(user);}} style={{display:'block',width:'100%',border:0,background:'transparent',textAlign:'left',padding:'10px 12px',borderRadius:'10px',fontWeight:800,color:'#061b34',cursor:'pointer'}}>@{user}</button>)}
+  </div>;
+  if(bare) return <div style={{position:'relative',width:'100%'}}>{field}{picker}</div>;
+  return <label className={wide ? 'wide' : undefined} style={{position:'relative'}}><span>{label}</span>{field}{picker}</label>;
+}
+function Input({label,field,form,setForm,type='text',mentions}){
+  const enabled = mentions ?? shouldEnableMentions(label,field,type);
+  return <MentionTextInput label={label} type={type} value={form[field] ?? ''} onChange={value=>setForm({...form,[field]:value})} enableMentions={enabled}/>;
+}
+function Textarea({label,field,form,setForm,mentions=true}){
+  return <MentionTextInput label={label} value={form[field] ?? ''} onChange={value=>setForm({...form,[field]:value})} multiline wide enableMentions={mentions}/>;
+}
 function Select({label,field,form,setForm,options}){
   const current = form[field] ?? '';
   const hasCurrentOption = options.some(([value])=>sameId(value,current));
