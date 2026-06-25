@@ -991,6 +991,14 @@ function formatActivityDateTime(activity){
   const date = formatDate(activity?.dueDate);
   return activity?.dueTime ? `${date} ${String(activity.dueTime).slice(0,5)}` : date;
 }
+function crmNowMinutes(){
+  const parts = crmDateParts();
+  return Number(parts.hour || 0) * 60 + Number(parts.minute || 0);
+}
+function activityTimeMinutes(activity){
+  const [hour='0', minute='0'] = String(activity?.dueTime || '').slice(0,5).split(':');
+  return Number(hour || 0) * 60 + Number(minute || 0);
+}
 function dateOnlyFromCrmValue(value){
   if(!value) return '';
   const raw = String(value);
@@ -1680,6 +1688,7 @@ function App(){
   const [selectedContractId,setSelectedContractId] = useState(null);
   const [selectedActivityId,setSelectedActivityId] = useState(null);
   const [selectedProductName,setSelectedProductName] = useState(null);
+  const [meetingReminder,setMeetingReminder] = useState(null);
   const [authReady,setAuthReady] = useState(false);
 
   useEffect(() => {
@@ -1732,6 +1741,47 @@ function App(){
       listener?.subscription?.unsubscribe?.();
     };
   }, []);
+
+  useEffect(() => {
+    if(!currentUser) return undefined;
+    const storageKey = `dsh-v1-meeting-reminders-${today()}`;
+    const readShown = () => {
+      try { return JSON.parse(localStorage.getItem(storageKey) || '[]'); }
+      catch { return []; }
+    };
+    const markShown = (key) => {
+      const shown = readShown();
+      if(shown.includes(key)) return;
+      localStorage.setItem(storageKey,JSON.stringify([...shown,key]));
+    };
+    const checkMeetings = () => {
+      if(meetingReminder) return;
+      const now = crmNowMinutes();
+      const shown = readShown();
+      const nextMeeting = safeArray(activities)
+        .filter(activity =>
+          activity.status !== 'Concluída' &&
+          activity.dueDate === today() &&
+          activity.dueTime &&
+          activity.meetingLink &&
+          String(activity.type || '').toLowerCase().includes('reuni')
+        )
+        .map(activity => ({activity, startsAt: activityTimeMinutes(activity)}))
+        .filter(({activity,startsAt}) => {
+          const reminderKey = `${activity.id}-${activity.dueDate}-${String(activity.dueTime).slice(0,5)}`;
+          return !shown.includes(reminderKey) && now >= startsAt - 5 && now <= startsAt;
+        })
+        .sort((a,b)=>a.startsAt-b.startsAt)[0]?.activity;
+      if(nextMeeting){
+        const reminderKey = `${nextMeeting.id}-${nextMeeting.dueDate}-${String(nextMeeting.dueTime).slice(0,5)}`;
+        markShown(reminderKey);
+        setMeetingReminder(nextMeeting);
+      }
+    };
+    checkMeetings();
+    const interval = window.setInterval(checkMeetings,30000);
+    return () => window.clearInterval(interval);
+  }, [activities,currentUser,meetingReminder]);
 
   if(!authReady) return <div className="app" style={{minHeight:'100vh',display:'grid',placeItems:'center',background:'#f6f8fb',color:'#061b34',fontWeight:900}}>Carregando acesso...</div>;
   if(!currentUser) return <LoginScreen onLogin={setCurrentUser}/>;
@@ -1804,6 +1854,7 @@ function App(){
     {selectedContract && <ContractModal contract={selectedContract} contracts={contracts} setContracts={setContracts} companies={companies} deals={deals} products={products} setSelectedCompanyId={setSelectedCompanyId} setSelectedDealId={setSelectedDealId} setSelectedProductName={setSelectedProductName} canWrite={canWrite} onClose={()=>setSelectedContractId(null)}/>}
     {selectedActivity && <ActivityModal activity={selectedActivity} activities={activities} setActivities={setActivities} deals={deals} canWrite={canWrite} onClose={()=>setSelectedActivityId(null)}/>}  
     {selectedProductName && <ProductInfoModal product={selectedProductName} products={products} setProducts={setProducts} canWrite={canWrite} onClose={()=>setSelectedProductName(null)}/>}
+    {meetingReminder && <MeetingReminderModal activity={meetingReminder} deals={deals} onOpenActivity={()=>{setSelectedActivityId(meetingReminder.id);setMeetingReminder(null);}} onClose={()=>setMeetingReminder(null)}/>}
   </div>;
 }
 
@@ -3860,6 +3911,27 @@ function ContactModal({contact,onClose,contacts,setContacts,companies,setSelecte
       </div>
     </Panel>
     <div className="formGrid modalGrid"><Input label="Nome" field="name" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Input label="Cargo" field="role" form={draft} setForm={setDraft}/><Input label="E-mail" field="email" form={draft} setForm={setDraft}/><Input label="Telefone" field="phone" form={draft} setForm={setDraft}/><Input label="WhatsApp" field="whatsapp" form={draft} setForm={setDraft}/><Input label="LinkedIn" field="linkedin" form={draft} setForm={setDraft}/><Select label="Tipo" field="type" form={draft} setForm={setDraft} options={['Decisor','Influenciador','Usuário','Financeiro','Outros'].map(x=>[x,x])}/><Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div>
+  </div></div>;
+}
+
+function MeetingReminderModal({activity,deals,onClose,onOpenActivity}){
+  const deal = byId(deals,activity?.dealId);
+  const meetingHref = dropboxHref(activity?.meetingLink);
+  return <div className="modalBackdrop"><div className="modal" style={{maxWidth:'620px'}}>
+    <div className="modalHead">
+      <div><h2>Reunião em 5 minutos</h2><span>{formatActivityDateTime(activity)} · {activity?.owner || 'Sem responsável'}</span></div>
+      <button className="iconBtn" onClick={onClose}><X/></button>
+    </div>
+    <div className="timelineItem" style={{marginBottom:'14px'}}>
+      <b>{activity?.title || 'Reunião agendada'}</b>
+      <span>{deal?.title || 'Atividade sem oportunidade vinculada'}</span>
+      {activity?.notes && <p>{activity.notes}</p>}
+    </div>
+    <div style={{display:'flex',gap:'10px',flexWrap:'wrap'}}>
+      {meetingHref && <a className="saveBtn" href={meetingHref} target="_blank" rel="noreferrer" style={{textDecoration:'none'}}><ExternalLink size={16}/>Entrar na reunião</a>}
+      <button className="mini" onClick={onOpenActivity}><Edit3 size={15}/>Abrir atividade</button>
+      <button className="mini" onClick={onClose}><X size={15}/>Fechar</button>
+    </div>
   </div></div>;
 }
 
