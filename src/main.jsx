@@ -2755,6 +2755,10 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
   const selectedDeals = deals.filter(deal => selectedDealIds.some(id => sameId(id, deal.id)));
   const visibleSelectedCount = list.filter(deal => selectedDealIds.some(id => sameId(id, deal.id))).length;
   const allVisibleSelected = list.length > 0 && visibleSelectedCount === list.length;
+  const openList = list.filter(deal=>!['Ganho','Perdido'].includes(deal.stage));
+  const listMrr = openList.reduce((total,deal)=>total+dealMrr(deal),0);
+  const listWeightedMrr = openList.reduce((total,deal)=>total+dealWeightedMrr(deal),0);
+  const listTcv = openList.reduce((total,deal)=>total+dealTcv(deal),0);
   useEffect(() => {
     setSelectedDealIds(ids => ids.filter(id => deals.some(deal => sameId(deal.id, id))));
   }, [deals]);
@@ -2858,13 +2862,19 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
       <Input label="Fechamento anterior a" field="closeBeforeMonth" form={filters} setForm={setFilters} type="month"/>
       <button className="saveBtn" onClick={clearFilters}><Filter size={16}/>Limpar filtros</button>
     </div></Panel>
+    <section className="cards">
+      <Kpi icon={CircleDollarSign} label="Receita mensal filtrada" value={moneyShort(listMrr)}/>
+      <Kpi icon={TrendingUp} label="Previsão mensal ponderada" value={moneyShort(listWeightedMrr)}/>
+      <Kpi icon={BriefcaseBusiness} label="Oportunidades abertas" value={openList.length}/>
+      <Kpi icon={CheckCircle2} label="Contrato total filtrado" value={moneyShort(listTcv)}/>
+    </section>
     <Panel title={`Oportunidades (${list.length})`}>
       {canWrite && <div className="bulkActions">
         <label style={{display:'inline-flex',alignItems:'center',gap:'8px',cursor:'pointer'}}><input className="rowSelect" type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection}/>Selecionar visíveis</label>
         <span>{selectedDeals.length} selecionada(s)</span>
         <button className="mini" onClick={removeSelectedDeals} disabled={!selectedDeals.length}><Trash2 size={15}/>Excluir selecionadas</button>
       </div>}
-      <Table headers={['Sel.','Oportunidade','Empresa','Produto','Receita mensal','Prazo','Valor total','Etapa','Responsável','Ações']}>{list.map(d=>{ const linkedCompany = companyForDeal(d,companies,contacts); const relationship = relationshipStatusForDeal(d, interactions, activities); return <tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><input className="rowSelect" type="checkbox" checked={selectedDealIds.some(id=>sameId(id,d.id))} onChange={(e)=>{e.stopPropagation(); toggleDealSelection(d.id);}} onClick={e=>e.stopPropagation()} disabled={!canWrite}/></td><td><div className="dealHealthLine"><i className={`dealHealthDot ${relationship.tone}`} title={relationship.label}></i><b>{d.title}</b></div><span>{relationship.label}</span><span>{d.nextStep}</span></td><td>{linkedCompany?.name || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(d.product)}} disabled={!d.product}>{d.product || '-'}</button></td><td>{money(dealMrr(d))}</td><td>{dealMonths(d)} meses</td><td><b>{money(dealTcv(d))}</b></td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>})}</Table>
+      <Table headers={['Sel.','Oportunidade','Empresa','Produto','Receita mensal','Prazo','Contrato total','Etapa','Responsável','Ações']}>{list.map(d=>{ const linkedCompany = companyForDeal(d,companies,contacts); const relationship = relationshipStatusForDeal(d, interactions, activities); return <tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><input className="rowSelect" type="checkbox" checked={selectedDealIds.some(id=>sameId(id,d.id))} onChange={(e)=>{e.stopPropagation(); toggleDealSelection(d.id);}} onClick={e=>e.stopPropagation()} disabled={!canWrite}/></td><td><div className="dealHealthLine"><i className={`dealHealthDot ${relationship.tone}`} title={relationship.label}></i><b>{d.title}</b></div><span>{relationship.label}</span><span>{d.nextStep}</span></td><td>{linkedCompany?.name || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(d.product)}} disabled={!d.product}>{d.product || '-'}</button></td><td><b>{money(dealMrr(d))}</b></td><td>{dealMonths(d)} meses</td><td>{money(dealTcv(d))}</td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>})}</Table>
     </Panel>
   </>;
 }
