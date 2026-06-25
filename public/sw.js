@@ -1,5 +1,5 @@
-const CACHE_NAME = 'daleth-sales-hub-v3';
-const APP_SHELL = ['/', '/manifest.webmanifest', '/daleth-star.png'];
+const CACHE_NAME = 'daleth-sales-hub-v4';
+const APP_SHELL = ['/', '/manifest.webmanifest', '/daleth-star.png', '/pwa-icon.svg', '/favicon.ico'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
