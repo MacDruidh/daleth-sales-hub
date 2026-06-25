@@ -1516,7 +1516,12 @@ function UXStyle(){
     .uxHeaderTitle h1{font-size:26px!important;line-height:1.02!important;letter-spacing:-.04em!important;color:var(--ux-text)!important;margin:0!important;font-weight:900!important;}
     .uxHeaderTitle p{margin:5px 0 0!important;color:var(--ux-muted)!important;font-size:14px!important;font-weight:600!important;}
     .uxEyebrow{display:inline-flex!important;align-items:center!important;gap:6px!important;color:var(--ux-blue)!important;background:var(--ux-blue-soft)!important;border:1px solid #c9eef8!important;border-radius:999px!important;padding:5px 10px!important;font-size:12px!important;font-weight:900!important;margin-bottom:8px!important;}
-    .topActions{flex:1!important;justify-content:flex-end!important;gap:12px!important;}
+    .topActions{flex:1!important;justify-content:flex-end!important;gap:12px!important;min-width:0!important;flex-wrap:wrap!important;align-items:center!important;}
+    .topActions .notification{flex:0 1 auto!important;min-width:0!important;}
+    .topUserCard{flex:0 1 180px!important;max-width:210px!important;}
+    .topUserCard div{min-width:0!important;}
+    .topUserCard b,.topUserCard small{display:block!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
+    .topUtilityBtn{flex:0 0 auto!important;white-space:nowrap!important;}
     .search{min-width:min(440px,36vw)!important;height:46px!important;background:#f8fbff!important;border:1px solid var(--ux-border)!important;border-radius:16px!important;padding:0 14px!important;}
     .search input{font-size:14px!important;}
     .notification{border:1px solid var(--ux-border)!important;border-radius:16px!important;background:#fff!important;box-shadow:0 6px 18px rgba(15,23,42,.04)!important;}
@@ -1574,7 +1579,12 @@ function UXStyle(){
       .grid2{grid-template-columns:1fr!important;}
       .topbar{align-items:flex-start!important;flex-direction:column!important;}
       .topActions{width:100%!important;justify-content:flex-start!important;flex-wrap:wrap!important;}
+      .topUserCard{flex:1 1 180px!important;}
       .search{min-width:100%!important;}
+    }
+    @media(max-width:900px){
+      .topUserCard{order:3!important;flex:1 1 160px!important;max-width:none!important;}
+      .topUtilityBtn{order:4!important;}
     }
     @media(min-width:761px) and (max-width:1000px){
       .app{display:grid!important;grid-template-columns:80px minmax(0,1fr)!important;}
@@ -1600,6 +1610,8 @@ function UXStyle(){
       .topActions{display:grid!important;grid-template-columns:1fr auto!important;gap:8px!important;align-items:stretch!important;}
       .search{grid-column:1 / -1!important;width:100%!important;min-width:0!important;height:44px!important;}
       .notification{min-width:0!important;width:100%!important;padding:9px 10px!important;border-radius:13px!important;}
+      .topUserCard{grid-column:1!important;width:100%!important;max-width:none!important;min-width:0!important;}
+      .topUtilityBtn{width:auto!important;min-width:0!important;padding-left:12px!important;padding-right:12px!important;}
       .notification small{white-space:normal!important;font-size:10px!important;line-height:1.25!important;}
       .notification b{font-size:12px!important;}
       .topActions .mini{min-height:44px!important;justify-content:center!important;}
@@ -1636,7 +1648,7 @@ function UXStyle(){
     }
     @media(max-width:430px){
       .topActions{grid-template-columns:1fr!important;}
-      .topActions .notification,.topActions .mini{grid-column:1!important;}
+      .topActions .notification,.topActions .mini,.topUtilityBtn{grid-column:1!important;}
       .topActions .mini{width:100%!important;}
       .column{flex-basis:calc(100vw - 36px)!important;width:calc(100vw - 36px)!important;min-width:calc(100vw - 36px)!important;}
     }
@@ -1781,7 +1793,7 @@ function App(){
       <div className="sidebarBox"><b>Perfil ativo</b><span>{currentUser.name} · {currentUser.role}</span></div>
     </aside>
     <main className="main">
-      <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresas, contatos e oportunidades..."/></div><button className="notification" style={{cursor:'pointer',textAlign:'left'}} onClick={()=>navigate('pending')} title="Abrir painel de pendências"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></button><div className="notification" style={{minWidth:'150px'}}><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><a className="mini" href="/Manual_do_Usuario_Daleth_Sales_Hub.pdf" target="_blank" rel="noreferrer" style={{textDecoration:'none'}}><FileText size={15}/>Manual</a><button className="mini" onClick={logout}><X size={15}/>Sair</button></div></header>
+      <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresas, contatos e oportunidades..."/></div><button className="notification" style={{cursor:'pointer',textAlign:'left'}} onClick={()=>navigate('pending')} title="Abrir painel de pendências"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></button><div className="notification topUserCard"><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><a className="mini topUtilityBtn" href="/Manual_do_Usuario_Daleth_Sales_Hub.pdf" target="_blank" rel="noreferrer" style={{textDecoration:'none'}}><FileText size={15}/>Manual</a><button className="mini topUtilityBtn" onClick={logout}><X size={15}/>Sair</button></div></header>
       {selectedDealAsPage ? <DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/> : (query.trim() ? <GlobalSearch {...context}/> : <>
         {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='insights' && <InsightsDaleth {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <CrmQuality {...context} selectedDeal={selectedDealInQuality ? selectedDeal : null}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='registrations' && <Registrations {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>}
       </>)}
