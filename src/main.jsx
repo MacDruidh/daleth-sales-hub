@@ -56,6 +56,7 @@ const initialNotes = [
 const initialInteractions = [];
 
 const initialContracts = [];
+const CRM_AUTO_REFRESH_MS = 30000;
 
 function isSameSeedCollection(value, seed, field){
   if(!Array.isArray(value) || value.length !== seed.length || !seed.length) return false;
@@ -132,13 +133,17 @@ function useStore(key, initial){
     return () => { cancelled = true; };
   }, [key]);
 
-  const save = (next) => {
+  const updateLocalCache = (next) => {
     setValue(next);
     try {
       localStorage.setItem(key, JSON.stringify(next));
     } catch (error) {
       console.warn('Não foi possível atualizar o cache local:', key, error);
     }
+  };
+
+  const save = (next) => {
+    updateLocalCache(next);
 
     supabase.from('crm_state').upsert({
       key,
@@ -149,7 +154,7 @@ function useStore(key, initial){
     });
   };
 
-  return [value, save];
+  return [value, save, updateLocalCache];
 }
 function useProducts(){
   const [products, setProductsState] = useState(INITIAL_PRODUCTS);
@@ -216,6 +221,42 @@ function useProducts(){
   return [products, setProducts]; 
 }
 
+function useSupabaseCollectionSync({name,tables,load,updateLocalCache,logLabel}){
+  useEffect(() => {
+    let cancelled = false;
+    let loading = false;
+
+    const refresh = async () => {
+      if(loading) return;
+      loading = true;
+      try {
+        const next = await load();
+        if(!cancelled && Array.isArray(next)) updateLocalCache(next);
+      } catch (error) {
+        console.warn(logLabel || `Falha ao sincronizar ${name}:`, error);
+      } finally {
+        loading = false;
+      }
+    };
+
+    refresh();
+    const interval = window.setInterval(refresh,CRM_AUTO_REFRESH_MS);
+    const channel = supabase.channel(`dsh-${name}-realtime`);
+    safeArray(tables).forEach(table => {
+      channel.on('postgres_changes',{event:'*',schema:'public',table},refresh);
+    });
+    channel.subscribe(status => {
+      if(status === 'SUBSCRIBED') refresh();
+    });
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
+  }, []);
+}
+
 function mapCompanyFromDb(c){
   return {
     id: c.legacy_id || c.id,
@@ -271,36 +312,27 @@ async function deleteCompanyFromSupabase(company){
 }
 
 function useCompanies(){
-  const [companies, saveCompaniesToCrmState] = useStore('dsh-v1-companies', []);
+  const [companies, saveCompaniesToCrmState, updateCompaniesCache] = useStore('dsh-v1-companies', []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadCompanies(){
-      try {
-        const { data, error } = await supabase
-          .from('companies')
-          .select('id,name,segment,cnpj,site,website,status,phone,email,notes,legacy_id')
-          .order('name');
-
-        if(error) throw error;
-
-        const mapped = (data || []).map(mapCompanyFromDb);
-
-        if(!cancelled && mapped.length){
-          saveCompaniesToCrmState(mapped);
-        }
-      } catch (error) {
-        console.warn('Falha ao carregar empresas relacionais:', error);
-      }
-    }
-
-    loadCompanies();
-
-    return () => { cancelled = true; };
-  }, []);
+  useSupabaseCollectionSync({
+    name:'companies',
+    tables:['companies'],
+    load:loadCompaniesFromSupabase,
+    updateLocalCache:updateCompaniesCache,
+    logLabel:'Falha ao carregar empresas relacionais:'
+  });
 
   return [companies, saveCompaniesToCrmState];
+}
+
+async function loadCompaniesFromSupabase(){
+  const { data, error } = await supabase
+    .from('companies')
+    .select('id,name,segment,cnpj,site,website,status,phone,email,notes,legacy_id')
+    .order('name');
+
+  if(error) throw error;
+  return (data || []).map(mapCompanyFromDb);
 }
 
 function companyDbIdFromUiId(companies, companyId){
@@ -383,52 +415,43 @@ async function deleteContactFromSupabase(contact){
 }
 
 function useContacts(){
-  const [contacts, saveContactsToCrmState] = useStore('dsh-v1-contacts', []);
+  const [contacts, saveContactsToCrmState, updateContactsCache] = useStore('dsh-v1-contacts', []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadContacts(){
-      try {
-        const { data, error } = await supabase
-          .from('contacts')
-          .select(`
-            id,
-            company_id,
-            name,
-            role,
-            email,
-            phone,
-            whatsapp,
-            linkedin,
-            type,
-            contact_type,
-            notes,
-            legacy_id,
-            companies:company_id (
-              legacy_id
-            )
-          `)
-          .order('name');
-
-        if(error) throw error;
-
-        const mapped = (data || []).map(mapContactFromDb);
-
-        if(!cancelled && mapped.length){
-          saveContactsToCrmState(mapped);
-        }
-      } catch (error) {
-        console.warn('Falha ao carregar contatos relacionais:', error);
-      }
-    }
-
-    loadContacts();
-
-    return () => { cancelled = true; };
-  }, []);
+  useSupabaseCollectionSync({
+    name:'contacts',
+    tables:['contacts'],
+    load:loadContactsFromSupabase,
+    updateLocalCache:updateContactsCache,
+    logLabel:'Falha ao carregar contatos relacionais:'
+  });
 
   return [contacts, saveContactsToCrmState];
+}
+
+async function loadContactsFromSupabase(){
+  const { data, error } = await supabase
+    .from('contacts')
+    .select(`
+      id,
+      company_id,
+      name,
+      role,
+      email,
+      phone,
+      whatsapp,
+      linkedin,
+      type,
+      contact_type,
+      notes,
+      legacy_id,
+      companies:company_id (
+        legacy_id
+      )
+    `)
+    .order('name');
+
+  if(error) throw error;
+  return (data || []).map(mapContactFromDb);
 }
 
 function contactDbIdFromUiId(contacts, contactId){
@@ -530,38 +553,27 @@ async function deleteDealFromSupabase(deal){
 }
 
 function useDeals(){
-  const [deals, saveDealsToCrmState] = useStore('dsh-v1-deals', []);
+  const [deals, saveDealsToCrmState, updateDealsCache] = useStore('dsh-v1-deals', []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadDeals(){
-      try {
-        const { data, error } = await supabase
-          .from('opportunities')
-          .select(DEAL_SELECT)
-          .order('created_at', { ascending: false });
-
-        if(error) throw error;
-
-        const mapped = (data || []).map(mapDealFromDb);
-
-        if(!cancelled && mapped.length){
-          saveDealsToCrmState(mapped);
-        }
-      } catch (error) {
-        console.error('Falha ao carregar oportunidades relacionais:', error);
-      }
-    }
-
-    loadDeals();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useSupabaseCollectionSync({
+    name:'opportunities',
+    tables:['opportunities'],
+    load:loadDealsFromSupabase,
+    updateLocalCache:updateDealsCache,
+    logLabel:'Falha ao carregar oportunidades relacionais:'
+  });
 
   return [deals, saveDealsToCrmState];
+}
+
+async function loadDealsFromSupabase(){
+  const { data, error } = await supabase
+    .from('opportunities')
+    .select(DEAL_SELECT)
+    .order('created_at', { ascending: false });
+
+  if(error) throw error;
+  return (data || []).map(mapDealFromDb);
 }
 
 function dealDbIdFromUiId(deals, dealId){
@@ -778,81 +790,58 @@ async function saveNoteToSupabase(note, deals){
 }
 
 function useActivities(){
-  const [activities, saveActivitiesToCrmState] = useStore('dsh-v1-activities', []);
+  const [activities, saveActivitiesToCrmState, updateActivitiesCache] = useStore('dsh-v1-activities', []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadActivities(){
-      try {
-        let { data, error } = await supabase
-          .from('activities')
-          .select(ACTIVITY_SELECT)
-          .order('created_at', { ascending: false });
-
-        if(error && isMissingActivityFieldError(error)){
-          const legacyResult = await supabase
-            .from('activities')
-            .select(ACTIVITY_LEGACY_SELECT)
-            .order('created_at', { ascending: false });
-          data = legacyResult.data;
-          error = legacyResult.error;
-        }
-
-        if(error) throw error;
-
-        const mapped = (data || []).map(mapActivityFromDb);
-
-        if(!cancelled && mapped.length){
-          saveActivitiesToCrmState(mapped);
-        }
-      } catch (error) {
-        console.error('Falha ao carregar atividades relacionais:', error);
-      }
-    }
-
-    loadActivities();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useSupabaseCollectionSync({
+    name:'activities',
+    tables:['activities'],
+    load:loadActivitiesFromSupabase,
+    updateLocalCache:updateActivitiesCache,
+    logLabel:'Falha ao carregar atividades relacionais:'
+  });
 
   return [activities, saveActivitiesToCrmState];
 }
+async function loadActivitiesFromSupabase(){
+  let { data, error } = await supabase
+    .from('activities')
+    .select(ACTIVITY_SELECT)
+    .order('created_at', { ascending: false });
+
+  if(error && isMissingActivityFieldError(error)){
+    const legacyResult = await supabase
+      .from('activities')
+      .select(ACTIVITY_LEGACY_SELECT)
+      .order('created_at', { ascending: false });
+    data = legacyResult.data;
+    error = legacyResult.error;
+  }
+
+  if(error) throw error;
+  return (data || []).map(mapActivityFromDb);
+}
 function useNotes(){
-  const [notes, saveNotesToCrmState] = useStore('dsh-v1-notes', []);
+  const [notes, saveNotesToCrmState, updateNotesCache] = useStore('dsh-v1-notes', []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadNotes(){
-      try {
-        const { data, error } = await supabase
-          .from('notes')
-          .select(NOTE_SELECT)
-          .order('note_date', { ascending: false });
-
-        if(error) throw error;
-
-        const mapped = (data || []).map(mapNoteFromDb);
-
-        if(!cancelled && mapped.length){
-          saveNotesToCrmState(mapped);
-        }
-      } catch (error) {
-        console.error('Falha ao carregar notas relacionais:', error);
-      }
-    }
-
-    loadNotes();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useSupabaseCollectionSync({
+    name:'notes',
+    tables:['notes'],
+    load:loadNotesFromSupabase,
+    updateLocalCache:updateNotesCache,
+    logLabel:'Falha ao carregar notas relacionais:'
+  });
 
   return [notes, saveNotesToCrmState];
+}
+
+async function loadNotesFromSupabase(){
+  const { data, error } = await supabase
+    .from('notes')
+    .select(NOTE_SELECT)
+    .order('note_date', { ascending: false });
+
+  if(error) throw error;
+  return (data || []).map(mapNoteFromDb);
 }
 
 function mapContractFromDb(c, companies=[], deals=[]){
@@ -937,36 +926,27 @@ async function deleteContractFromSupabase(contract){
 }
 
 function useContracts(){
-  const [contracts, saveContractsToCrmState] = useStore('dsh-v1-contracts', initialContracts);
+  const [contracts, saveContractsToCrmState, updateContractsCache] = useStore('dsh-v1-contracts', initialContracts);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadContracts(){
-      try {
-        const { data, error } = await supabase
-        .from('contracts')
-        .select(CONTRACT_SELECT)
-        .order('created_at', { ascending: false });
-
-        if(error) throw error;
-        const mapped = (data || []).map(mapContractFromDb);
-        if(!cancelled){
-          saveContractsToCrmState(mapped);
-        }
-      } catch(error){
-        console.error('Falha ao carregar contratos:', error);
-      }
-    }
-
-    loadContracts();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useSupabaseCollectionSync({
+    name:'contracts',
+    tables:['contracts'],
+    load:loadContractsFromSupabase,
+    updateLocalCache:updateContractsCache,
+    logLabel:'Falha ao carregar contratos:'
+  });
 
   return [contracts, saveContractsToCrmState];
+}
+
+async function loadContractsFromSupabase(){
+  const { data, error } = await supabase
+    .from('contracts')
+    .select(CONTRACT_SELECT)
+    .order('created_at', { ascending: false });
+
+  if(error) throw error;
+  return (data || []).map(mapContractFromDb);
 }
 function money(v){ return Number(v||0).toLocaleString('pt-BR',{ style:'currency', currency:'BRL' }); }
 function moneyShort(v){
