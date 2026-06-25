@@ -1771,7 +1771,7 @@ function App(){
       const nextMeeting = safeArray(activities)
         .filter(activity =>
           activity.status !== 'Concluída' &&
-          activity.dueDate === today() &&
+          dateOnlyFromCrmValue(activity.dueDate) === today() &&
           activity.dueTime &&
           activity.meetingLink &&
           isMeetingActivity(activity)
@@ -1817,7 +1817,7 @@ function App(){
   const selectedDealAsPage = selectedDeal && !selectedDealInQuality;
   const pendingActivities = activities.filter(a => a.status !== 'Concluída');
   const overdueCount = pendingActivities.filter(a => a.dueDate && a.dueDate < today()).length;
-  const meetingsTodayCount = safeArray(activities).filter(a => a.dueDate === today() && isMeetingActivity(a)).length;
+  const meetingsTodayCount = safeArray(activities).filter(a => dateOnlyFromCrmValue(a.dueDate) === today() && isMeetingActivity(a)).length;
   const proposalsWithoutFollowup = deals.filter(d =>
     d.stage === 'Proposta Enviada' &&
     !pendingActivities.some(a => sameId(a.dealId, d.id) && a.dueDate && a.dueDate >= today())
@@ -2471,7 +2471,7 @@ function PendingPanel({companies=[],contacts=[],deals=[],activities=[],contracts
   const currentDate = today();
   const pendingActivities = safeArray(activities).filter(activity=>activity.status !== 'Concluída');
   const overdueActivities = pendingActivities.filter(activity=>activity.dueDate && activity.dueDate < currentDate).sort((a,b)=>(String(a.dueDate || '') + String(a.dueTime || '')).localeCompare(String(b.dueDate || '') + String(b.dueTime || '')));
-  const meetingsToday = safeArray(activities).filter(activity=>activity.dueDate === currentDate && isMeetingActivity(activity)).sort((a,b)=>String(a.dueTime || '').localeCompare(String(b.dueTime || '')));
+  const meetingsToday = safeArray(activities).filter(activity=>dateOnlyFromCrmValue(activity.dueDate) === currentDate && isMeetingActivity(activity)).sort((a,b)=>String(a.dueTime || '').localeCompare(String(b.dueTime || '')));
   const proposalsWithoutFollowup = safeArray(deals).filter(deal=>deal.stage === 'Proposta Enviada' && !pendingActivities.some(activity=>sameId(activity.dealId,deal.id) && activity.dueDate && activity.dueDate >= currentDate));
   const dealsWithoutNextStep = safeArray(deals).filter(deal=>!['Ganho','Perdido'].includes(deal.stage) && !String(deal.nextStep || '').trim());
   const expiringContracts = safeArray(contracts).map(contract=>({contract,days:daysUntil(contract.endDate)})).filter(({contract,days})=>contractStatus(contract) === 'Ativo' && days !== null && days >= 0 && days <= 90).sort((a,b)=>a.days-b.days);
