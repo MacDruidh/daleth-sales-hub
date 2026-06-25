@@ -4175,23 +4175,76 @@ function PipedriveImport({
     };
     reader.readAsText(file);
   };
-  const restoreBackup = () => {
+  const persistBackupState = async (data, savedCore=null) => {
+    const state = {
+      companies:savedCore?.companies || data.companies,
+      contacts:savedCore?.contacts || data.contacts,
+      deals:savedCore?.deals || data.deals,
+      activities:savedCore?.activities || data.activities,
+      notes:savedCore?.notes || data.notes,
+      interactions:data.interactions,
+      opportunityFiles:data.opportunityFiles,
+      contracts:data.contracts,
+      products:data.products,
+      companySegments:data.companySegments,
+      stages:data.stages,
+      stageHistory:data.stageHistory,
+      lossReasons:data.lossReasons,
+    };
+    const entries = [
+      ['dsh-v1-companies',state.companies],
+      ['dsh-v1-contacts',state.contacts],
+      ['dsh-v1-deals',state.deals],
+      ['dsh-v1-activities',state.activities],
+      ['dsh-v1-notes',state.notes],
+      ['dsh-v1-interactions',state.interactions],
+      ['dsh-v1-opportunity-files',state.opportunityFiles],
+      ['dsh-v1-contracts',state.contracts],
+      ['dsh-v1-company-segments',state.companySegments],
+      ['dsh-v1-stages',state.stages],
+      ['dsh-v1-stage-history',state.stageHistory],
+      ['dsh-v1-loss-reasons',state.lossReasons],
+    ].filter(([,value])=>shouldPersistCrmState(value));
+    if(entries.length){
+      const { error } = await supabase.from('crm_state').upsert(entries.map(([key,data])=>({
+        key,
+        data,
+        updated_at:new Date().toISOString()
+      })));
+      if(error) throw error;
+    }
+    return state;
+  };
+  const applyBackupState = (state) => {
+    setCompanies(state.companies);
+    setContacts(state.contacts);
+    setDeals(state.deals);
+    setActivities(state.activities);
+    setNotes(state.notes);
+    setInteractions(state.interactions);
+    setOpportunityFiles(state.opportunityFiles);
+    setContracts(state.contracts);
+    if(state.products.length) setProducts(state.products);
+    if(state.companySegments.length) setCompanySegments(state.companySegments);
+    if(state.stages.length) setStages(state.stages);
+    setStageHistory(state.stageHistory);
+    setLossReasons(state.lossReasons);
+  };
+  const restoreBackup = async () => {
     if(!backupPreview) return;
     if(!window.confirm('Restaurar este backup neste navegador e sincronizar no estado central do CRM?')) return;
-    setCompanies(backupPreview.companies);
-    setContacts(backupPreview.contacts);
-    setDeals(backupPreview.deals);
-    setActivities(backupPreview.activities);
-    setNotes(backupPreview.notes);
-    setInteractions(backupPreview.interactions);
-    setOpportunityFiles(backupPreview.opportunityFiles);
-    setContracts(backupPreview.contracts);
-    if(backupPreview.products.length) setProducts(backupPreview.products);
-    if(backupPreview.companySegments.length) setCompanySegments(backupPreview.companySegments);
-    if(backupPreview.stages.length) setStages(backupPreview.stages);
-    setStageHistory(backupPreview.stageHistory);
-    setLossReasons(backupPreview.lossReasons);
-    setStatus('Backup restaurado. Reabra o CRM no outro navegador para conferir a sincronização.');
+    setStatus('Restaurando backup e sincronizando no Supabase...');
+    try {
+      const savedCore = await upsertImportedData(backupPreview);
+      const state = await persistBackupState(backupPreview, savedCore);
+      applyBackupState(state);
+      setStatus('Backup restaurado e sincronizado no Supabase. Outros usuários já podem reabrir o CRM para carregar esta base.');
+    } catch (error) {
+      console.warn('Falha ao sincronizar backup no Supabase:', error);
+      await persistBackupState(backupPreview);
+      applyBackupState(backupPreview);
+      setStatus('Backup restaurado no estado central. Algumas tabelas relacionais do Supabase não aceitaram a sincronização agora.');
+    }
   };
 
   const upsertImportedData = async (data) => {
