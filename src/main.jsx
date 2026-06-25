@@ -1127,6 +1127,7 @@ function dealMonths(d){ return Math.max(1, Number(d?.contractMonths || 12)); }
 function dealTcv(d){ return (dealMrr(d) * dealMonths(d)) + dealSetup(d); }
 function dealArr(d){ return dealMrr(d) * 12; }
 function probabilityForStage(stage,fallback=30){ return Object.prototype.hasOwnProperty.call(STAGE_PROBABILITIES,stage) ? STAGE_PROBABILITIES[stage] : Number(fallback || 0); }
+function dealWeightedMrr(d){ return dealMrr(d) * (probabilityForStage(d?.stage,d?.probability) / 100); }
 function dealWeightedTcv(d){ return dealTcv(d) * (probabilityForStage(d?.stage,d?.probability) / 100); }
 function appendStageHistory(history,deal,fromStage,toStage,owner){
   if(!toStage || fromStage === toStage) return safeArray(history);
@@ -1860,8 +1861,8 @@ function GlobalSearch({query,companies,contacts,deals,setDeals,activities,contra
     </Panel>
     <section className="grid2 compact">
       <Panel title="Oportunidades">
-        <DashboardTable headers={['Oportunidade','Empresa','Etapa','Valor total','Ações']}>
-          {dealResults.length ? dealResults.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.product}</span></td><td>{companyForDeal(d,companies,contacts)?.name || '-'}</td><td>{d.stage}</td><td>{moneyShort(dealTcv(d))}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Editar</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDealFromSearch(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>) : <tr><td>Nenhuma oportunidade</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+        <DashboardTable headers={['Oportunidade','Empresa','Etapa','Receita mensal','Ações']}>
+          {dealResults.length ? dealResults.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.product}</span></td><td>{companyForDeal(d,companies,contacts)?.name || '-'}</td><td>{d.stage}</td><td>{moneyShort(dealMrr(d))}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Editar</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDealFromSearch(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>) : <tr><td>Nenhuma oportunidade</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
       <Panel title="Empresas">
@@ -1913,17 +1914,17 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
   const openSetup = open.reduce((s,d)=>s + dealSetup(d),0);
   const openTcv = open.reduce((s,d)=>s + dealTcv(d),0);
   const openArr = open.reduce((s,d)=>s + dealArr(d),0);
-  const weightedTcv = open.reduce((s,d)=>s + dealWeightedTcv(d),0);
+  const weightedMrr = open.reduce((s,d)=>s + dealWeightedMrr(d),0);
   const wonMrr = won.reduce((s,d)=>s + dealMrr(d),0);
   const wonTcv = won.reduce((s,d)=>s + dealTcv(d),0);
   const thisMonth = today().slice(0,7);
   const next90 = new Date();
   next90.setDate(next90.getDate()+90);
-  const forecast30 = open.reduce((s,d)=>s + (d.closeDate?.startsWith(thisMonth) ? dealWeightedTcv(d) : 0),0);
+  const forecast30 = open.reduce((s,d)=>s + (d.closeDate?.startsWith(thisMonth) ? dealWeightedMrr(d) : 0),0);
   const forecast90 = open.reduce((s,d)=>{
     if(!d.closeDate) return s;
     const date = new Date(d.closeDate + 'T00:00:00');
-    return date <= next90 ? s + dealWeightedTcv(d) : s;
+    return date <= next90 ? s + dealWeightedMrr(d) : s;
   },0);
 
   const stageRows = safeArray(stages).map(stage => {
@@ -1931,7 +1932,7 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
     return {
       label: stage,
       count: stageDeals.length,
-      total: stageDeals.reduce((s,d)=>s+dealTcv(d),0)
+      total: stageDeals.reduce((s,d)=>s+dealMrr(d),0)
     };
   });
 
@@ -1939,11 +1940,11 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
     const seg = dealSegment(d,companies,contacts);
     if(!acc[seg]) acc[seg] = {label: seg, count: 0, total: 0};
     acc[seg].count += 1;
-    acc[seg].total += dealTcv(d);
+    acc[seg].total += dealMrr(d);
     return acc;
   },{})).map(([,row])=>row).sort((a,b)=>b.total-a.total);
 
-  const topDeals = [...open].sort((a,b)=>dealTcv(b)-dealTcv(a)).slice(0,5);
+  const topDeals = [...open].sort((a,b)=>dealMrr(b)-dealMrr(a)).slice(0,5);
   const overdueActivities = pending
     .filter(a => a.dueDate && a.dueDate < today())
     .sort((a,b)=>(String(a.dueDate) + String(a.dueTime || '')).localeCompare(String(b.dueDate) + String(b.dueTime || '')))
@@ -2016,12 +2017,12 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
             <strong style={{display:'block',fontSize:'25px',marginTop:'8px',color:'#061b34'}}>{moneyShort(activeContractMrr || wonMrr)}</strong>
           </div>
           <div style={{background:'#fff',border:'1px solid #e4edf7',borderRadius:'18px',padding:'16px'}}>
-            <span style={{display:'block',fontSize:'12px',fontWeight:800,color:'#64748b',textTransform:'uppercase',letterSpacing:'.05em'}}>Valor total do pipeline</span>
-            <strong style={{display:'block',fontSize:'25px',marginTop:'8px',color:'#061b34'}}>{moneyShort(openTcv)}</strong>
+            <span style={{display:'block',fontSize:'12px',fontWeight:800,color:'#64748b',textTransform:'uppercase',letterSpacing:'.05em'}}>Pipeline mensal</span>
+            <strong style={{display:'block',fontSize:'25px',marginTop:'8px',color:'#061b34'}}>{moneyShort(openMrr)}</strong>
           </div>
           <div style={{background:'#fff',border:'1px solid #e4edf7',borderRadius:'18px',padding:'16px'}}>
-            <span style={{display:'block',fontSize:'12px',fontWeight:800,color:'#64748b',textTransform:'uppercase',letterSpacing:'.05em'}}>Previsão ponderada</span>
-            <strong style={{display:'block',fontSize:'25px',marginTop:'8px',color:'#061b34'}}>{moneyShort(weightedTcv)}</strong>
+            <span style={{display:'block',fontSize:'12px',fontWeight:800,color:'#64748b',textTransform:'uppercase',letterSpacing:'.05em'}}>Previsão mensal ponderada</span>
+            <strong style={{display:'block',fontSize:'25px',marginTop:'8px',color:'#061b34'}}>{moneyShort(weightedMrr)}</strong>
           </div>
         </div>
       </div>
@@ -2069,33 +2070,33 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
     <section className="cards" style={{gridTemplateColumns:'repeat(4,minmax(170px,1fr))'}}>
       <Kpi icon={CircleDollarSign} label="Receita mensal potencial" value={moneyShort(openMrr)}/>
       <Kpi icon={TrendingUp} label="Receita anualizada potencial" value={moneyShort(openArr)}/>
-      <Kpi icon={BriefcaseBusiness} label="Valor total dos contratos" value={moneyShort(openTcv)}/>
+      <Kpi icon={BriefcaseBusiness} label="Oportunidades abertas" value={open.length}/>
       <Kpi icon={CheckCircle2} label="Receita anualizada contratada" value={moneyShort(activeContractArr)}/>
     </section>
 
     <section className="grid2" style={{alignItems:'start'}}>
       <Panel title="Pipeline por etapa">
-        <DashboardTable headers={['Etapa','Oportunidades','Valor total','Ações']}>
+        <DashboardTable headers={['Etapa','Oportunidades','Receita mensal','Ações']}>
           {stageRows.map(row=><tr key={row.label} onClick={()=>setSelectedStage(selectedStage===row.label ? null : row.label)} style={{cursor:'pointer'}} title="Clique para ver as oportunidades desta etapa"><td>{row.label}</td><td>{row.count}</td><td><b>{moneyShort(row.total)}</b></td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedStage(selectedStage===row.label ? null : row.label)}}>{selectedStage===row.label ? 'Fechar' : 'Ver oportunidades'}</button></td></tr>)}
-          <tr className="totalRow"><td>Total</td><td>{open.length}</td><td>{moneyShort(openTcv)}</td><td>-</td></tr>
+          <tr className="totalRow"><td>Total</td><td>{open.length}</td><td>{moneyShort(openMrr)}</td><td>-</td></tr>
         </DashboardTable>
         {selectedStage && <div style={{marginTop:'18px'}}>
           <h3 style={{fontSize:'18px',margin:'0 0 10px'}}>Oportunidades em {selectedStage}</h3>
-          <DashboardTable headers={['Oportunidade','Empresa','Responsável','Valor total','Ações']}>
-            {open.filter(d=>d.stage===selectedStage).length ? open.filter(d=>d.stage===selectedStage).map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{companyForDeal(d,companies,contacts)?.name || '-'}</td><td>{d.owner || '-'}</td><td>{moneyShort(dealTcv(d))}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade nesta etapa</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+          <DashboardTable headers={['Oportunidade','Empresa','Responsável','Receita mensal','Ações']}>
+            {open.filter(d=>d.stage===selectedStage).length ? open.filter(d=>d.stage===selectedStage).map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{companyForDeal(d,companies,contacts)?.name || '-'}</td><td>{d.owner || '-'}</td><td>{moneyShort(dealMrr(d))}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade nesta etapa</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
           </DashboardTable>
         </div>}
       </Panel>
 
       <Panel title="Pipeline por segmento">
-        <DashboardTable headers={['Segmento','Oportunidades','Valor total','Ações']}>
+        <DashboardTable headers={['Segmento','Oportunidades','Receita mensal','Ações']}>
           {segmentRows.length ? segmentRows.map(row=><tr key={row.label} onClick={()=>setSelectedSegment(selectedSegment===row.label ? null : row.label)} style={{cursor:'pointer'}} title="Clique para ver as oportunidades deste segmento"><td>{row.label}</td><td>{row.count}</td><td><b>{moneyShort(row.total)}</b></td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedSegment(selectedSegment===row.label ? null : row.label)}}>{selectedSegment===row.label ? 'Fechar' : 'Ver oportunidades'}</button></td></tr>) : <tr><td>Nenhum segmento</td><td>0</td><td>{moneyShort(0)}</td><td>-</td></tr>}
-          <tr className="totalRow"><td>Total</td><td>{open.length}</td><td>{moneyShort(openTcv)}</td><td>-</td></tr>
+          <tr className="totalRow"><td>Total</td><td>{open.length}</td><td>{moneyShort(openMrr)}</td><td>-</td></tr>
         </DashboardTable>
         {selectedSegment && <div style={{marginTop:'18px'}}>
           <h3 style={{fontSize:'18px',margin:'0 0 10px'}}>Oportunidades em {selectedSegment}</h3>
-          <DashboardTable headers={['Oportunidade','Empresa','Etapa','Valor total','Ações']}>
-            {open.filter(d=>dealSegment(d,companies,contacts)===selectedSegment).length ? open.filter(d=>dealSegment(d,companies,contacts)===selectedSegment).map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{companyForDeal(d,companies,contacts)?.name || '-'}</td><td>{d.stage || '-'}</td><td>{moneyShort(dealTcv(d))}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade neste segmento</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+          <DashboardTable headers={['Oportunidade','Empresa','Etapa','Receita mensal','Ações']}>
+            {open.filter(d=>dealSegment(d,companies,contacts)===selectedSegment).length ? open.filter(d=>dealSegment(d,companies,contacts)===selectedSegment).map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{companyForDeal(d,companies,contacts)?.name || '-'}</td><td>{d.stage || '-'}</td><td>{moneyShort(dealMrr(d))}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade neste segmento</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
           </DashboardTable>
         </div>}
       </Panel>
@@ -2103,8 +2104,8 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
 
     <section className="grid2 compact">
       <Panel title="Top oportunidades">
-        <DashboardTable headers={['Cliente','Etapa','Valor total','Fechamento']}>
-          {topDeals.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{companyForDeal(d,companies,contacts)?.name || d.title}</b><span>{d.title}</span></td><td>{d.stage}</td><td>{moneyShort(dealTcv(d))}</td><td>{formatDate(d.closeDate)}</td></tr>)}
+        <DashboardTable headers={['Cliente','Etapa','Receita mensal','Fechamento']}>
+          {topDeals.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{companyForDeal(d,companies,contacts)?.name || d.title}</b><span>{d.title}</span></td><td>{d.stage}</td><td>{moneyShort(dealMrr(d))}</td><td>{formatDate(d.closeDate)}</td></tr>)}
         </DashboardTable>
       </Panel>
 
@@ -2119,8 +2120,8 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
     </section>
 
     <Panel title="Oportunidades sem contato há mais de 15 dias">
-      <DashboardTable headers={['Oportunidade','Empresa','Etapa','Dias sem contato','Valor total','Ações']}>
-        {noContactDeals.length ? noContactDeals.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{companyForDeal(d,companies,contacts)?.name || '-'}</td><td>{d.stage || '-'}</td><td><b style={{color:d.daysWithoutContact >= 30 ? '#dc2626' : '#b45309'}}>{d.daysWithoutContact} dias</b></td><td>{moneyShort(dealTcv(d))}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade sem contato crítico</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+      <DashboardTable headers={['Oportunidade','Empresa','Etapa','Dias sem contato','Receita mensal','Ações']}>
+        {noContactDeals.length ? noContactDeals.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{companyForDeal(d,companies,contacts)?.name || '-'}</td><td>{d.stage || '-'}</td><td><b style={{color:d.daysWithoutContact >= 30 ? '#dc2626' : '#b45309'}}>{d.daysWithoutContact} dias</b></td><td>{moneyShort(dealMrr(d))}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade sem contato crítico</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
       </DashboardTable>
     </Panel>
 
@@ -2173,10 +2174,10 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
       (!filters.segment || segment === filters.segment) &&
       periodIncludes(contract.startDate || contract.endDate || today());
   });
-  const openValue = openDeals.reduce((total,deal)=>total+dealTcv(deal),0);
-  const weightedValue = openDeals.reduce((total,deal)=>total+dealWeightedTcv(deal),0);
-  const wonValue = wonDeals.reduce((total,deal)=>total+dealTcv(deal),0);
-  const lostValue = lostDeals.reduce((total,deal)=>total+dealTcv(deal),0);
+  const openValue = openDeals.reduce((total,deal)=>total+dealMrr(deal),0);
+  const weightedValue = openDeals.reduce((total,deal)=>total+dealWeightedMrr(deal),0);
+  const wonValue = wonDeals.reduce((total,deal)=>total+dealMrr(deal),0);
+  const lostValue = lostDeals.reduce((total,deal)=>total+dealMrr(deal),0);
   const finishedCount = wonDeals.length + lostDeals.length;
   const winRate = finishedCount ? Math.round((wonDeals.length / finishedCount) * 100) : 0;
   const completedActivities = filteredActivities.filter(activity=>activity.status === 'Concluída');
@@ -2192,8 +2193,8 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
     if(deal.stage === 'Ganho') rows[owner].won += 1;
     if(!['Ganho','Perdido'].includes(deal.stage)){
       rows[owner].open += 1;
-      rows[owner].value += dealTcv(deal);
-      rows[owner].weighted += dealWeightedTcv(deal);
+      rows[owner].value += dealMrr(deal);
+      rows[owner].weighted += dealWeightedMrr(deal);
     }
     return rows;
   },{})).sort((a,b)=>b.weighted-a.weighted);
@@ -2201,22 +2202,22 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
     const product = deal.product || 'Sem produto';
     if(!rows[product]) rows[product] = {product,count:0,value:0,weighted:0};
     rows[product].count += 1;
-    rows[product].value += dealTcv(deal);
-    if(!['Ganho','Perdido'].includes(deal.stage)) rows[product].weighted += dealWeightedTcv(deal);
+    rows[product].value += dealMrr(deal);
+    if(!['Ganho','Perdido'].includes(deal.stage)) rows[product].weighted += dealWeightedMrr(deal);
     return rows;
   },{})).sort((a,b)=>b.value-a.value);
   const segmentRows = Object.values(filteredDeals.reduce((rows,deal)=>{
     const segment = dealSegment(deal,companies,contacts);
     if(!rows[segment]) rows[segment] = {segment,count:0,value:0};
     rows[segment].count += 1;
-    rows[segment].value += dealTcv(deal);
+    rows[segment].value += dealMrr(deal);
     return rows;
   },{})).sort((a,b)=>b.value-a.value);
   const reasonRows = Object.values(lostDeals.reduce((rows,deal)=>{
     const reason = lossReasons?.[deal.id] || 'Não informado';
     if(!rows[reason]) rows[reason] = {reason,count:0,value:0};
     rows[reason].count += 1;
-    rows[reason].value += dealTcv(deal);
+    rows[reason].value += dealMrr(deal);
     return rows;
   },{})).sort((a,b)=>b.count-a.count);
   const breakdownDeals = (() => {
@@ -2226,7 +2227,7 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
     if(selectedBreakdown.type === 'product') return filteredDeals.filter(deal=>(deal.product || 'Sem produto') === key);
     if(selectedBreakdown.type === 'segment') return filteredDeals.filter(deal=>dealSegment(deal,companies,contacts) === key);
     return [];
-  })().sort((a,b)=>dealTcv(b)-dealTcv(a));
+  })().sort((a,b)=>dealMrr(b)-dealMrr(a));
   const resetFilters = () => {
     setFilters({period:'all',owner:'',product:'',segment:''});
     setSelectedBreakdown(null);
@@ -2250,51 +2251,51 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
       </div>
     </Panel>
     <section className="cards">
-      <Kpi icon={BriefcaseBusiness} label="Pipeline aberto" value={moneyShort(openValue)}/>
-      <Kpi icon={TrendingUp} label="Previsão ponderada" value={moneyShort(weightedValue)}/>
+      <Kpi icon={BriefcaseBusiness} label="Pipeline mensal aberto" value={moneyShort(openValue)}/>
+      <Kpi icon={TrendingUp} label="Previsão mensal ponderada" value={moneyShort(weightedValue)}/>
       <Kpi icon={CheckCircle2} label="Taxa de ganho" value={`${winRate}%`}/>
-      <Kpi icon={CircleDollarSign} label="Valor ganho" value={moneyShort(wonValue)}/>
+      <Kpi icon={CircleDollarSign} label="Receita mensal ganha" value={moneyShort(wonValue)}/>
     </section>
     <section className="cards">
-      <Kpi icon={AlertTriangle} label="Valor perdido" value={moneyShort(lostValue)}/>
+      <Kpi icon={AlertTriangle} label="Receita mensal perdida" value={moneyShort(lostValue)}/>
       <Kpi icon={Clock3} label="Atividades abertas" value={pendingActivities.length}/>
       <Kpi icon={CheckCircle2} label="Atividades concluídas" value={completedActivities.length}/>
       <Kpi icon={AlertTriangle} label="Atividades vencidas" value={overdueActivities.length}/>
     </section>
     <section className="grid2 compact">
       <Panel title="Desempenho por responsável">
-        <DashboardTable headers={['Responsável','Abertas','Ganhas','Pipeline','Previsão']}>
+        <DashboardTable headers={['Responsável','Abertas','Ganhas','Pipeline mensal','Previsão mensal']}>
           {ownerRows.length ? ownerRows.map(row=><tr key={row.owner} onClick={()=>openBreakdown('owner',row.owner,`${row.owner} · oportunidades abertas`)} style={{cursor:'pointer'}}><td><b>{row.owner}</b><span>Clique para ver as abertas</span></td><td>{row.open}</td><td>{row.won}</td><td>{moneyShort(row.value)}</td><td>{moneyShort(row.weighted)}</td></tr>) : <tr><td>Nenhum dado</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
       <Panel title="Pipeline por produto">
-        <DashboardTable headers={['Produto','Oportunidades','Valor total','Previsão']}>
+        <DashboardTable headers={['Produto','Oportunidades','Receita mensal','Previsão mensal']}>
           {productRows.length ? productRows.map(row=><tr key={row.product} onClick={()=>openBreakdown('product',row.product,`Produto · ${row.product}`)} style={{cursor:'pointer'}}><td><b>{row.product}</b><span>Clique para ver oportunidades</span></td><td>{row.count}</td><td>{moneyShort(row.value)}</td><td>{moneyShort(row.weighted)}</td></tr>) : <tr><td>Nenhum dado</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
     </section>
     <section className="grid2 compact">
       <Panel title="Pipeline por segmento">
-        <DashboardTable headers={['Segmento','Oportunidades','Valor total']}>
+        <DashboardTable headers={['Segmento','Oportunidades','Receita mensal']}>
           {segmentRows.length ? segmentRows.map(row=><tr key={row.segment} onClick={()=>openBreakdown('segment',row.segment,`Segmento · ${row.segment}`)} style={{cursor:'pointer'}}><td><b>{row.segment}</b><span>Clique para ver oportunidades</span></td><td>{row.count}</td><td>{moneyShort(row.value)}</td></tr>) : <tr><td>Nenhum dado</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
       <Panel title="Motivos de perda">
-        <DashboardTable headers={['Motivo','Oportunidades','Valor perdido']}>
+        <DashboardTable headers={['Motivo','Oportunidades','Receita mensal perdida']}>
           {reasonRows.length ? reasonRows.map(row=><tr key={row.reason}><td><b>{row.reason}</b></td><td>{row.count}</td><td>{moneyShort(row.value)}</td></tr>) : <tr><td>Nenhuma perda no filtro</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
     </section>
     {selectedBreakdown && <Panel title={`Detalhe do insight: ${selectedBreakdown.label}`}><div id="insightBreakdown" style={{scrollMarginTop:'24px'}}>
       <p className="muted" style={{margin:'0 0 12px'}}>{breakdownDeals.length} oportunidade(s) encontrada(s) dentro dos filtros atuais.</p>
-      <DashboardTable headers={['Oportunidade','Empresa','Etapa','Responsável','Valor total','Ações']}>
-        {breakdownDeals.length ? breakdownDeals.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title || 'Sem título'}</b><span>{deal.nextStep || '-'}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td><span className="pill">{deal.stage || '-'}</span></td><td>{deal.owner || '-'}</td><td>{moneyShort(dealTcv(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade encontrada</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+      <DashboardTable headers={['Oportunidade','Empresa','Etapa','Responsável','Receita mensal','Ações']}>
+        {breakdownDeals.length ? breakdownDeals.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title || 'Sem título'}</b><span>{deal.nextStep || '-'}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td><span className="pill">{deal.stage || '-'}</span></td><td>{deal.owner || '-'}</td><td>{moneyShort(dealMrr(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade encontrada</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
       </DashboardTable>
     </div></Panel>}
     <section className="grid2 compact">
       <Panel title="Oportunidades que exigem atenção">
-        <DashboardTable headers={['Oportunidade','Empresa','Status','Valor','Ações']}>
-          {staleDeals.length ? staleDeals.slice(0,12).map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b><span>{deal.nextStep}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td><span className={`relationshipPill ${deal.relationship.tone}`}><i className={`dealHealthDot ${deal.relationship.tone}`}></i>{deal.relationship.label}</span></td><td>{moneyShort(dealTcv(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade crítica</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+        <DashboardTable headers={['Oportunidade','Empresa','Status','Receita mensal','Ações']}>
+          {staleDeals.length ? staleDeals.slice(0,12).map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b><span>{deal.nextStep}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td><span className={`relationshipPill ${deal.relationship.tone}`}><i className={`dealHealthDot ${deal.relationship.tone}`}></i>{deal.relationship.label}</span></td><td>{moneyShort(dealMrr(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade crítica</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
       <Panel title="Contratos filtrados">
@@ -2319,8 +2320,8 @@ function FunnelAnalytics({stages=STAGES,deals=[],companies=[],contacts=[],stageH
   const lostDeals = safeArray(deals).filter(deal=>deal.stage === 'Perdido');
   const finishedDeals = wonDeals.length + lostDeals.length;
   const winRate = finishedDeals ? Math.round((wonDeals.length / finishedDeals) * 100) : 0;
-  const openValue = openDeals.reduce((total,deal)=>total+dealTcv(deal),0);
-  const weightedValue = openDeals.reduce((total,deal)=>total+dealWeightedTcv(deal),0);
+  const openValue = openDeals.reduce((total,deal)=>total+dealMrr(deal),0);
+  const weightedValue = openDeals.reduce((total,deal)=>total+dealWeightedMrr(deal),0);
   const validHistory = safeArray(stageHistory).filter(entry=>byId(deals,entry.dealId));
   const durationsByStage = {};
   const historyByDeal = validHistory.reduce((groups,entry)=>{
@@ -2348,8 +2349,8 @@ function FunnelAnalytics({stages=STAGES,deals=[],companies=[],contacts=[],stageH
     return {
       stage,
       count:currentDeals.length,
-      value:currentDeals.reduce((total,deal)=>total+dealTcv(deal),0),
-      weighted:currentDeals.reduce((total,deal)=>total+dealWeightedTcv(deal),0),
+      value:currentDeals.reduce((total,deal)=>total+dealMrr(deal),0),
+      weighted:currentDeals.reduce((total,deal)=>total+dealWeightedMrr(deal),0),
       conversion:entered.size ? Math.round((advanced.size / entered.size) * 100) : null,
       averageDays:durations.length ? durations.reduce((total,value)=>total+value,0) / durations.length : null,
     };
@@ -2358,10 +2359,10 @@ function FunnelAnalytics({stages=STAGES,deals=[],companies=[],contacts=[],stageH
     const reason = lossReasons?.[deal.id] || 'Não informado';
     if(!rows[reason]) rows[reason] = {count:0,value:0};
     rows[reason].count += 1;
-    rows[reason].value += dealTcv(deal);
+    rows[reason].value += dealMrr(deal);
     return rows;
   },{})).sort((a,b)=>b[1].count-a[1].count);
-  const selectedStageDeals = selectedStage ? deals.filter(deal=>deal.stage === selectedStage).sort((a,b)=>dealTcv(b)-dealTcv(a)) : [];
+  const selectedStageDeals = selectedStage ? deals.filter(deal=>deal.stage === selectedStage).sort((a,b)=>dealMrr(b)-dealMrr(a)) : [];
   useEffect(()=>{
     if(!selectedStage) return;
     setTimeout(()=>{
@@ -2374,30 +2375,30 @@ function FunnelAnalytics({stages=STAGES,deals=[],companies=[],contacts=[],stageH
       {!validHistory.length && <p style={{margin:0,color:'#b45309',fontWeight:800}}>O histórico de etapas começará a aparecer quando uma oportunidade mudar de etapa.</p>}
     </Panel>
     <section className="cards">
-      <Kpi icon={BriefcaseBusiness} label="Pipeline aberto" value={moneyShort(openValue)}/>
-      <Kpi icon={TrendingUp} label="Previsão ponderada" value={moneyShort(weightedValue)}/>
+      <Kpi icon={BriefcaseBusiness} label="Pipeline mensal aberto" value={moneyShort(openValue)}/>
+      <Kpi icon={TrendingUp} label="Previsão mensal ponderada" value={moneyShort(weightedValue)}/>
       <Kpi icon={CheckCircle2} label="Taxa de ganho" value={`${winRate}%`}/>
       <Kpi icon={CircleDollarSign} label="Oportunidades ganhas" value={wonDeals.length}/>
     </section>
     <Panel title="Desempenho por etapa">
-      <DashboardTable headers={['Etapa','Oportunidades','Valor total','Previsão ponderada','Conversão adiante','Tempo médio','Ações']}>
+      <DashboardTable headers={['Etapa','Oportunidades','Receita mensal','Previsão mensal','Conversão adiante','Tempo médio','Ações']}>
         {stageRows.map(row=><tr key={row.stage} onClick={()=>row.count && setSelectedStage(selectedStage === row.stage ? null : row.stage)} style={{cursor:row.count ? 'pointer' : 'default'}}><td><span className="pill">{row.stage}</span></td><td>{row.count}</td><td><b>{moneyShort(row.value)}</b></td><td>{moneyShort(row.weighted)}</td><td>{row.conversion === null ? 'Aguardando histórico' : `${row.conversion}%`}</td><td>{row.averageDays === null ? 'Aguardando histórico' : `${row.averageDays.toFixed(1)} dias`}</td><td><button className="mini" disabled={!row.count} onClick={(event)=>{event.stopPropagation();setSelectedStage(selectedStage === row.stage ? null : row.stage)}}>{selectedStage === row.stage ? 'Fechar' : 'Ver oportunidades'}</button></td></tr>)}
       </DashboardTable>
     </Panel>
     {selectedStage && <Panel title={`Oportunidades em ${selectedStage}`}><div id="funnelStageDeals" style={{scrollMarginTop:'24px'}}>
       <p className="muted" style={{margin:'0 0 12px'}}>{selectedStageDeals.length} oportunidade(s) nesta etapa.</p>
-      <DashboardTable headers={['Oportunidade','Empresa','Responsável','Valor total','Previsão','Ações']}>
-        {selectedStageDeals.length ? selectedStageDeals.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title || 'Sem título'}</b><span>{deal.nextStep || '-'}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{deal.owner || '-'}</td><td>{moneyShort(dealTcv(deal))}</td><td>{deal.closeDate ? formatDate(deal.closeDate) : '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade nesta etapa</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+      <DashboardTable headers={['Oportunidade','Empresa','Responsável','Receita mensal','Previsão','Ações']}>
+        {selectedStageDeals.length ? selectedStageDeals.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title || 'Sem título'}</b><span>{deal.nextStep || '-'}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{deal.owner || '-'}</td><td>{moneyShort(dealMrr(deal))}</td><td>{deal.closeDate ? formatDate(deal.closeDate) : '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade nesta etapa</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
       </DashboardTable>
     </div></Panel>}
     <section className="grid2 compact">
       <Panel title={`Oportunidades ganhas (${wonDeals.length})`}>
-        <DashboardTable headers={['Oportunidade','Empresa','Valor total','Responsável']}>
-          {wonDeals.length ? wonDeals.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{moneyShort(dealTcv(deal))}</td><td>{deal.owner || '-'}</td></tr>) : <tr><td>Nenhuma oportunidade ganha</td><td>-</td><td>-</td><td>-</td></tr>}
+        <DashboardTable headers={['Oportunidade','Empresa','Receita mensal','Responsável']}>
+          {wonDeals.length ? wonDeals.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{moneyShort(dealMrr(deal))}</td><td>{deal.owner || '-'}</td></tr>) : <tr><td>Nenhuma oportunidade ganha</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
       <Panel title={`Motivos de perda (${lostDeals.length})`}>
-        <DashboardTable headers={['Motivo','Oportunidades','Valor perdido']}>
+        <DashboardTable headers={['Motivo','Oportunidades','Receita mensal perdida']}>
           {reasonRows.length ? reasonRows.map(([reason,data])=><tr key={reason}><td><b>{reason}</b></td><td>{data.count}</td><td>{moneyShort(data.value)}</td></tr>) : <tr><td>Nenhuma oportunidade perdida</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
@@ -2433,8 +2434,8 @@ function PendingPanel({companies=[],contacts=[],deals=[],activities=[],contracts
         </DashboardTable>
       </Panel>
       <Panel title={`Propostas sem follow-up (${proposalsWithoutFollowup.length})`}>
-        <DashboardTable headers={['Oportunidade','Empresa','Responsável','Valor total','Ações']}>
-          {proposalsWithoutFollowup.length ? proposalsWithoutFollowup.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b><span>{deal.closeDate ? `Previsão: ${formatDate(deal.closeDate)}` : 'Sem previsão'}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{deal.owner || '-'}</td><td>{moneyShort(dealTcv(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Criar follow-up</button></td></tr>) : <tr><td>Nenhuma proposta sem follow-up</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+        <DashboardTable headers={['Oportunidade','Empresa','Responsável','Receita mensal','Ações']}>
+          {proposalsWithoutFollowup.length ? proposalsWithoutFollowup.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b><span>{deal.closeDate ? `Previsão: ${formatDate(deal.closeDate)}` : 'Sem previsão'}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{deal.owner || '-'}</td><td>{moneyShort(dealMrr(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Criar follow-up</button></td></tr>) : <tr><td>Nenhuma proposta sem follow-up</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
     </section>
@@ -2451,8 +2452,8 @@ function PendingPanel({companies=[],contacts=[],deals=[],activities=[],contracts
       </Panel>
     </section>
     <Panel title={`Oportunidades sem próximo passo (${dealsWithoutNextStep.length})`}>
-      <DashboardTable headers={['Oportunidade','Empresa','Etapa','Responsável','Valor total','Ações']}>
-        {dealsWithoutNextStep.length ? dealsWithoutNextStep.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{deal.stage || '-'}</td><td>{deal.owner || '-'}</td><td>{moneyShort(dealTcv(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Definir próximo passo</button></td></tr>) : <tr><td>Todas as oportunidades abertas possuem próximo passo</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+      <DashboardTable headers={['Oportunidade','Empresa','Etapa','Responsável','Receita mensal','Ações']}>
+        {dealsWithoutNextStep.length ? dealsWithoutNextStep.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{deal.stage || '-'}</td><td>{deal.owner || '-'}</td><td>{moneyShort(dealMrr(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Definir próximo passo</button></td></tr>) : <tr><td>Todas as oportunidades abertas possuem próximo passo</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
       </DashboardTable>
     </Panel>
   </>;
