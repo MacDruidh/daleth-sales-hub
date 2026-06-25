@@ -2301,6 +2301,7 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
 }
 
 function FunnelAnalytics({stages=STAGES,deals=[],companies=[],contacts=[],stageHistory=[],lossReasons={},setSelectedDealId}){
+  const [selectedStage,setSelectedStage] = useState(null);
   const openDeals = safeArray(deals).filter(deal=>!['Ganho','Perdido'].includes(deal.stage));
   const wonDeals = safeArray(deals).filter(deal=>deal.stage === 'Ganho');
   const lostDeals = safeArray(deals).filter(deal=>deal.stage === 'Perdido');
@@ -2348,6 +2349,13 @@ function FunnelAnalytics({stages=STAGES,deals=[],companies=[],contacts=[],stageH
     rows[reason].value += dealTcv(deal);
     return rows;
   },{})).sort((a,b)=>b[1].count-a[1].count);
+  const selectedStageDeals = selectedStage ? deals.filter(deal=>deal.stage === selectedStage).sort((a,b)=>dealTcv(b)-dealTcv(a)) : [];
+  useEffect(()=>{
+    if(!selectedStage) return;
+    setTimeout(()=>{
+      document.getElementById('funnelStageDeals')?.scrollIntoView({behavior:'smooth',block:'start'});
+    }, 0);
+  }, [selectedStage]);
   return <>
     <Panel title="Funil Comercial Aprimorado">
       <p className="muted" style={{margin:'0 0 8px'}}>Visão financeira e operacional do funil. Conversão e tempo por etapa passam a ser medidos a partir das novas movimentações.</p>
@@ -2361,9 +2369,15 @@ function FunnelAnalytics({stages=STAGES,deals=[],companies=[],contacts=[],stageH
     </section>
     <Panel title="Desempenho por etapa">
       <DashboardTable headers={['Etapa','Oportunidades','Valor total','Previsão ponderada','Conversão adiante','Tempo médio','Ações']}>
-        {stageRows.map(row=><tr key={row.stage}><td><span className="pill">{row.stage}</span></td><td>{row.count}</td><td><b>{moneyShort(row.value)}</b></td><td>{moneyShort(row.weighted)}</td><td>{row.conversion === null ? 'Aguardando histórico' : `${row.conversion}%`}</td><td>{row.averageDays === null ? 'Aguardando histórico' : `${row.averageDays.toFixed(1)} dias`}</td><td><button className="mini" disabled={!row.count} onClick={()=>{const deal=deals.find(item=>item.stage===row.stage);if(deal)setSelectedDealId?.(deal.id)}}>Abrir oportunidade</button></td></tr>)}
+        {stageRows.map(row=><tr key={row.stage} onClick={()=>row.count && setSelectedStage(selectedStage === row.stage ? null : row.stage)} style={{cursor:row.count ? 'pointer' : 'default'}}><td><span className="pill">{row.stage}</span></td><td>{row.count}</td><td><b>{moneyShort(row.value)}</b></td><td>{moneyShort(row.weighted)}</td><td>{row.conversion === null ? 'Aguardando histórico' : `${row.conversion}%`}</td><td>{row.averageDays === null ? 'Aguardando histórico' : `${row.averageDays.toFixed(1)} dias`}</td><td><button className="mini" disabled={!row.count} onClick={(event)=>{event.stopPropagation();setSelectedStage(selectedStage === row.stage ? null : row.stage)}}>{selectedStage === row.stage ? 'Fechar' : 'Ver oportunidades'}</button></td></tr>)}
       </DashboardTable>
     </Panel>
+    {selectedStage && <Panel title={`Oportunidades em ${selectedStage}`}><div id="funnelStageDeals" style={{scrollMarginTop:'24px'}}>
+      <p className="muted" style={{margin:'0 0 12px'}}>{selectedStageDeals.length} oportunidade(s) nesta etapa.</p>
+      <DashboardTable headers={['Oportunidade','Empresa','Responsável','Valor total','Previsão','Ações']}>
+        {selectedStageDeals.length ? selectedStageDeals.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title || 'Sem título'}</b><span>{deal.nextStep || '-'}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{deal.owner || '-'}</td><td>{moneyShort(dealTcv(deal))}</td><td>{deal.closeDate ? formatDate(deal.closeDate) : '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade nesta etapa</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+      </DashboardTable>
+    </div></Panel>}
     <section className="grid2 compact">
       <Panel title={`Oportunidades ganhas (${wonDeals.length})`}>
         <DashboardTable headers={['Oportunidade','Empresa','Valor total','Responsável']}>
