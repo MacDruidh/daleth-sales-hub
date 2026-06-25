@@ -2673,6 +2673,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
     {canWrite && <div className="toolbar"><input placeholder="Nova etapa customizável" value={newStage} onChange={e=>setNewStage(e.target.value)} onKeyDown={e=>{ if(e.key === 'Enter') addStage(); }}/><button onClick={addStage}><Plus size={16}/>Adicionar etapa</button></div>}
     <section className="kanban">{stages.map(stage => {
       const currentStageDeals = deals.filter(d=>d.stage===stage);
+      const stageMonthlyValue = currentStageDeals.reduce((total,deal)=>total+dealMrr(deal),0);
       return <div
         className={`column ${draggingStage===stage ? 'stageDragging' : ''} ${dragOverStage===stage && draggingStage!==stage ? 'stageDropTarget' : ''}`}
         key={stage}
@@ -2688,6 +2689,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
           </div>
         </div> : <div className="stageHeader">
           <button type="button" className="stageName" onClick={()=>setSelectedStage(stage)} title="Clique para listar as oportunidades desta etapa"><span>{stage}</span><small>{currentStageDeals.length}</small></button>
+          <span className="muted" style={{fontSize:'12px',fontWeight:900}}>Mensal: {moneyShort(stageMonthlyValue)}</span>
           {canWrite && <div className="stageActions">
             <button className="mini stageDragHandle" draggable onDragStart={e=>startStageDrag(e, stage)} onDragEnd={endStageDrag} title="Arrastar etapa" aria-label={`Arrastar ${stage}`}><GripVertical size={14}/></button>
             <button className="mini" onClick={()=>startEditStage(stage)} title="Renomear etapa" aria-label={`Renomear ${stage}`}><Edit3 size={14}/></button>
@@ -2695,13 +2697,13 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
           </div>}
         </div>}
         <div className="stageCards">
-          {currentStageDeals.map(d => <article className="dealCard" key={d.id}><div onClick={()=>setSelectedDealId(d.id)}><b>{d.title}</b><span>{companyForDeal(d,companies,contacts)?.name || 'Sem empresa'}</span><strong>{money(dealTcv(d))}</strong></div><select value={d.stage} onChange={e=>move(d,e.target.value)} disabled={!canWrite}>{stages.map(s=><option key={s}>{s}</option>)}</select></article>)}
+          {currentStageDeals.map(d => <article className="dealCard" key={d.id}><div onClick={()=>setSelectedDealId(d.id)}><b>{d.title}</b><span>{companyForDeal(d,companies,contacts)?.name || 'Sem empresa'}</span><strong>{money(dealMrr(d))}/mês</strong></div><select value={d.stage} onChange={e=>move(d,e.target.value)} disabled={!canWrite}>{stages.map(s=><option key={s}>{s}</option>)}</select></article>)}
         </div>
       </div>;
     })}</section>
     {selectedStage && <Panel title={`Oportunidades em ${selectedStage}`}>
-      <DashboardTable headers={['Oportunidade','Empresa','Responsável','Valor total','Ações']}>
-        {stageDeals.length ? stageDeals.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{companyForDeal(d,companies,contacts)?.name || '-'}</td><td>{d.owner || '-'}</td><td>{moneyShort(dealTcv(d))}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade nesta etapa</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+      <DashboardTable headers={['Oportunidade','Empresa','Responsável','Receita mensal','Ações']}>
+        {stageDeals.length ? stageDeals.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{companyForDeal(d,companies,contacts)?.name || '-'}</td><td>{d.owner || '-'}</td><td>{moneyShort(dealMrr(d))}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade nesta etapa</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
       </DashboardTable>
       <button className="mini" onClick={()=>setSelectedStage(null)} style={{marginTop:'12px'}}><X size={15}/>Fechar lista</button>
     </Panel>}
