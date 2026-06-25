@@ -81,6 +81,11 @@ function readStoredCrmValue(key){
     return null;
   }
 }
+function shouldPersistCrmState(value){
+  if(Array.isArray(value)) return value.length > 0;
+  if(value && typeof value === 'object') return Object.keys(value).length > 0;
+  return value !== null && value !== undefined && value !== '';
+}
 
 function useStore(key, initial){
   const [value, setValue] = useState(() => {
@@ -110,7 +115,7 @@ function useStore(key, initial){
           localStorage.setItem(key, JSON.stringify(nextValue));
         }
 
-        if(!remoteValue){
+        if(!remoteValue && shouldPersistCrmState(nextValue)){
           await supabase.from('crm_state').upsert({
             key,
             data: nextValue,
@@ -4087,10 +4092,13 @@ function ProfilesAdmin({currentUser}){
 
 function PipedriveImport({
   companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,
+  interactions,setInteractions,opportunityFiles,setOpportunityFiles,contracts,setContracts,products,setProducts,
+  companySegments,setCompanySegments,stages,setStages,stageHistory,setStageHistory,lossReasons,setLossReasons,
   pipedriveImportMeta,setPipedriveImportMeta
 }){
   const [status,setStatus] = useState('');
   const [preview,setPreview] = useState(null);
+  const [backupPreview,setBackupPreview] = useState(null);
 
   const mergeById = (current, incoming) => {
     const map = new Map(current.map(item => [String(item.id), item]));
@@ -4108,6 +4116,83 @@ function PipedriveImport({
     notes: Array.isArray(data?.notes) ? data.notes : [],
     counts: data?.counts || {}
   });
+  const normalizeBackup = (data) => ({
+    companies:safeArray(data?.companies),
+    contacts:safeArray(data?.contacts),
+    deals:safeArray(data?.deals),
+    activities:safeArray(data?.activities),
+    notes:safeArray(data?.notes),
+    interactions:safeArray(data?.interactions),
+    opportunityFiles:safeArray(data?.opportunityFiles),
+    contracts:safeArray(data?.contracts),
+    products:safeArray(data?.products),
+    companySegments:safeArray(data?.companySegments),
+    stages:safeArray(data?.stages),
+    stageHistory:safeArray(data?.stageHistory),
+    lossReasons:data?.lossReasons && typeof data.lossReasons === 'object' ? data.lossReasons : {},
+  });
+  const backupCounts = (data) => ({
+    companies:safeArray(data?.companies).length,
+    contacts:safeArray(data?.contacts).length,
+    deals:safeArray(data?.deals).length,
+    activities:safeArray(data?.activities).length,
+    notes:safeArray(data?.notes).length,
+    contracts:safeArray(data?.contracts).length,
+  });
+  const exportBackup = () => {
+    const payload = {
+      exportedAt:new Date().toISOString(),
+      source:'Daleth Sales Hub',
+      version:1,
+      companies,contacts,deals,activities,notes,interactions,opportunityFiles,contracts,products,
+      companySegments,stages,stageHistory,lossReasons
+    };
+    const blob = new Blob([JSON.stringify(payload,null,2)], { type:'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `daleth-sales-hub-backup-${today()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setStatus('Backup gerado. Use este arquivo para restaurar a base em outro navegador.');
+  };
+  const loadBackupFile = (event) => {
+    const file = event.target.files?.[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = normalizeBackup(JSON.parse(String(reader.result)));
+        setBackupPreview(data);
+        const counts = backupCounts(data);
+        setStatus(`Backup carregado: ${counts.companies} empresas, ${counts.deals} oportunidades, ${counts.activities} atividades e ${counts.contracts} contratos.`);
+      } catch (error) {
+        console.warn('Falha ao ler backup:', error);
+        setStatus('Não foi possível ler este backup.');
+      }
+    };
+    reader.readAsText(file);
+  };
+  const restoreBackup = () => {
+    if(!backupPreview) return;
+    if(!window.confirm('Restaurar este backup neste navegador e sincronizar no estado central do CRM?')) return;
+    setCompanies(backupPreview.companies);
+    setContacts(backupPreview.contacts);
+    setDeals(backupPreview.deals);
+    setActivities(backupPreview.activities);
+    setNotes(backupPreview.notes);
+    setInteractions(backupPreview.interactions);
+    setOpportunityFiles(backupPreview.opportunityFiles);
+    setContracts(backupPreview.contracts);
+    if(backupPreview.products.length) setProducts(backupPreview.products);
+    if(backupPreview.companySegments.length) setCompanySegments(backupPreview.companySegments);
+    if(backupPreview.stages.length) setStages(backupPreview.stages);
+    setStageHistory(backupPreview.stageHistory);
+    setLossReasons(backupPreview.lossReasons);
+    setStatus('Backup restaurado. Reabra o CRM no outro navegador para conferir a sincronização.');
+  };
 
   const upsertImportedData = async (data) => {
     const companiesPayload = data.companies.map(companyToDb);
@@ -4274,6 +4359,19 @@ function PipedriveImport({
       <Kpi icon={BriefcaseBusiness} label="Oportunidades no arquivo" value={count('deals')}/>
       <Kpi icon={CalendarDays} label="Atividades no arquivo" value={count('activities')}/>
     </section>
+
+    <Panel title="Backup e restauração do CRM">
+      <p className="muted">Use esta área para levar a base correta de um navegador para outro. No Safari, gere o backup. No Chrome, carregue o arquivo e restaure.</p>
+      <div style={{display:'flex',gap:'10px',flexWrap:'wrap',alignItems:'center'}}>
+        <button className="saveBtn" onClick={exportBackup}><FileText size={16}/>Exportar backup atual</button>
+        <label className="mini" style={{cursor:'pointer',padding:'10px 12px'}}>
+          <FolderOpen size={15}/>Carregar backup
+          <input type="file" accept=".json,application/json" onChange={loadBackupFile} style={{display:'none'}} />
+        </label>
+        {backupPreview && <button className="saveBtn" onClick={restoreBackup}><Save size={16}/>Restaurar backup carregado</button>}
+      </div>
+      {backupPreview && <p className="muted" style={{margin:'12px 0 0'}}>Backup pronto: {backupCounts(backupPreview).companies} empresas, {backupCounts(backupPreview).deals} oportunidades, {backupCounts(backupPreview).activities} atividades, {backupCounts(backupPreview).contracts} contratos.</p>}
+    </Panel>
 
     <section className="grid2">
       <Panel title="Importação Pipedrive">
