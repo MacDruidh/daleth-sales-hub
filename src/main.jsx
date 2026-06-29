@@ -3466,9 +3466,12 @@ function Activities({currentUser,activities,setActivities,deals,query,setSelecte
   const monthActivityCount = calendarActivities.filter(a=>String(a.dueDate||'').startsWith(monthPrefix)).length;
   const changeMonth = (offset) => setMonth(new Date(year,monthIndex+offset,1,12));
   const dealOptions = safeArray(deals).slice().sort((a,b)=>String(a.title || '').localeCompare(String(b.title || ''),'pt-BR'));
+  const exportableActivities = safeArray(activities).filter(activity=>activity.dueDate);
+  const myExportableActivities = currentUser?.name ? exportableActivities.filter(activity=>activity.owner === currentUser.name) : [];
+  const undatedActivities = safeArray(activities).filter(activity=>!activity.dueDate);
   const calendarLinks = [
-    currentUser?.name ? ['Meu calendário',calendarSubscriptionUrl({owner:currentUser.name})] : null,
-    ['Todos os responsáveis',calendarSubscriptionUrl()]
+    currentUser?.name ? [`Meu calendário (${myExportableActivities.length})`,calendarSubscriptionUrl({owner:currentUser.name,includeCompleted:true})] : null,
+    [`Todos os responsáveis (${exportableActivities.length})`,calendarSubscriptionUrl({includeCompleted:true})]
   ].filter(Boolean);
   const copyCalendarUrl = async (url) => {
     await copyTextToClipboard(url);
@@ -3560,6 +3563,7 @@ function Activities({currentUser,activities,setActivities,deals,query,setSelecte
       <div>
         <b style={{color:'#061b34'}}>Assinar calendário externo</b>
         <p className="muted" style={{margin:'4px 0 0'}}>Use estes links no Apple Calendar ou Outlook para acompanhar as atividades do CRM. A atualização depende do intervalo definido por cada aplicativo de calendário.</p>
+        <p className="muted" style={{margin:'4px 0 0'}}>Entram no calendário externo atividades com data preenchida, pendentes ou concluídas. {undatedActivities.length ? `${undatedActivities.length} atividade(s) sem data ficam fora até receberem uma data.` : 'Todas as atividades possuem data.'}</p>
       </div>
       <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
         {calendarLinks.map(([label,url])=><div key={label} style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>

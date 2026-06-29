@@ -237,7 +237,7 @@ export default async function handler(request,response){
   if(owner) query = query.eq('owner',owner);
   if(type) query = query.or(`type.eq.${type},activity_type.eq.${type}`);
   if(status) query = query.eq('status',status);
-  if(!status && !includeCompleted) query = query.neq('status','Concluída');
+  if(!status && includeCompleted === false && url.searchParams.has('includeCompleted')) query = query.neq('status','Concluída');
 
   const { data, error } = await query;
   if(error){
