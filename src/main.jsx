@@ -1188,6 +1188,28 @@ function isDropboxLink(value){
 function normalizedDropboxLink(value){
   return dropboxHref(value).toLowerCase().replace(/([?&])dl=[01](&|$)/,'$1').replace(/[?&]$/,'').replace(/\/$/,'');
 }
+function calendarFeedToken(){
+  return import.meta.env.VITE_CALENDAR_FEED_TOKEN || '';
+}
+function calendarSubscriptionUrl({owner='',type='',status='',includeCompleted=false}={}){
+  const params = new URLSearchParams();
+  if(owner) params.set('owner',owner);
+  if(type) params.set('type',type);
+  if(status) params.set('status',status);
+  if(includeCompleted) params.set('includeCompleted','1');
+  const token = calendarFeedToken();
+  if(token) params.set('token',token);
+  const query = params.toString();
+  return `${window.location.origin}/api/calendar.ics${query ? `?${query}` : ''}`;
+}
+async function copyTextToClipboard(value){
+  if(navigator.clipboard?.writeText){
+    await navigator.clipboard.writeText(value);
+    return true;
+  }
+  window.prompt('Copie o link do calendário:',value);
+  return false;
+}
 function companyForDeal(deal, companies, contacts){
   const direct = byId(companies, deal?.companyId);
   if(direct) return direct;
@@ -3416,7 +3438,7 @@ function Documents({opportunityFiles=[],setOpportunityFiles,companies=[],contact
   </>;
 }
 
-function Activities({activities,setActivities,deals,query,setSelectedActivityId,canWrite}){
+function Activities({currentUser,activities,setActivities,deals,query,setSelectedActivityId,canWrite}){
   const [view,setView] = useState('calendar');
   const [month,setMonth] = useState(() => new Date(`${today()}T12:00:00`));
   const [calendarFilters,setCalendarFilters] = useState({owner:'',type:'',status:''});
@@ -3444,6 +3466,14 @@ function Activities({activities,setActivities,deals,query,setSelectedActivityId,
   const monthActivityCount = calendarActivities.filter(a=>String(a.dueDate||'').startsWith(monthPrefix)).length;
   const changeMonth = (offset) => setMonth(new Date(year,monthIndex+offset,1,12));
   const dealOptions = safeArray(deals).slice().sort((a,b)=>String(a.title || '').localeCompare(String(b.title || ''),'pt-BR'));
+  const calendarLinks = [
+    currentUser?.name ? ['Meu calendário',calendarSubscriptionUrl({owner:currentUser.name})] : null,
+    ['Todos os responsáveis',calendarSubscriptionUrl()]
+  ].filter(Boolean);
+  const copyCalendarUrl = async (url) => {
+    await copyTextToClipboard(url);
+    window.alert('Link do calendário copiado. No Apple Calendar ou Outlook, escolha a opção de assinar calendário por URL.');
+  };
   const openNewActivity = (date) => {
     if(!canWrite) return;
     setCalendarDraft({
@@ -3526,6 +3556,18 @@ function Activities({activities,setActivities,deals,query,setSelectedActivityId,
     }
   };
   return <Panel title={`Atividades (${list.length})`}>
+    <div style={{border:'1px solid #d7e8f5',background:'linear-gradient(180deg,#f7fcff 0%,#ffffff 100%)',borderRadius:'16px',padding:'14px',marginBottom:'14px',display:'grid',gap:'10px'}}>
+      <div>
+        <b style={{color:'#061b34'}}>Assinar calendário externo</b>
+        <p className="muted" style={{margin:'4px 0 0'}}>Use estes links no Apple Calendar ou Outlook para acompanhar as atividades do CRM. A atualização depende do intervalo definido por cada aplicativo de calendário.</p>
+      </div>
+      <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+        {calendarLinks.map(([label,url])=><div key={label} style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
+          <a className="mini" href={url} target="_blank" rel="noreferrer" style={{textDecoration:'none'}}><CalendarDays size={15}/>{label}</a>
+          <button className="mini" onClick={()=>copyCalendarUrl(url)}><Link2 size={15}/>Copiar link</button>
+        </div>)}
+      </div>
+    </div>
     <div className="activityViewBar">
       <div className="activityViewSwitch" aria-label="Visualização de atividades">
         <button className={view==='list'?'active':''} onClick={()=>setView('list')}><List size={16}/>Lista</button>
