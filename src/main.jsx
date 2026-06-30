@@ -4098,8 +4098,20 @@ function ActivityModal({activity,onClose,activities,setActivities,deals,canWrite
       window.alert('Alterações salvas localmente. O Supabase não aceitou a atualização agora.');
     }
   };
+  const remove = async () => {
+    if(!canWrite) return;
+    if(!window.confirm('Deseja realmente excluir esta atividade? Ela também deixará de aparecer no calendário externo.')) return;
+    try {
+      await deleteActivityFromSupabase(activity);
+      setActivities(activities.filter(a=>!sameId(a.id,activity.id)));
+      onClose();
+    } catch (error) {
+      console.warn('Falha ao excluir atividade no Supabase:', error);
+      window.alert('Não foi possível excluir esta atividade no Supabase agora.');
+    }
+  };
   return <div className="modalBackdrop"><div className="modal"><div className="modalHead"><div><h2>{activity.title}</h2><span>{byId(deals,activity.dealId)?.title || 'Atividade sem oportunidade vinculada'}</span></div><button className="iconBtn" onClick={onClose}><X/></button></div>
-    <div className="formGrid modalGrid"><Select label="Status" field="status" form={draft} setForm={setDraft} options={['Pendente','Concluída'].map(x=>[x,x])}/><Select label="Tipo" field="type" form={draft} setForm={setDraft} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Oportunidade" field="dealId" form={draft} setForm={setDraft} options={[['','Sem oportunidade'],...safeArray(deals).map(d=>[d.id,d.title])]}/><Input label="Data" field="dueDate" form={draft} setForm={setDraft} type="date"/><Input label="Hora" field="dueTime" form={draft} setForm={setDraft} type="time"/><Input label="Link chamada" field="meetingLink" form={draft} setForm={setDraft} type="url"/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div>
+    <div className="formGrid modalGrid"><Select label="Status" field="status" form={draft} setForm={setDraft} options={['Pendente','Concluída'].map(x=>[x,x])}/><Select label="Tipo" field="type" form={draft} setForm={setDraft} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Oportunidade" field="dealId" form={draft} setForm={setDraft} options={[['','Sem oportunidade'],...safeArray(deals).map(d=>[d.id,d.title])]}/><Input label="Data" field="dueDate" form={draft} setForm={setDraft} type="date"/><Input label="Hora" field="dueTime" form={draft} setForm={setDraft} type="time"/><Input label="Link chamada" field="meetingLink" form={draft} setForm={setDraft} type="url"/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}{canWrite && <button className="mini" onClick={remove} style={{borderColor:'#fecaca',color:'#dc2626'}}><Trash2 size={15}/>Excluir atividade</button>}</div>
   </div></div>;
 }
 
