@@ -1901,6 +1901,16 @@ function App(){
     return () => window.clearInterval(interval);
   }, [activities,currentUser,meetingReminder]);
 
+  useEffect(() => {
+    if(!authReady || !currentUser || !selectedDealId) return;
+    const activePageForScroll = (!currentUser?.canViewDashboard && page === 'dashboard') ? 'deals' : page;
+    if(activePageForScroll === 'quality') return;
+    window.requestAnimationFrame(() => {
+      mainRef.current?.scrollTo({top:0,left:0,behavior:'auto'});
+      window.scrollTo({top:0,left:0,behavior:'auto'});
+    });
+  }, [authReady,currentUser,selectedDealId,page]);
+
   if(!authReady) return <div className="app" style={{minHeight:'100vh',display:'grid',placeItems:'center',background:'#f6f8fb',color:'#061b34',fontWeight:900}}>Carregando acesso...</div>;
   if(!currentUser) return <LoginScreen onLogin={setCurrentUser}/>;
   const selectedDeal = byId(deals, selectedDealId);
@@ -1923,13 +1933,6 @@ function App(){
   const activePage = (!canViewDashboard && page === 'dashboard') ? 'deals' : page;
   const selectedDealInQuality = selectedDeal && activePage === 'quality';
   const selectedDealAsPage = selectedDeal && !selectedDealInQuality;
-  useEffect(() => {
-    if(!selectedDealAsPage) return;
-    window.requestAnimationFrame(() => {
-      mainRef.current?.scrollTo({top:0,left:0,behavior:'auto'});
-      window.scrollTo({top:0,left:0,behavior:'auto'});
-    });
-  }, [selectedDealAsPage, selectedDealId]);
   const pendingActivities = activities.filter(a => a.status !== 'Concluída');
   const overdueCount = pendingActivities.filter(a => a.dueDate && a.dueDate < today()).length;
   const meetingsTodayCount = safeArray(activities).filter(a => dateOnlyFromCrmValue(a.dueDate) === today() && isMeetingActivity(a)).length;
