@@ -1807,6 +1807,7 @@ function App(){
   const [selectedProductName,setSelectedProductName] = useState(null);
   const [meetingReminder,setMeetingReminder] = useState(null);
   const [authReady,setAuthReady] = useState(false);
+  const mainRef = useRef(null);
 
   useEffect(() => {
     if(stages.includes('Contrato')) return;
@@ -1922,6 +1923,13 @@ function App(){
   const activePage = (!canViewDashboard && page === 'dashboard') ? 'deals' : page;
   const selectedDealInQuality = selectedDeal && activePage === 'quality';
   const selectedDealAsPage = selectedDeal && !selectedDealInQuality;
+  useEffect(() => {
+    if(!selectedDealAsPage) return;
+    window.requestAnimationFrame(() => {
+      mainRef.current?.scrollTo({top:0,left:0,behavior:'auto'});
+      window.scrollTo({top:0,left:0,behavior:'auto'});
+    });
+  }, [selectedDealAsPage, selectedDealId]);
   const pendingActivities = activities.filter(a => a.status !== 'Concluída');
   const overdueCount = pendingActivities.filter(a => a.dueDate && a.dueDate < today()).length;
   const meetingsTodayCount = safeArray(activities).filter(a => dateOnlyFromCrmValue(a.dueDate) === today() && isMeetingActivity(a)).length;
@@ -1961,7 +1969,7 @@ function App(){
       <nav>{menu.map(([id,label,Icon]) => <button key={id} title={label} aria-label={label} data-label={label} className={activePage===id?'active':''} onClick={()=>navigate(id)}><Icon size={18}/><span className="navLabel">{label}</span></button>)}</nav>
       <div className="sidebarBox"><b>Perfil ativo</b><span>{currentUser.name} · {currentUser.role}</span></div>
     </aside>
-    <main className="main">
+    <main className="main" ref={mainRef}>
       <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresas, contatos e oportunidades..."/></div><button className="notification" style={{cursor:'pointer',textAlign:'left'}} onClick={()=>navigate('pending')} title="Abrir painel de pendências"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></button><div className="notification topUserCard"><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><a className="mini topUtilityBtn" href="/Manual_do_Usuario_Daleth_Sales_Hub.pdf" target="_blank" rel="noreferrer" style={{textDecoration:'none'}}><FileText size={15}/>Manual</a><button className="mini topUtilityBtn" onClick={logout}><X size={15}/>Sair</button></div></header>
       {selectedDealAsPage ? <DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/> : (query.trim() ? <GlobalSearch {...context}/> : <>
         {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='insights' && <InsightsDaleth {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <CrmQuality {...context} selectedDeal={selectedDealInQuality ? selectedDeal : null}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='registrations' && <Registrations {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>}
