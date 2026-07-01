@@ -122,7 +122,7 @@ def build_story():
     ))
     story.append(Spacer(1, 0.8 * cm))
     story.append(p(
-        "Versao atualizada: 01/07/2026. Inclui Menções para mim, sincronizacao prudente das listas principais, assinatura de calendario externo, exclusao de atividades e cadastro de motivos de perda.",
+        "Versao atualizada: 01/07/2026. Inclui Menções para mim, sincronizacao prudente das listas principais, assinatura de calendario externo, exclusao de atividades, cadastro de motivos de perda, multiplos produtos por oportunidade e edicao do historico.",
         "CoverSubtitle",
     ))
     story.append(Spacer(1, 5.2 * cm))
@@ -292,7 +292,8 @@ def build_story():
     story.append(p("Ficha da oportunidade", "Heading"))
     for item in [
         "A aba Dados permite editar informacoes comerciais.",
-        "Historico registra interacoes e anotacoes.",
+        "Cada oportunidade pode ter ate tres produtos vinculados: Produto 1, Produto 2 e Produto 3.",
+        "Historico registra interacoes e anotacoes; interacoes registradas podem ser editadas pela propria linha do tempo.",
         "Atividades mostra compromissos e follow-ups vinculados.",
         "Documentos permite anexar links de arquivos.",
         "Contrato e Matriz trazem resumo comercial e sugestoes de solucoes.",

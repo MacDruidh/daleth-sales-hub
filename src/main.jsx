@@ -461,13 +461,15 @@ function contactDbIdFromUiId(contacts, contactId){
 }
 
 function mapDealFromDb(d){
+  const product = d.product || '';
   return {
     id: d.legacy_id || d.id,
     supabaseId: d.id,
     companyId: d.companies?.legacy_id || d.company_id,
     contactId: d.contacts?.legacy_id || d.contact_id || '',
     title: d.title || '',
-    product: d.product || '',
+    product,
+    products: product ? product.split(/\s+\+\s+/).map(item=>item.trim()).filter(Boolean).slice(0,3) : [],
     value: Number(d.value || 0),
     setup: Number(d.setup_value || 0),
     contractMonths: Number(d.contract_months || 12),
@@ -482,23 +484,24 @@ function mapDealFromDb(d){
 }
 
 function dealToDb(deal, companies, contacts){
+  const normalizedDeal = normalizeDealProductsForSave(deal);
   return {
-    legacy_id: deal.legacy_id || deal.legacyId || (deal.pipedriveId ? String(deal.id) : null),
-    company_id: companyDbIdFromUiId(companies, deal.companyId),
-    contact_id: contactDbIdFromUiId(contacts, deal.contactId),
-    title: deal.title || '',
-    product: deal.product || null,
-    value: Number(deal.value || 0),
-    setup_value: Number(deal.setup || 0),
-    contract_months: Number(deal.contractMonths || 12),
-    probability: probabilityForStage(deal.stage,Number(deal.probability || 30)),
-    expected_close_date: deal.closeDate || null,
-    status: deal.status || null,
-    stage: deal.stage || 'Lead Captado',
-    description: deal.description || null,
-    next_step: deal.nextStep || null,
-    priority: deal.priority || 'Média',
-    owner: deal.owner || null
+    legacy_id: normalizedDeal.legacy_id || normalizedDeal.legacyId || (normalizedDeal.pipedriveId ? String(normalizedDeal.id) : null),
+    company_id: companyDbIdFromUiId(companies, normalizedDeal.companyId),
+    contact_id: contactDbIdFromUiId(contacts, normalizedDeal.contactId),
+    title: normalizedDeal.title || '',
+    product: normalizedDeal.product || null,
+    value: Number(normalizedDeal.value || 0),
+    setup_value: Number(normalizedDeal.setup || 0),
+    contract_months: Number(normalizedDeal.contractMonths || 12),
+    probability: probabilityForStage(normalizedDeal.stage,Number(normalizedDeal.probability || 30)),
+    expected_close_date: normalizedDeal.closeDate || null,
+    status: normalizedDeal.status || null,
+    stage: normalizedDeal.stage || 'Lead Captado',
+    description: normalizedDeal.description || null,
+    next_step: normalizedDeal.nextStep || null,
+    priority: normalizedDeal.priority || 'Média',
+    owner: normalizedDeal.owner || null
   };
 }
 
@@ -1226,7 +1229,7 @@ function requiredDealFields(deal,companies,contacts){
   const missing = [];
   if(!byId(companies,deal?.companyId)) missing.push('empresa');
   if(!String(deal?.owner || '').trim()) missing.push('responsável');
-  if(!String(deal?.product || '').trim()) missing.push('produto');
+  if(!dealProductValues(deal).length) missing.push('produto');
   if(!String(deal?.nextStep || '').trim()) missing.push('próximo passo');
   return missing;
 }
@@ -1244,6 +1247,30 @@ function mergeUniqueTextOptions(...groups){
   return groups.flatMap(group => safeArray(group)).map(value => String(value || '').trim()).filter(Boolean).filter((value,index,items)=>
     items.findIndex(item=>item.toLowerCase() === value.toLowerCase()) === index
   );
+}
+function dealProductValues(deal){
+  const hasExplicitFields = Object.prototype.hasOwnProperty.call(deal || {}, 'product2') || Object.prototype.hasOwnProperty.call(deal || {}, 'product3');
+  const raw = hasExplicitFields
+    ? [deal?.product, deal?.product2, deal?.product3]
+    : (Array.isArray(deal?.products) && deal.products.length ? deal.products : String(deal?.product || '').split(/\s+\+\s+/));
+  return mergeUniqueTextOptions(raw).slice(0,3);
+}
+function dealProductLabel(deal){
+  return dealProductValues(deal).join(' + ') || String(deal?.product || '').trim();
+}
+function normalizeDealProductsForSave(deal){
+  const values = dealProductValues(deal);
+  return {
+    ...deal,
+    products: values,
+    product: values.join(' + '),
+    product2: values[1] || '',
+    product3: values[2] || '',
+  };
+}
+function dealHasProduct(deal, product){
+  if(!product) return true;
+  return dealProductValues(deal).some(item => normalizedLookup(item) === normalizedLookup(product));
 }
 function dealMrr(d){ return Number(d?.value || 0); }
 function dealSetup(d){ return Number(d?.setup || 0); }
@@ -1998,7 +2025,7 @@ function GlobalSearch({query,companies,contacts,deals,setDeals,activities,contra
   }).slice(0,8);
   const matchingDeals = deals.filter(d => {
     const company = companyForDeal(d,companies,contacts);
-    return includes(d.title,d.product,d.owner,d.stage,d.description,d.nextStep,company?.name,company?.segment);
+    return includes(d.title,dealProductLabel(d),d.owner,d.stage,d.description,d.nextStep,company?.name,company?.segment);
   });
   const dealResults = matchingDeals
     .sort((a,b)=>String(a.title || '').localeCompare(String(b.title || ''),'pt-BR',{sensitivity:'base'}))
@@ -2009,7 +2036,7 @@ function GlobalSearch({query,companies,contacts,deals,setDeals,activities,contra
   });
   const contractResults = matchingContracts.slice(0,8);
   const relatedProducts = new Set([
-    ...matchingDeals.map(d=>d.product),
+    ...matchingDeals.flatMap(d=>dealProductValues(d)),
     ...matchingContracts.map(c=>c.product),
   ].filter(Boolean).map(p=>String(p).trim().toLowerCase()));
   const productResults = safeArray(products).filter(p => includes(p) || relatedProducts.has(String(p).trim().toLowerCase())).slice(0,8);
@@ -2042,7 +2069,7 @@ function GlobalSearch({query,companies,contacts,deals,setDeals,activities,contra
     <section className="grid2 compact">
       <Panel title="Oportunidades">
         <DashboardTable headers={['Oportunidade','Empresa','Etapa','Receita mensal','Ações']}>
-          {dealResults.length ? dealResults.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.product}</span></td><td>{companyForDeal(d,companies,contacts)?.name || '-'}</td><td>{d.stage}</td><td>{moneyShort(dealMrr(d))}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Editar</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDealFromSearch(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>) : <tr><td>Nenhuma oportunidade</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+          {dealResults.length ? dealResults.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{dealProductLabel(d)}</span></td><td>{companyForDeal(d,companies,contacts)?.name || '-'}</td><td>{d.stage}</td><td>{moneyShort(dealMrr(d))}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Editar</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDealFromSearch(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>) : <tr><td>Nenhuma oportunidade</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
       <Panel title="Empresas">
@@ -2315,7 +2342,7 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
   const next90 = new Date(`${today()}T00:00:00`);
   next90.setDate(next90.getDate()+90);
   const owners = mergeUniqueTextOptions(deals.map(deal=>deal.owner),activities.map(activity=>activity.owner),contracts.map(contract=>contract.owner)).sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  const products = mergeUniqueTextOptions(deals.map(deal=>deal.product),contracts.map(contract=>contract.product)).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const products = mergeUniqueTextOptions(deals.flatMap(deal=>dealProductValues(deal)),contracts.map(contract=>contract.product)).sort((a,b)=>a.localeCompare(b,'pt-BR'));
   const segments = mergeUniqueTextOptions(companies.map(company=>company.segment),deals.map(deal=>dealSegment(deal,companies,contacts))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
   const periodIncludes = (dateValue) => {
     if(filters.period === 'all') return true;
@@ -2331,7 +2358,7 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
   };
   const dealMatches = (deal) =>
     (!filters.owner || deal.owner === filters.owner) &&
-    (!filters.product || deal.product === filters.product) &&
+    dealHasProduct(deal, filters.product) &&
     (!filters.segment || dealSegment(deal,companies,contacts) === filters.segment) &&
     periodIncludes(deal.closeDate || today());
   const filteredDeals = safeArray(deals).filter(dealMatches);
@@ -2341,7 +2368,7 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
   const filteredActivities = safeArray(activities).filter(activity=>{
     const deal = byId(deals,activity.dealId);
     return (!filters.owner || activity.owner === filters.owner || deal?.owner === filters.owner) &&
-      (!filters.product || deal?.product === filters.product) &&
+      (!filters.product || dealHasProduct(deal, filters.product)) &&
       (!filters.segment || dealSegment(deal,companies,contacts) === filters.segment) &&
       periodIncludes(activity.dueDate || today());
   });
@@ -2350,7 +2377,7 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
     const company = byId(companies,contract.companyId);
     const segment = company?.segment || dealSegment(deal,companies,contacts);
     return (!filters.owner || contract.owner === filters.owner || deal?.owner === filters.owner) &&
-      (!filters.product || contract.product === filters.product || deal?.product === filters.product) &&
+      (!filters.product || contract.product === filters.product || dealHasProduct(deal, filters.product)) &&
       (!filters.segment || segment === filters.segment) &&
       periodIncludes(contract.startDate || contract.endDate || today());
   });
@@ -2379,11 +2406,13 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
     return rows;
   },{})).sort((a,b)=>b.weighted-a.weighted);
   const productRows = Object.values(filteredDeals.reduce((rows,deal)=>{
-    const product = deal.product || 'Sem produto';
-    if(!rows[product]) rows[product] = {product,count:0,value:0,weighted:0};
-    rows[product].count += 1;
-    rows[product].value += dealMrr(deal);
-    if(!['Ganho','Perdido'].includes(deal.stage)) rows[product].weighted += dealWeightedMrr(deal);
+    const labels = dealProductValues(deal);
+    (labels.length ? labels : ['Sem produto']).forEach(product => {
+      if(!rows[product]) rows[product] = {product,count:0,value:0,weighted:0};
+      rows[product].count += 1;
+      rows[product].value += dealMrr(deal);
+      if(!['Ganho','Perdido'].includes(deal.stage)) rows[product].weighted += dealWeightedMrr(deal);
+    });
     return rows;
   },{})).sort((a,b)=>b.value-a.value);
   const segmentRows = Object.values(filteredDeals.reduce((rows,deal)=>{
@@ -2404,7 +2433,7 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
     if(!selectedBreakdown) return [];
     const key = selectedBreakdown.key;
     if(selectedBreakdown.type === 'owner') return openDeals.filter(deal=>(deal.owner || 'Sem responsável') === key);
-    if(selectedBreakdown.type === 'product') return filteredDeals.filter(deal=>(deal.product || 'Sem produto') === key);
+    if(selectedBreakdown.type === 'product') return filteredDeals.filter(deal=>key === 'Sem produto' ? !dealProductValues(deal).length : dealHasProduct(deal,key));
     if(selectedBreakdown.type === 'segment') return filteredDeals.filter(deal=>dealSegment(deal,companies,contacts) === key);
     return [];
   })().sort((a,b)=>dealMrr(b)-dealMrr(a));
@@ -2652,7 +2681,7 @@ function CrmQuality({companies=[],contacts=[],deals=[],selectedDeal,setSelectedD
     const issues = [];
     if(!company) issues.push('Sem empresa');
     if(!String(deal.owner || '').trim()) issues.push('Sem responsável');
-    if(!String(deal.product || '').trim()) issues.push('Sem produto');
+    if(!dealProductValues(deal).length) issues.push('Sem produto');
     if(!String(deal.nextStep || '').trim()) issues.push('Sem próximo passo');
     return {deal,company,issues};
   }).filter(item=>item.issues.length);
@@ -2911,7 +2940,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
 }
 
 function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,notes,setNotes,interactions=[],activities=[],setSelectedDealId,setSelectedProductName,query,canWrite,stageHistory,setStageHistory}){
-  const empty = { title:'', companyId:companies[0]?.id||'', contactId:'', product:'SAC+', value:0, setup:0, contractMonths:12, stage:stages[0], owner:'Sergio Paulo', probability:probabilityForStage(stages[0],30), closeDate:'', description:'', nextStep:'', priority:'Média' };
+  const empty = { title:'', companyId:companies[0]?.id||'', contactId:'', product:'SAC+', product2:'', product3:'', products:['SAC+'], value:0, setup:0, contractMonths:12, stage:stages[0], owner:'Sergio Paulo', probability:probabilityForStage(stages[0],30), closeDate:'', description:'', nextStep:'', priority:'Média' };
   const [form,setFormBase] = useState(empty);
   const [filters,setFilters] = useState({ companyId:'', product:'', stage:'', owner:'', closeBeforeMonth:'' });
   const [selectedDealIds,setSelectedDealIds] = useState([]);
@@ -2926,9 +2955,9 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
   };
   const availableContacts = safeArray(contacts).filter(c=>sameId(c.companyId, form.companyId));
   const list = deals.filter(d => {
-    const matchesQuery = (safeText(d.title)+safeText(d.product)+safeText(d.owner)+safeText(d.stage)+safeText(d.description)+safeText(d.nextStep)).toLowerCase().includes(query.toLowerCase());
+    const matchesQuery = (safeText(d.title)+safeText(dealProductLabel(d))+safeText(d.owner)+safeText(d.stage)+safeText(d.description)+safeText(d.nextStep)).toLowerCase().includes(query.toLowerCase());
     const matchesCompany = !filters.companyId || sameId(d.companyId, filters.companyId);
-    const matchesProduct = !filters.product || d.product === filters.product;
+    const matchesProduct = dealHasProduct(d, filters.product);
     const matchesStage = !filters.stage || d.stage === filters.stage;
     const matchesOwner = !filters.owner || d.owner === filters.owner;
     const matchesCloseBefore = !filters.closeBeforeMonth || (d.closeDate && d.closeDate < `${filters.closeBeforeMonth}-01`);
@@ -2970,11 +2999,11 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
     if(!form.title.trim()) return;
     const similarDeal = deals.find(deal =>
       normalizedLookup(deal.title) === normalizedLookup(form.title) ||
-      (sameId(deal.companyId, form.companyId) && normalizedLookup(deal.product) === normalizedLookup(form.product) && normalizedLookup(deal.title).includes(normalizedLookup(form.title)))
+      (sameId(deal.companyId, form.companyId) && dealHasProduct(deal, form.product) && normalizedLookup(deal.title).includes(normalizedLookup(form.title)))
     );
     if(similarDeal && !window.confirm(`Existe uma oportunidade ${entityCode('O',similarDeal)} - ${similarDeal.title} com dados semelhantes. Deseja incluir mesmo assim?`)) return;
     const nextDeal = {
-      ...form,
+      ...normalizeDealProductsForSave(form),
       value: Number(form.value),
       setup: Number(form.setup),
       contractMonths: Number(form.contractMonths || 12),
@@ -3040,7 +3069,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
   };
   const clearFilters = () => setFilters({ companyId:'', product:'', stage:'', owner:'', closeBeforeMonth:'' });
   return <>
-    {canWrite && <Panel title="Nova oportunidade"><div className="formGrid"><Input label="Título" field="title" form={form} setForm={setForm}/><Select label="Empresa *" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Contato" field="contactId" form={form} setForm={setForm} options={[["", availableContacts.length ? "Selecione" : "Sem contatos desta empresa"],...availableContacts.map(c=>[c.id,c.name])]}/><Select label="Produto *" field="product" form={form} setForm={setForm} options={safeArray(products).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={form} setForm={setForm} type="number"/><Input label="Implantação" field="setup" form={form} setForm={setForm} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(form.stage,form.probability)} readOnly/></label><Select label="Etapa" field="stage" form={form} setForm={setForm} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável *" field="owner" form={form} setForm={setForm} options={USERS.map(u=>[u,u])}/><Input label="Fechamento previsto" field="closeDate" form={form} setForm={setForm} type="date"/><Input label="Próximo passo *" field="nextStep" form={form} setForm={setForm}/><label><span>Valor total do contrato</span><input value={money(dealTcv(form))} readOnly/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Criar oportunidade</button></div></Panel>}
+    {canWrite && <Panel title="Nova oportunidade"><div className="formGrid"><Input label="Título" field="title" form={form} setForm={setForm}/><Select label="Empresa *" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Contato" field="contactId" form={form} setForm={setForm} options={[["", availableContacts.length ? "Selecione" : "Sem contatos desta empresa"],...availableContacts.map(c=>[c.id,c.name])]}/><DealProductFields form={form} setForm={setForm} products={products}/><Input label="Receita mensal" field="value" form={form} setForm={setForm} type="number"/><Input label="Implantação" field="setup" form={form} setForm={setForm} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(form.stage,form.probability)} readOnly/></label><Select label="Etapa" field="stage" form={form} setForm={setForm} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável *" field="owner" form={form} setForm={setForm} options={USERS.map(u=>[u,u])}/><Input label="Fechamento previsto" field="closeDate" form={form} setForm={setForm} type="date"/><Input label="Próximo passo *" field="nextStep" form={form} setForm={setForm}/><label><span>Valor total do contrato</span><input value={money(dealTcv(form))} readOnly/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Criar oportunidade</button></div></Panel>}
     <Panel title="Filtros de oportunidades"><div className="formGrid">
       <Select label="Empresa" field="companyId" form={filters} setForm={setFilters} options={[["","Todas"],...safeArray(companies).map(c=>[c.id,c.name])]}/>
       <Select label="Produto" field="product" form={filters} setForm={setFilters} options={[["","Todos"],...safeArray(products).map(p=>[p,p])]}/>
@@ -3061,7 +3090,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
         <span>{selectedDeals.length} selecionada(s)</span>
         <button className="mini" onClick={removeSelectedDeals} disabled={!selectedDeals.length}><Trash2 size={15}/>Excluir selecionadas</button>
       </div>}
-      <Table headers={['Sel.','Oportunidade','Empresa','Produto','Receita mensal','Prazo','Contrato total','Etapa','Responsável','Ações']}>{list.map(d=>{ const linkedCompany = companyForDeal(d,companies,contacts); const relationship = relationshipStatusForDeal(d, interactions, activities); return <tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><input className="rowSelect" type="checkbox" checked={selectedDealIds.some(id=>sameId(id,d.id))} onChange={(e)=>{e.stopPropagation(); toggleDealSelection(d.id);}} onClick={e=>e.stopPropagation()} disabled={!canWrite}/></td><td><div className="dealHealthLine"><i className={`dealHealthDot ${relationship.tone}`} title={relationship.label}></i><b>{d.title}</b></div><span>{relationship.label}</span><span>{d.nextStep}</span></td><td>{linkedCompany?.name || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(d.product)}} disabled={!d.product}>{d.product || '-'}</button></td><td><b>{money(dealMrr(d))}</b></td><td>{dealMonths(d)} meses</td><td>{money(dealTcv(d))}</td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>})}</Table>
+      <Table headers={['Sel.','Oportunidade','Empresa','Produto','Receita mensal','Prazo','Contrato total','Etapa','Responsável','Ações']}>{list.map(d=>{ const linkedCompany = companyForDeal(d,companies,contacts); const relationship = relationshipStatusForDeal(d, interactions, activities); return <tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><input className="rowSelect" type="checkbox" checked={selectedDealIds.some(id=>sameId(id,d.id))} onChange={(e)=>{e.stopPropagation(); toggleDealSelection(d.id);}} onClick={e=>e.stopPropagation()} disabled={!canWrite}/></td><td><div className="dealHealthLine"><i className={`dealHealthDot ${relationship.tone}`} title={relationship.label}></i><b>{d.title}</b></div><span>{relationship.label}</span><span>{d.nextStep}</span></td><td>{linkedCompany?.name || '-'}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>{dealProductValues(d).map(product=><button className="mini" key={product} onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(product)}}>{product}</button>)}</div></td><td><b>{money(dealMrr(d))}</b></td><td>{dealMonths(d)} meses</td><td>{money(dealTcv(d))}</td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>})}</Table>
     </Panel>
   </>;
 }
@@ -3073,7 +3102,9 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,c
   const [draft,setDraft] = useState({contractMonths:12,setup:0,...deal,companyId:inferredCompany?.id || deal.companyId,probability:probabilityForStage(deal.stage,deal.probability),lossReason:lossReasons?.[deal.id] || ''});
   const [note,setNote] = useState('');
   const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),dueTime:'',meetingLink:'',owner:deal.owner || currentUser?.name || 'Sergio Paulo',status:'Pendente',notes:''});
-  const [interaction,setInteraction] = useState({type:'Ligação',dateTime:crmDateTimeInput(),owner:currentUser?.name || deal.owner || 'Sergio Paulo',description:'',nextAction:'',nextDueDate:''});
+  const emptyInteraction = {type:'Ligação',dateTime:crmDateTimeInput(),owner:currentUser?.name || deal.owner || 'Sergio Paulo',description:'',nextAction:'',nextDueDate:''};
+  const [interaction,setInteraction] = useState(emptyInteraction);
+  const [editingInteractionId,setEditingInteractionId] = useState(null);
   const emptyFile = {id:'',name:'',url:'',category:'Proposta',notes:'',owner:currentUser?.name || deal.owner || 'Sergio Paulo'};
   const [fileDraft,setFileDraft] = useState(emptyFile);
   const company = byId(companies, draft.companyId) || inferredCompany;
@@ -3090,6 +3121,7 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,c
       id:`interaction-${i.id}`,
       source:'interaction',
       type:i.type || 'Interação',
+      rawId:i.id,
       owner:i.owner || i.user || 'Daleth',
       date:i.dateTime || i.createdAt || i.date || '',
       description:i.description || '',
@@ -3123,13 +3155,14 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,c
 
   const save = async () => {
     if(!canWrite) return;
-    const nextDeal = {
+    const rawDeal = {
       ...draft,
       value: Number(draft.value),
       setup: Number(draft.setup),
       contractMonths: Number(draft.contractMonths || 12),
       probability: probabilityForStage(draft.stage,draft.probability)
     };
+    const nextDeal = normalizeDealProductsForSave(rawDeal);
     if(!validateRequiredDealFields(nextDeal,companies,contacts)) return;
     if(deal.stage !== nextDeal.stage) setStageHistory?.(appendStageHistory(stageHistory,deal,deal.stage,nextDeal.stage,currentUser?.name));
     if(nextDeal.stage === 'Perdido') setLossReasons?.({...lossReasons,[deal.id]:nextDeal.lossReason || ''});
@@ -3177,15 +3210,40 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,c
       window.alert(`Atividade salva localmente. O Supabase não aceitou a gravação agora: ${supabaseErrorText(error)}`);
     }
   };
-  const addInteraction = () => {
+  const saveInteraction = () => {
     if(!canWrite) return;
     if(!interaction.description.trim()) return;
-    setInteractions([{...interaction,id:Date.now(),dealId:deal.id,createdAt:new Date().toISOString()},...safeArray(interactions)]);
+    const nextInteraction = editingInteractionId
+      ? {...interaction,id:editingInteractionId,dealId:deal.id,updatedAt:new Date().toISOString()}
+      : {...interaction,id:Date.now(),dealId:deal.id,createdAt:new Date().toISOString()};
+    setInteractions(editingInteractionId
+      ? safeArray(interactions).map(item=>sameId(item.id,editingInteractionId) ? nextInteraction : item)
+      : [nextInteraction,...safeArray(interactions)]
+    );
     if(interaction.nextAction.trim()){
       setDeals(deals.map(d=>sameId(d.id,deal.id) ? {...d,nextStep:interaction.nextAction} : d));
       setDraft({...draft,nextStep:interaction.nextAction});
     }
-    setInteraction({type:'Ligação',dateTime:crmDateTimeInput(),owner:currentUser?.name || deal.owner || 'Sergio Paulo',description:'',nextAction:'',nextDueDate:''});
+    setInteraction({...emptyInteraction,dateTime:crmDateTimeInput()});
+    setEditingInteractionId(null);
+  };
+  const editInteraction = (item) => {
+    if(!canWrite || item.source !== 'interaction') return;
+    const original = safeArray(interactions).find(interaction=>sameId(interaction.id,item.rawId));
+    if(!original) return;
+    setInteraction({
+      type:original.type || 'Ligação',
+      dateTime:original.dateTime || original.createdAt || crmDateTimeInput(),
+      owner:original.owner || currentUser?.name || deal.owner || 'Sergio Paulo',
+      description:original.description || '',
+      nextAction:original.nextAction || '',
+      nextDueDate:original.nextDueDate || '',
+    });
+    setEditingInteractionId(original.id);
+  };
+  const cancelInteractionEdit = () => {
+    setInteraction({...emptyInteraction,dateTime:crmDateTimeInput()});
+    setEditingInteractionId(null);
   };
   const saveFileLink = () => {
     if(!canWrite || !setOpportunityFiles) return;
@@ -3235,7 +3293,7 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,c
           <p className="muted" style={{margin:0,display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center'}}>
             <button className="mini" onClick={()=>openLinkedEntity(setSelectedCompanyId, company?.id)} disabled={!company}>{company?.name || 'Sem empresa'}</button>
             {contact?.name && <button className="mini" onClick={()=>openLinkedEntity(setSelectedContactId, deal.contactId)}>{contact.name}</button>}
-            <button className="mini" onClick={()=>setSelectedProductName?.(draft.product)} disabled={!draft.product}>{draft.product || 'Sem produto'}</button>
+            {dealProductValues(draft).length ? dealProductValues(draft).map(product=><button className="mini" key={product} onClick={()=>setSelectedProductName?.(product)}>{product}</button>) : <button className="mini" disabled>Sem produto</button>}
           </p>
         </div>
         <div style={{display:'flex',gap:'10px',flexWrap:'wrap'}}>
@@ -3256,20 +3314,21 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,c
 
     <div className="tabs" style={{marginBottom:'18px',overflowX:'auto'}}>{['dados','historico','atividades','arquivos','contrato','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t === 'dados' ? 'Dados' : t === 'historico' ? `Histórico (${dealInteractions.length})` : t === 'atividades' ? `Atividades (${openDealActivities.length})` : t === 'arquivos' ? `Arquivos (${dealFiles.length})` : t === 'contrato' ? 'Contrato' : 'Matriz'}</button>)}</div>
 
-    {tab==='dados' && <Panel title="Dados da oportunidade"><div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={optionsIncludingCurrent(products,draft.product).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(draft.stage,draft.probability)} readOnly/></label><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/>{draft.stage==='Perdido' && <Select label="Motivo da perda" field="lossReason" form={draft} setForm={setDraft} options={[["","Selecione"],...optionsIncludingCurrent(lossReasonOptions,draft.lossReason).map(reason=>[reason,reason])]}/>}<label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div></Panel>}
+    {tab==='dados' && <Panel title="Dados da oportunidade"><div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><DealProductFields form={draft} setForm={setDraft} products={products}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(draft.stage,draft.probability)} readOnly/></label><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/>{draft.stage==='Perdido' && <Select label="Motivo da perda" field="lossReason" form={draft} setForm={setDraft} options={[["","Selecione"],...optionsIncludingCurrent(lossReasonOptions,draft.lossReason).map(reason=>[reason,reason])]}/>}<label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div></Panel>}
 
     {tab==='historico' && <>
-      {canWrite && <Panel title="Nova interação"><div className="formGrid modalGrid">
+      {canWrite && <Panel title={editingInteractionId ? 'Editar interação' : 'Nova interação'}><div className="formGrid modalGrid">
         <Select label="Tipo" field="type" form={interaction} setForm={setInteraction} options={['Ligação','Reunião','E-mail','WhatsApp','Anotação'].map(x=>[x,x])}/>
         <Input label="Data e hora" field="dateTime" form={interaction} setForm={setInteraction} type="datetime-local"/>
         <Select label="Responsável" field="owner" form={interaction} setForm={setInteraction} options={USERS.map(u=>[u,u])}/>
         <Input label="Próxima ação" field="nextAction" form={interaction} setForm={setInteraction}/>
         <Input label="Prazo da próxima ação" field="nextDueDate" form={interaction} setForm={setInteraction} type="date"/>
         <Textarea label="Descrição da tratativa" field="description" form={interaction} setForm={setInteraction}/>
-        <button className="saveBtn" onClick={addInteraction}><MessageSquare size={16}/>Registrar interação</button>
+        <button className="saveBtn" onClick={saveInteraction}><MessageSquare size={16}/>{editingInteractionId ? 'Salvar histórico' : 'Registrar interação'}</button>
+        {editingInteractionId && <button className="mini" onClick={cancelInteractionEdit}><X size={15}/>Cancelar edição</button>}
       </div></Panel>}
       <Panel title="Linha do tempo da oportunidade">
-        <div className="timeline">{timeline.length ? timeline.map(item=><div className={`timelineItem ${item.source === 'note' ? 'timelineNote' : ''}`} data-full-note={item.source === 'note' ? item.description : undefined} title={item.source === 'note' ? 'Passe o cursor para ver a anotação completa' : undefined} key={item.id}><b>{interactionIcon(item.type)} {item.type}</b><span>{formatDateTime(item.date)} · {item.owner}</span><p>{item.description}</p>{item.nextAction && <p><b>Próxima ação:</b> {item.nextAction}{item.nextDueDate ? ` · Prazo: ${formatDate(item.nextDueDate)}` : ''}</p>}</div>) : <p className="muted">Nenhuma tratativa registrada ainda.</p>}</div>
+        <div className="timeline">{timeline.length ? timeline.map(item=><div className={`timelineItem ${item.source === 'note' ? 'timelineNote' : ''}`} data-full-note={item.source === 'note' ? item.description : undefined} title={item.source === 'note' ? 'Passe o cursor para ver a anotação completa' : undefined} key={item.id}><div style={{display:'flex',justifyContent:'space-between',gap:'12px',alignItems:'flex-start',flexWrap:'wrap'}}><b>{interactionIcon(item.type)} {item.type}</b>{canWrite && item.source === 'interaction' && <button className="mini" onClick={()=>editInteraction(item)}><Edit3 size={15}/>Editar</button>}</div><span>{formatDateTime(item.date)} · {item.owner}</span><p>{item.description}</p>{item.nextAction && <p><b>Próxima ação:</b> {item.nextAction}{item.nextDueDate ? ` · Prazo: ${formatDate(item.nextDueDate)}` : ''}</p>}</div>) : <p className="muted">Nenhuma tratativa registrada ainda.</p>}</div>
       </Panel>
     </>}
 
@@ -3284,7 +3343,7 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,c
 
     {tab==='contrato' && <Panel title="Resumo Comercial"><div className="formGrid modalGrid">
 <label><span>Empresa</span><input value={company?.name || ''} readOnly/></label>
-<label><span>Produto</span><input value={draft.product || ''} readOnly/></label>
+<label><span>Produtos</span><input value={dealProductLabel(draft)} readOnly/></label>
 <label><span>Receita mensal</span><input value={money(dealMrr(draft))} readOnly/></label>
 <label><span>Implantação</span><input value={money(dealSetup(draft))} readOnly/></label>
 <label><span>Prazo contratual</span><input value={`${dealMonths(draft)} meses`} readOnly/></label>
@@ -3709,6 +3768,37 @@ function SegmentField({label='Segmento',field='segment',form,setForm,segments,se
   </label>;
 }
 
+function DealProductFields({form,setForm,products=[]}){
+  const values = dealProductValues(form);
+  const updateAt = (index, value) => {
+    const nextValues = [...values];
+    nextValues[index] = value;
+    const normalized = mergeUniqueTextOptions(nextValues).slice(0,3);
+    setForm({
+      ...form,
+      products: normalized,
+      product: normalized[0] || '',
+      product2: normalized[1] || '',
+      product3: normalized[2] || '',
+    });
+  };
+  return <>
+    {[0,1,2].map(index => (
+      <Select
+        key={index}
+        label={index === 0 ? 'Produto 1 *' : `Produto ${index + 1}`}
+        field={`product${index + 1}`}
+        form={{[`product${index + 1}`]: values[index] || ''}}
+        setForm={next => updateAt(index, next[`product${index + 1}`] || '')}
+        options={[
+          ...(index === 0 ? [] : [['','Nenhum']]),
+          ...optionsIncludingCurrent(products, values[index]).map(product=>[product,product])
+        ]}
+      />
+    ))}
+  </>;
+}
+
 function Registrations(props){
   const [tab,setTab] = useState('companies');
   const tabs = [
@@ -3857,7 +3947,7 @@ function Contracts({contracts,setContracts,deals,companies,products,query,canWri
       .map(d=>({
         dealId: d.id,
         companyId: d.companyId,
-        product: d.product,
+        product: dealProductLabel(d),
         startDate: d.closeDate || today(),
         endDate: addMonths(d.closeDate || today(), dealMonths(d)),
         mrr: dealMrr(d),
