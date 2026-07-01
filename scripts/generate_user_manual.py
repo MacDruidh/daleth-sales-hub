@@ -122,7 +122,7 @@ def build_story():
     ))
     story.append(Spacer(1, 0.8 * cm))
     story.append(p(
-        "Versao atualizada: 29/06/2026. Inclui Menções para mim, sincronizacao prudente das listas principais e assinatura de calendario externo.",
+        "Versao atualizada: 01/07/2026. Inclui Menções para mim, sincronizacao prudente das listas principais, assinatura de calendario externo e exclusao de atividades.",
         "CoverSubtitle",
     ))
     story.append(Spacer(1, 5.2 * cm))
@@ -315,6 +315,7 @@ def build_story():
         "Atividades podem ficar Pendentes ou Concluidas.",
         "Atividades vencidas aparecem em Pendencias, Dashboard e Insights.",
         "Use @Nome nas observacoes de uma atividade ou reuniao para citar alguem do time.",
+        "Para uma atividade cadastrada por engano, abra a atividade e use Excluir atividade. Ela sai do CRM e tambem deixa de aparecer no calendario externo depois da proxima atualizacao da assinatura.",
         "Use Assinar calendario externo para copiar o link e assinar as atividades no Apple Calendar ou Outlook.",
         "O link Meu calendario filtra pelo usuario logado; Todos os responsaveis mostra a agenda geral do CRM.",
     ]:
