@@ -122,7 +122,7 @@ def build_story():
     ))
     story.append(Spacer(1, 0.8 * cm))
     story.append(p(
-        "Versao atualizada: 01/07/2026. Inclui Menções para mim, sincronizacao prudente das listas principais, assinatura de calendario externo e exclusao de atividades.",
+        "Versao atualizada: 01/07/2026. Inclui Menções para mim, sincronizacao prudente das listas principais, assinatura de calendario externo, exclusao de atividades e cadastro de motivos de perda.",
         "CoverSubtitle",
     ))
     story.append(Spacer(1, 5.2 * cm))
@@ -275,6 +275,7 @@ def build_story():
         "Segmentos podem ser escolhidos de uma lista e novos segmentos ficam salvos para uso futuro.",
         "Contatos devem ser vinculados a empresas sempre que possivel.",
         "Produtos cadastrados ficam disponiveis em oportunidades e contratos.",
+        "Motivos de Perda cadastra as opcoes usadas quando uma oportunidade estiver na etapa Perdido.",
     ]:
         story.append(bullet(item))
 
@@ -296,6 +297,7 @@ def build_story():
         "Documentos permite anexar links de arquivos.",
         "Contrato e Matriz trazem resumo comercial e sugestoes de solucoes.",
         "Campos de texto aceitam mencoes com @ para acionar outro usuario.",
+        "Quando a etapa for Perdido, escolha o Motivo da perda a partir da lista mantida em Cadastros.",
     ]:
         story.append(bullet(item))
 

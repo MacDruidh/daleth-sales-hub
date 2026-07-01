@@ -1798,6 +1798,7 @@ function App(){
   const [stages,setStages] = useStore('dsh-v1-stages', STAGES);
   const [stageHistory,setStageHistory] = useStore('dsh-v1-stage-history', []);
   const [lossReasons,setLossReasons] = useStore('dsh-v1-loss-reasons', {});
+  const [lossReasonOptions,setLossReasonOptions] = useStore('dsh-v1-loss-reason-options', LOSS_REASONS);
   const [selectedDealId,setSelectedDealId] = useState(null);
   const [selectedCompanyId,setSelectedCompanyId] = useState(null);
   const [selectedContactId,setSelectedContactId] = useState(null);
@@ -1931,7 +1932,7 @@ function App(){
   const mentionCount = mentionsForUser({currentUser,deals,activities,notes,interactions}).length;
   const alertTotal = overdueCount + meetingsTodayCount + proposalsWithoutFollowup + mentionCount;
   const alertText = `${overdueCount} atividades vencidas · ${proposalsWithoutFollowup} propostas sem follow-up · ${meetingsTodayCount} reuniões hoje · ${mentionCount} menções`;
-  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,contracts,setContracts,products,setProducts,companySegments,setCompanySegments,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,stageHistory,setStageHistory,lossReasons,setLossReasons,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
+  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,contracts,setContracts,products,setProducts,companySegments,setCompanySegments,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,stageHistory,setStageHistory,lossReasons,setLossReasons,lossReasonOptions,setLossReasonOptions,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
   const logout = async () => {
     setQuery('');
     setSelectedDealId(null);
@@ -3054,7 +3055,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
   </>;
 }
 
-function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,opportunityFiles=[],setOpportunityFiles,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,stageHistory=[],setStageHistory,lossReasons={},setLossReasons,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName}){
+function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,opportunityFiles=[],setOpportunityFiles,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,stageHistory=[],setStageHistory,lossReasons={},setLossReasons,lossReasonOptions=LOSS_REASONS,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName}){
   const initialContact = byId(contacts, deal.contactId);
   const inferredCompany = companyForDeal(deal, companies, contacts);
   const [tab,setTab] = useState('dados');
@@ -3244,7 +3245,7 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,c
 
     <div className="tabs" style={{marginBottom:'18px',overflowX:'auto'}}>{['dados','historico','atividades','arquivos','contrato','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t === 'dados' ? 'Dados' : t === 'historico' ? `Histórico (${dealInteractions.length})` : t === 'atividades' ? `Atividades (${openDealActivities.length})` : t === 'arquivos' ? `Arquivos (${dealFiles.length})` : t === 'contrato' ? 'Contrato' : 'Matriz'}</button>)}</div>
 
-    {tab==='dados' && <Panel title="Dados da oportunidade"><div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={optionsIncludingCurrent(products,draft.product).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(draft.stage,draft.probability)} readOnly/></label><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/>{draft.stage==='Perdido' && <Select label="Motivo da perda" field="lossReason" form={draft} setForm={setDraft} options={[["","Selecione"],...LOSS_REASONS.map(reason=>[reason,reason])]}/>}<label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div></Panel>}
+    {tab==='dados' && <Panel title="Dados da oportunidade"><div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={optionsIncludingCurrent(products,draft.product).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(draft.stage,draft.probability)} readOnly/></label><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/>{draft.stage==='Perdido' && <Select label="Motivo da perda" field="lossReason" form={draft} setForm={setDraft} options={[["","Selecione"],...optionsIncludingCurrent(lossReasonOptions,draft.lossReason).map(reason=>[reason,reason])]}/>}<label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div></Panel>}
 
     {tab==='historico' && <>
       {canWrite && <Panel title="Nova interação"><div className="formGrid modalGrid">
@@ -3703,10 +3704,11 @@ function Registrations(props){
     ['companies','Empresas',Building2],
     ['contacts','Contatos',UserRound],
     ['products','Produtos',Package],
+    ['lossReasons','Motivos de Perda',AlertTriangle],
   ];
   return <>
     <Panel title="Cadastros">
-      <p className="muted" style={{margin:'0 0 14px'}}>Central para manter as bases do CRM organizadas: empresas, contatos e produtos.</p>
+      <p className="muted" style={{margin:'0 0 14px'}}>Central para manter as bases do CRM organizadas: empresas, contatos, produtos e motivos de perda.</p>
       <div className="tabs" style={{marginBottom:0,overflowX:'auto'}}>
         {tabs.map(([id,label,Icon])=><button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}><Icon size={16}/>{label}</button>)}
       </div>
@@ -3714,6 +3716,7 @@ function Registrations(props){
     {tab==='companies' && <Companies {...props}/>}
     {tab==='contacts' && <Contacts {...props}/>}
     {tab==='products' && <Products {...props}/>}
+    {tab==='lossReasons' && <LossReasonRegistrations {...props}/>}
   </>;
 }
 
@@ -4163,6 +4166,38 @@ function Products({products,setProducts,query,canWrite,setSelectedProductName}){
   </>;
 }
 
+function LossReasonRegistrations({lossReasonOptions=[],setLossReasonOptions,lossReasons={},query='',canWrite}){
+  const [name,setName] = useState('');
+  const list = optionsIncludingCurrent(lossReasonOptions).filter(reason => reason.toLowerCase().includes(query.toLowerCase()));
+  const add = () => {
+    if(!canWrite) return;
+    const clean = name.trim();
+    if(!clean) return;
+    if(safeArray(lossReasonOptions).some(reason => normalizedLookup(reason) === normalizedLookup(clean))){
+      window.alert('Este motivo de perda já está cadastrado.');
+      return;
+    }
+    setLossReasonOptions?.([...safeArray(lossReasonOptions), clean]);
+    setName('');
+  };
+  const removeReason = (reason) => {
+    if(!canWrite) return;
+    const usedCount = Object.values(lossReasons || {}).filter(value => normalizedLookup(value) === normalizedLookup(reason)).length;
+    const message = usedCount
+      ? `Este motivo aparece em ${usedCount} oportunidade(s) perdida(s). Deseja removê-lo da lista de novos cadastros mesmo assim?`
+      : 'Deseja realmente excluir este motivo de perda?';
+    if(!window.confirm(message)) return;
+    setLossReasonOptions?.(safeArray(lossReasonOptions).filter(item => normalizedLookup(item) !== normalizedLookup(reason)));
+  };
+  return <>
+    {canWrite && <Panel title="Novo motivo de perda"><div className="formGrid"><label><span>Motivo</span><input value={name} onChange={e=>setName(e.target.value)} placeholder="Ex.: Concorrente escolhido" onKeyDown={e=>{ if(e.key==='Enter') add(); }}/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Adicionar motivo</button></div></Panel>}
+    <Panel title={`Motivos de perda (${list.length})`}>
+      <p className="muted" style={{margin:'0 0 14px'}}>Estes motivos aparecem no campo Motivo da perda quando a oportunidade estiver na etapa Perdido.</p>
+      <Table headers={['Motivo','Ações']}>{list.length ? list.map(reason=><tr key={reason}><td><b>{reason}</b></td><td>{canWrite ? <button className="mini" onClick={()=>removeReason(reason)}><Trash2 size={15}/>Excluir</button> : '-'}</td></tr>) : <tr><td>Nenhum motivo cadastrado</td><td>-</td></tr>}</Table>
+    </Panel>
+  </>;
+}
+
 function ProfilesAdmin({currentUser}){
   const { profiles, setProfiles, loading, error } = useProfiles(currentUser?.canViewDashboard === true);
   const [status,setStatus] = useState('');
@@ -4215,6 +4250,7 @@ function PipedriveImport({
   companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,
   interactions,setInteractions,opportunityFiles,setOpportunityFiles,contracts,setContracts,products,setProducts,
   companySegments,setCompanySegments,stages,setStages,stageHistory,setStageHistory,lossReasons,setLossReasons,
+  lossReasonOptions,setLossReasonOptions,
   pipedriveImportMeta,setPipedriveImportMeta
 }){
   const [status,setStatus] = useState('');
@@ -4251,6 +4287,7 @@ function PipedriveImport({
     stages:safeArray(data?.stages),
     stageHistory:safeArray(data?.stageHistory),
     lossReasons:data?.lossReasons && typeof data.lossReasons === 'object' ? data.lossReasons : {},
+    lossReasonOptions:safeArray(data?.lossReasonOptions),
   });
   const backupCounts = (data) => ({
     companies:safeArray(data?.companies).length,
@@ -4266,7 +4303,7 @@ function PipedriveImport({
       source:'Daleth Sales Hub',
       version:1,
       companies,contacts,deals,activities,notes,interactions,opportunityFiles,contracts,products,
-      companySegments,stages,stageHistory,lossReasons
+      companySegments,stages,stageHistory,lossReasons,lossReasonOptions
     };
     const blob = new Blob([JSON.stringify(payload,null,2)], { type:'application/json' });
     const url = URL.createObjectURL(blob);
@@ -4311,6 +4348,7 @@ function PipedriveImport({
       stages:data.stages,
       stageHistory:data.stageHistory,
       lossReasons:data.lossReasons,
+      lossReasonOptions:data.lossReasonOptions,
     };
     const entries = [
       ['dsh-v1-companies',state.companies],
@@ -4325,6 +4363,7 @@ function PipedriveImport({
       ['dsh-v1-stages',state.stages],
       ['dsh-v1-stage-history',state.stageHistory],
       ['dsh-v1-loss-reasons',state.lossReasons],
+      ['dsh-v1-loss-reason-options',state.lossReasonOptions],
     ].filter(([,value])=>shouldPersistCrmState(value));
     if(entries.length){
       const { error } = await supabase.from('crm_state').upsert(entries.map(([key,data])=>({
@@ -4350,6 +4389,7 @@ function PipedriveImport({
     if(state.stages.length) setStages(state.stages);
     setStageHistory(state.stageHistory);
     setLossReasons(state.lossReasons);
+    if(state.lossReasonOptions.length) setLossReasonOptions(state.lossReasonOptions);
   };
   const restoreBackup = async () => {
     if(!backupPreview) return;
