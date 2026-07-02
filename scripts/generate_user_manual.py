@@ -122,7 +122,7 @@ def build_story():
     ))
     story.append(Spacer(1, 0.8 * cm))
     story.append(p(
-        "Versao atualizada: 01/07/2026. Inclui Menções para mim, sincronizacao prudente das listas principais, assinatura de calendario externo, exclusao de atividades, cadastro de motivos de perda, multiplos produtos por oportunidade e edicao do historico.",
+        "Versao atualizada: 02/07/2026. Inclui Menções para mim, sincronizacao prudente das listas principais, assinatura de calendario externo, exclusao de atividades, cadastro de motivos de perda, multiplos produtos por oportunidade, edicao do historico e criacao rapida de oportunidade no Pipeline.",
         "CoverSubtitle",
     ))
     story.append(Spacer(1, 5.2 * cm))
@@ -263,6 +263,7 @@ def build_story():
     for item in [
         "Abaixo do nome da etapa aparece a soma da receita mensal daquela etapa.",
         "Cada card mostra a receita mensal da oportunidade.",
+        "Use o botao + no cabecalho da etapa para criar uma oportunidade ja posicionada naquela etapa.",
         "Clique no card para abrir a oportunidade.",
         "Use o seletor do card para mover a oportunidade de etapa.",
         "Ao clicar no nome da etapa, aparece a lista de oportunidades daquela etapa.",

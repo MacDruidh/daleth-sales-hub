@@ -2775,13 +2775,105 @@ function MiniMetric({icon:Icon,label,value,onClick,active=false}){
 function Panel({title,children}){ return <section className="panel"><h2>{title}</h2>{children}</section>; }
 function DashboardTable({headers,children}){ return <div className="tableWrap dashboardTable"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
 
-function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelectedDealId,canWrite,currentUser,stageHistory,setStageHistory}){
+function Pipeline({stages,setStages,deals,setDeals,companies,contacts,products,notes,setNotes,setSelectedDealId,canWrite,currentUser,stageHistory,setStageHistory}){
   const [newStage,setNewStage] = useState('');
   const [selectedStage,setSelectedStage] = useState(null);
   const [editingStage,setEditingStage] = useState(null);
   const [editingValue,setEditingValue] = useState('');
   const [draggingStage,setDraggingStage] = useState(null);
   const [dragOverStage,setDragOverStage] = useState(null);
+  const emptyDealForStage = (stage) => ({
+    title:'',
+    companyId:companies[0]?.id || '',
+    contactId:'',
+    product:'SAC+',
+    product2:'',
+    product3:'',
+    products:['SAC+'],
+    value:0,
+    setup:0,
+    contractMonths:12,
+    stage,
+    owner:currentUser?.name || 'Sergio Paulo',
+    probability:probabilityForStage(stage,30),
+    closeDate:'',
+    description:'',
+    nextStep:'',
+    priority:'Média'
+  });
+  const [creatingStage,setCreatingStage] = useState('');
+  const [quickDeal,setQuickDealBase] = useState(null);
+  const setQuickDeal = (next) => {
+    const current = quickDeal || emptyDealForStage(creatingStage || stages[0]);
+    const resolved = typeof next === 'function' ? next(current) : next;
+    if(!sameId(resolved.companyId, current.companyId)){
+      const allowed = safeArray(contacts).filter(contact=>sameId(contact.companyId,resolved.companyId));
+      setQuickDealBase({...resolved, contactId: allowed.some(contact=>sameId(contact.id,resolved.contactId)) ? resolved.contactId : ''});
+    } else {
+      setQuickDealBase(resolved);
+    }
+  };
+  const startCreateDeal = (stage) => {
+    if(!canWrite) return;
+    setSelectedStage(null);
+    setCreatingStage(stage);
+    setQuickDealBase(emptyDealForStage(stage));
+  };
+  const cancelCreateDeal = () => {
+    setCreatingStage('');
+    setQuickDealBase(null);
+  };
+  const quickContacts = safeArray(contacts).filter(contact=>sameId(contact.companyId,quickDeal?.companyId));
+  const creationNoteFor = (deal) => ({
+    dealId: deal.id,
+    user: currentUser?.name || deal.owner || 'Sergio Paulo',
+    date: today(),
+    text: `Oportunidade criada em ${formatDate(today())}.`
+  });
+  const saveCreationNote = async (deal, allDeals) => {
+    if(!setNotes) return;
+    const nextNote = creationNoteFor(deal);
+    try {
+      const savedNote = await saveNoteToSupabase(nextNote, allDeals);
+      setNotes([savedNote,...safeArray(notes)]);
+    } catch (error) {
+      console.warn('Falha ao salvar nota automática no Supabase:', error);
+      setNotes([{...nextNote,id:Date.now()},...safeArray(notes)]);
+    }
+  };
+  const saveQuickDeal = async () => {
+    if(!canWrite || !quickDeal) return;
+    if(!String(quickDeal.title || '').trim()) return;
+    const similarDeal = deals.find(deal =>
+      normalizedLookup(deal.title) === normalizedLookup(quickDeal.title) ||
+      (sameId(deal.companyId, quickDeal.companyId) && dealHasProduct(deal, quickDeal.product) && normalizedLookup(deal.title).includes(normalizedLookup(quickDeal.title)))
+    );
+    if(similarDeal && !window.confirm(`Existe uma oportunidade ${entityCode('O',similarDeal)} - ${similarDeal.title} com dados semelhantes. Deseja incluir mesmo assim?`)) return;
+    const nextDeal = {
+      ...normalizeDealProductsForSave({...quickDeal,stage:creatingStage}),
+      value: Number(quickDeal.value),
+      setup: Number(quickDeal.setup),
+      contractMonths: Number(quickDeal.contractMonths || 12),
+      probability: probabilityForStage(creatingStage,quickDeal.probability)
+    };
+    if(!validateRequiredDealFields(nextDeal,companies,contacts)) return;
+    try {
+      const saved = await saveDealToSupabase(nextDeal, companies, contacts);
+      const nextDeals = [saved,...deals];
+      setDeals(nextDeals);
+      setStageHistory(appendStageHistory(stageHistory,saved,'',saved.stage,currentUser?.name));
+      await saveCreationNote(saved, nextDeals);
+      cancelCreateDeal();
+    } catch (error) {
+      console.warn('Falha ao salvar oportunidade no Supabase:', error);
+      const localDeal = {...nextDeal,id:Date.now()};
+      setDeals([localDeal,...deals]);
+      setStageHistory(appendStageHistory(stageHistory,localDeal,'',localDeal.stage,currentUser?.name));
+      if(setNotes) setNotes([{...creationNoteFor(localDeal),id:Date.now()+1},...safeArray(notes)]);
+      cancelCreateDeal();
+      window.alert('Oportunidade salva localmente. O Supabase não aceitou a gravação agora.');
+    }
+  };
   const stageExists = (name, ignoreStage = null) => safeArray(stages).some(stage =>
     stage !== ignoreStage && stage.toLowerCase() === name.toLowerCase()
   );
@@ -2903,6 +2995,25 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
   const stageDeals = selectedStage ? deals.filter(d=>d.stage===selectedStage) : [];
   return <>
     {canWrite && <div className="toolbar"><input placeholder="Nova etapa customizável" value={newStage} onChange={e=>setNewStage(e.target.value)} onKeyDown={e=>{ if(e.key === 'Enter') addStage(); }}/><button onClick={addStage}><Plus size={16}/>Adicionar etapa</button></div>}
+    {canWrite && creatingStage && quickDeal && <Panel title={`Nova oportunidade em ${creatingStage}`}>
+      <div className="formGrid">
+        <Input label="Título" field="title" form={quickDeal} setForm={setQuickDeal}/>
+        <Select label="Empresa *" field="companyId" form={quickDeal} setForm={setQuickDeal} options={safeArray(companies).map(c=>[c.id,c.name])}/>
+        <Select label="Contato" field="contactId" form={quickDeal} setForm={setQuickDeal} options={[["", quickContacts.length ? "Selecione" : "Sem contatos desta empresa"],...quickContacts.map(c=>[c.id,c.name])]}/>
+        <DealProductFields form={quickDeal} setForm={setQuickDeal} products={products}/>
+        <Input label="Receita mensal" field="value" form={quickDeal} setForm={setQuickDeal} type="number"/>
+        <Input label="Implantação" field="setup" form={quickDeal} setForm={setQuickDeal} type="number"/>
+        <Input label="Prazo contratual (meses)" field="contractMonths" form={quickDeal} setForm={setQuickDeal} type="number"/>
+        <label><span>Etapa</span><input value={creatingStage} readOnly/></label>
+        <label><span>Probabilidade %</span><input value={probabilityForStage(creatingStage,quickDeal.probability)} readOnly/></label>
+        <Select label="Responsável *" field="owner" form={quickDeal} setForm={setQuickDeal} options={USERS.map(u=>[u,u])}/>
+        <Input label="Fechamento previsto" field="closeDate" form={quickDeal} setForm={setQuickDeal} type="date"/>
+        <Input label="Próximo passo *" field="nextStep" form={quickDeal} setForm={setQuickDeal}/>
+        <label><span>Valor total do contrato</span><input value={money(dealTcv(quickDeal))} readOnly/></label>
+        <button className="saveBtn" onClick={saveQuickDeal}><Plus size={16}/>Criar oportunidade</button>
+        <button className="mini" onClick={cancelCreateDeal}><X size={15}/>Cancelar</button>
+      </div>
+    </Panel>}
     <section className="kanban">{stages.map(stage => {
       const currentStageDeals = deals.filter(d=>d.stage===stage);
       const stageMonthlyValue = currentStageDeals.reduce((total,deal)=>total+dealMrr(deal),0);
@@ -2923,6 +3034,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelecte
           <button type="button" className="stageName" onClick={()=>setSelectedStage(stage)} title="Clique para listar as oportunidades desta etapa"><span>{stage}</span><small>{currentStageDeals.length}</small></button>
           <span className="muted" style={{fontSize:'12px',fontWeight:900}}>Mensal: {moneyShort(stageMonthlyValue)}</span>
           {canWrite && <div className="stageActions">
+            <button className="mini" onClick={()=>startCreateDeal(stage)} title={`Criar oportunidade em ${stage}`} aria-label={`Criar oportunidade em ${stage}`}><Plus size={14}/></button>
             <button className="mini stageDragHandle" draggable onDragStart={e=>startStageDrag(e, stage)} onDragEnd={endStageDrag} title="Arrastar etapa" aria-label={`Arrastar ${stage}`}><GripVertical size={14}/></button>
             <button className="mini" onClick={()=>startEditStage(stage)} title="Renomear etapa" aria-label={`Renomear ${stage}`}><Edit3 size={14}/></button>
             <button className="mini" onClick={()=>deleteStage(stage)} title="Excluir etapa" aria-label={`Excluir ${stage}`}><Trash2 size={14}/></button>
