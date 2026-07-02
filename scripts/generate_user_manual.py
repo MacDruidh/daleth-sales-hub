@@ -273,7 +273,7 @@ def build_story():
     for item in [
         "Empresas: cadastre nome fantasia, segmento, site e CNPJ.",
         "Segmentos podem ser escolhidos de uma lista e novos segmentos ficam salvos para uso futuro.",
-        "Contatos devem ser vinculados a empresas sempre que possivel.",
+        "Contatos devem ser vinculados a empresas sempre que possivel e podem ter Telefone 1 e Telefone 2.",
         "Produtos cadastrados ficam disponiveis em oportunidades e contratos.",
         "Motivos de Perda cadastra as opcoes usadas quando uma oportunidade estiver na etapa Perdido.",
     ]:
