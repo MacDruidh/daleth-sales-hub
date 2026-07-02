@@ -1038,16 +1038,6 @@ function daysSinceCrmDate(value){
   const end = new Date(`${today()}T00:00:00`);
   return Math.max(0, Math.floor((end - start) / (1000 * 60 * 60 * 24)));
 }
-function activityAlertForDeal(deal, activities=[]){
-  const pending = safeArray(activities)
-    .filter(activity=>sameId(activity.dealId,deal?.id) && String(activity.status || '') !== 'Concluída' && activity.dueDate)
-    .map(activity=>({activity,days:daysUntil(dateOnlyFromCrmValue(activity.dueDate))}))
-    .filter(item=>item.days !== null);
-  if(pending.some(item=>item.days < -3)) return {tone:'danger',label:'Atividade pendente há mais de 3 dias'};
-  if(pending.some(item=>item.days < 0 && item.days >= -3)) return {tone:'warn',label:'Atividade pendente há até 3 dias'};
-  if(pending.some(item=>item.days === 0)) return {tone:'good',label:'Atividade marcada para hoje'};
-  return null;
-}
 function latestRelationshipTouchForDeal(deal, interactions=[], activities=[]){
   const interactionTouches = safeArray(interactions)
     .filter(interaction=>sameId(interaction.dealId,deal?.id))
@@ -2785,148 +2775,13 @@ function MiniMetric({icon:Icon,label,value,onClick,active=false}){
 function Panel({title,children}){ return <section className="panel"><h2>{title}</h2>{children}</section>; }
 function DashboardTable({headers,children}){ return <div className="tableWrap dashboardTable"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
 
-function OpportunityCreatePanel({
-  title='Nova oportunidade',
-  fixedStage='',
-  currentUser,
-  canWrite,
-  companies=[],
-  setCompanies,
-  contacts=[],
-  setContacts,
-  deals=[],
-  setDeals,
-  products=[],
-  stages=[],
-  notes=[],
-  setNotes,
-  stageHistory=[],
-  setStageHistory,
-  onCreated,
-  onCancel
-}){
-  const empty = { title:'', companyId:companies[0]?.id||'', contactId:'', product:'SAC+', product2:'', product3:'', products:['SAC+'], value:0, setup:0, contractMonths:12, stage:fixedStage || stages[0], owner:currentUser?.name || 'Sergio Paulo', probability:probabilityForStage(fixedStage || stages[0],30), closeDate:'', description:'', nextStep:'', priority:'Média' };
-  const [form,setFormBase] = useState(empty);
-  const [newCompany,setNewCompany] = useState(false);
-  const [companyDraft,setCompanyDraft] = useState({name:'',segment:'',site:'',cnpj:''});
-  const [newContact,setNewContact] = useState(false);
-  const [contactDraft,setContactDraft] = useState({name:'',role:'',email:'',phone:'',whatsapp:''});
-  const setForm = (next) => {
-    const resolved = typeof next === 'function' ? next(form) : next;
-    if(!sameId(resolved.companyId, form.companyId)){
-      const allowed = safeArray(contacts).filter(contact=>sameId(contact.companyId,resolved.companyId));
-      setFormBase({...resolved, contactId: allowed.some(contact=>sameId(contact.id,resolved.contactId)) ? resolved.contactId : ''});
-    } else {
-      setFormBase(resolved);
-    }
-  };
-  const availableContacts = newCompany ? [] : safeArray(contacts).filter(contact=>sameId(contact.companyId, form.companyId));
-  const creationNoteFor = (deal) => ({dealId:deal.id,user:currentUser?.name || deal.owner || 'Sergio Paulo',date:today(),text:`Oportunidade criada em ${formatDate(today())}.`});
-  const create = async () => {
-    if(!canWrite) return;
-    if(!form.title.trim()) return;
-    let nextCompanies = companies;
-    let nextContacts = contacts;
-    let companyId = form.companyId;
-    let contactId = newContact || newCompany ? '' : form.contactId;
-
-    try {
-      if(newCompany){
-        if(!companyDraft.name.trim()){
-          window.alert('Informe o nome da nova empresa.');
-          return;
-        }
-        const savedCompany = await saveCompanyToSupabase({...companyDraft,status:'Prospect'});
-        nextCompanies = [savedCompany,...safeArray(companies)];
-        setCompanies?.(nextCompanies);
-        companyId = savedCompany.id;
-      }
-
-      if(newContact){
-        if(!contactDraft.name.trim()){
-          window.alert('Informe o nome do novo contato.');
-          return;
-        }
-        const savedContact = await saveContactToSupabase({...contactDraft,companyId,type:'Decisor'}, nextCompanies);
-        nextContacts = [savedContact,...safeArray(contacts)];
-        setContacts?.(nextContacts);
-        contactId = savedContact.id;
-      }
-
-      const nextDeal = normalizeDealProductsForSave({
-        ...form,
-        companyId,
-        contactId,
-        stage: fixedStage || form.stage,
-        value:Number(form.value),
-        setup:Number(form.setup),
-        contractMonths:Number(form.contractMonths || 12),
-        probability:probabilityForStage(fixedStage || form.stage,form.probability)
-      });
-      if(!validateRequiredDealFields(nextDeal,nextCompanies,nextContacts)) return;
-      const similarDeal = safeArray(deals).find(deal =>
-        normalizedLookup(deal.title) === normalizedLookup(nextDeal.title) ||
-        (sameId(deal.companyId,nextDeal.companyId) && dealHasProduct(deal,nextDeal.product) && normalizedLookup(deal.title).includes(normalizedLookup(nextDeal.title)))
-      );
-      if(similarDeal && !window.confirm(`Existe uma oportunidade ${entityCode('O',similarDeal)} - ${similarDeal.title} com dados semelhantes. Deseja incluir mesmo assim?`)) return;
-
-      const savedDeal = await saveDealToSupabase(nextDeal,nextCompanies,nextContacts);
-      const nextDeals = [savedDeal,...safeArray(deals)];
-      setDeals(nextDeals);
-      setStageHistory?.(appendStageHistory(stageHistory,savedDeal,'',savedDeal.stage,currentUser?.name));
-      try {
-        const savedNote = await saveNoteToSupabase(creationNoteFor(savedDeal), nextDeals);
-        setNotes?.([savedNote,...safeArray(notes)]);
-      } catch (noteError) {
-        console.warn('Falha ao salvar nota automática no Supabase:', noteError);
-        setNotes?.([{...creationNoteFor(savedDeal),id:Date.now()+1},...safeArray(notes)]);
-      }
-      setFormBase({...empty,companyId:nextCompanies[0]?.id || '',stage:fixedStage || stages[0],probability:probabilityForStage(fixedStage || stages[0],30)});
-      setCompanyDraft({name:'',segment:'',site:'',cnpj:''});
-      setContactDraft({name:'',role:'',email:'',phone:'',whatsapp:''});
-      setNewCompany(false);
-      setNewContact(false);
-      onCreated?.(savedDeal);
-    } catch (error) {
-      console.warn('Falha ao criar oportunidade completa:', error);
-      window.alert(`Não foi possível salvar a oportunidade agora: ${supabaseErrorText(error)}`);
-    }
-  };
-  return <Panel title={title}>
-    <div style={{display:'flex',gap:'10px',flexWrap:'wrap',marginBottom:'14px'}}>
-      <button className={`mini ${newCompany ? 'active' : ''}`} onClick={()=>setNewCompany(!newCompany)}><Plus size={15}/>{newCompany ? 'Usar empresa existente' : 'Nova empresa'}</button>
-      <button className={`mini ${newContact ? 'active' : ''}`} onClick={()=>setNewContact(!newContact)}><Plus size={15}/>{newContact ? 'Usar contato existente' : 'Novo contato'}</button>
-      {onCancel && <button className="mini" onClick={onCancel}><X size={15}/>Cancelar</button>}
-    </div>
-    {newCompany && <div className="formGrid" style={{marginBottom:'14px'}}><Input label="Nova empresa" field="name" form={companyDraft} setForm={setCompanyDraft}/><Input label="Segmento" field="segment" form={companyDraft} setForm={setCompanyDraft}/><Input label="Site" field="site" form={companyDraft} setForm={setCompanyDraft}/><Input label="CNPJ" field="cnpj" form={companyDraft} setForm={setCompanyDraft}/></div>}
-    {newContact && <div className="formGrid" style={{marginBottom:'14px'}}><Input label="Novo contato" field="name" form={contactDraft} setForm={setContactDraft}/><Input label="Cargo" field="role" form={contactDraft} setForm={setContactDraft}/><Input label="E-mail" field="email" form={contactDraft} setForm={setContactDraft}/><Input label="Telefone 1" field="phone" form={contactDraft} setForm={setContactDraft}/><Input label="Telefone 2" field="whatsapp" form={contactDraft} setForm={setContactDraft}/></div>}
-    <div className="formGrid">
-      <Input label="Título" field="title" form={form} setForm={setForm}/>
-      {newCompany ? <label><span>Empresa *</span><input value={companyDraft.name || 'Nova empresa'} readOnly/></label> : <Select label="Empresa *" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(company=>[company.id,company.name])}/>}
-      {newContact ? <label><span>Contato</span><input value={contactDraft.name || 'Novo contato'} readOnly/></label> : <Select label="Contato" field="contactId" form={form} setForm={setForm} options={[["", availableContacts.length ? "Selecione" : "Sem contatos desta empresa"],...availableContacts.map(contact=>[contact.id,contact.name])]}/>}
-      <DealProductFields form={form} setForm={setForm} products={products}/>
-      <Input label="Receita mensal" field="value" form={form} setForm={setForm} type="number"/>
-      <Input label="Implantação" field="setup" form={form} setForm={setForm} type="number"/>
-      <Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/>
-      <label><span>Probabilidade %</span><input value={probabilityForStage(fixedStage || form.stage,form.probability)} readOnly/></label>
-      {fixedStage ? <label><span>Etapa</span><input value={fixedStage} readOnly/></label> : <Select label="Etapa" field="stage" form={form} setForm={setForm} options={safeArray(stages).map(stage=>[stage,stage])}/>}
-      <Select label="Responsável *" field="owner" form={form} setForm={setForm} options={USERS.map(user=>[user,user])}/>
-      <Input label="Fechamento previsto" field="closeDate" form={form} setForm={setForm} type="date"/>
-      <Input label="Próximo passo *" field="nextStep" form={form} setForm={setForm}/>
-      <label><span>Valor total do contrato</span><input value={money(dealTcv(form))} readOnly/></label>
-      <button className="saveBtn" onClick={create}><Plus size={16}/>Criar oportunidade</button>
-    </div>
-  </Panel>;
-}
-
-function Pipeline({stages,setStages,deals,setDeals,companies,setCompanies,contacts,setContacts,products,notes,setNotes,setSelectedDealId,canWrite,currentUser,stageHistory,setStageHistory,activities=[]}){
+function Pipeline({stages,setStages,deals,setDeals,companies,contacts,setSelectedDealId,canWrite,currentUser,stageHistory,setStageHistory}){
   const [newStage,setNewStage] = useState('');
   const [selectedStage,setSelectedStage] = useState(null);
   const [editingStage,setEditingStage] = useState(null);
   const [editingValue,setEditingValue] = useState('');
   const [draggingStage,setDraggingStage] = useState(null);
   const [dragOverStage,setDragOverStage] = useState(null);
-  const [creatingStage,setCreatingStage] = useState('');
   const stageExists = (name, ignoreStage = null) => safeArray(stages).some(stage =>
     stage !== ignoreStage && stage.toLowerCase() === name.toLowerCase()
   );
@@ -3069,17 +2924,15 @@ function Pipeline({stages,setStages,deals,setDeals,companies,setCompanies,contac
           <span className="muted" style={{fontSize:'12px',fontWeight:900}}>Mensal: {moneyShort(stageMonthlyValue)}</span>
           {canWrite && <div className="stageActions">
             <button className="mini stageDragHandle" draggable onDragStart={e=>startStageDrag(e, stage)} onDragEnd={endStageDrag} title="Arrastar etapa" aria-label={`Arrastar ${stage}`}><GripVertical size={14}/></button>
-            <button className="mini" onClick={()=>setCreatingStage(stage)} title={`Criar oportunidade em ${stage}`} aria-label={`Criar oportunidade em ${stage}`}><Plus size={14}/></button>
             <button className="mini" onClick={()=>startEditStage(stage)} title="Renomear etapa" aria-label={`Renomear ${stage}`}><Edit3 size={14}/></button>
             <button className="mini" onClick={()=>deleteStage(stage)} title="Excluir etapa" aria-label={`Excluir ${stage}`}><Trash2 size={14}/></button>
           </div>}
         </div>}
         <div className="stageCards">
-          {currentStageDeals.map(d => { const activityAlert = activityAlertForDeal(d,activities); return <article className="dealCard" key={d.id}><div onClick={()=>setSelectedDealId(d.id)}><b style={{display:'flex',alignItems:'center',gap:'7px'}}>{activityAlert && <i className={`dealHealthDot ${activityAlert.tone}`} title={activityAlert.label}></i>}{d.title}</b><span>{companyForDeal(d,companies,contacts)?.name || 'Sem empresa'}</span><strong>{money(dealMrr(d))}/mês</strong></div><select value={d.stage} onChange={e=>move(d,e.target.value)} disabled={!canWrite}>{stages.map(s=><option key={s}>{s}</option>)}</select></article>})}
+          {currentStageDeals.map(d => <article className="dealCard" key={d.id}><div onClick={()=>setSelectedDealId(d.id)}><b>{d.title}</b><span>{companyForDeal(d,companies,contacts)?.name || 'Sem empresa'}</span><strong>{money(dealMrr(d))}/mês</strong></div><select value={d.stage} onChange={e=>move(d,e.target.value)} disabled={!canWrite}>{stages.map(s=><option key={s}>{s}</option>)}</select></article>)}
         </div>
       </div>;
     })}</section>
-    {creatingStage && <OpportunityCreatePanel title={`Nova oportunidade em ${creatingStage}`} fixedStage={creatingStage} currentUser={currentUser} canWrite={canWrite} companies={companies} setCompanies={setCompanies} contacts={contacts} setContacts={setContacts} deals={deals} setDeals={setDeals} products={products} stages={stages} notes={notes} setNotes={setNotes} stageHistory={stageHistory} setStageHistory={setStageHistory} onCreated={(deal)=>{setCreatingStage('');setSelectedDealId(deal.id);}} onCancel={()=>setCreatingStage('')}/>}
     {selectedStage && <Panel title={`Oportunidades em ${selectedStage}`}>
       <DashboardTable headers={['Oportunidade','Empresa','Responsável','Receita mensal','Ações']}>
         {stageDeals.length ? stageDeals.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{companyForDeal(d,companies,contacts)?.name || '-'}</td><td>{d.owner || '-'}</td><td>{moneyShort(dealMrr(d))}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade nesta etapa</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
@@ -3089,7 +2942,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,setCompanies,contac
   </>;
 }
 
-function Deals({currentUser,deals,setDeals,companies,setCompanies,contacts,setContacts,products,stages,notes,setNotes,interactions=[],activities=[],setSelectedDealId,setSelectedProductName,query,canWrite,stageHistory,setStageHistory}){
+function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,notes,setNotes,interactions=[],activities=[],setSelectedDealId,setSelectedProductName,query,canWrite,stageHistory,setStageHistory}){
   const empty = { title:'', companyId:companies[0]?.id||'', contactId:'', product:'SAC+', product2:'', product3:'', products:['SAC+'], value:0, setup:0, contractMonths:12, stage:stages[0], owner:'Sergio Paulo', probability:probabilityForStage(stages[0],30), closeDate:'', description:'', nextStep:'', priority:'Média' };
   const [form,setFormBase] = useState(empty);
   const [filters,setFilters] = useState({ companyId:'', product:'', stage:'', owner:'', closeBeforeMonth:'' });
@@ -3219,7 +3072,7 @@ function Deals({currentUser,deals,setDeals,companies,setCompanies,contacts,setCo
   };
   const clearFilters = () => setFilters({ companyId:'', product:'', stage:'', owner:'', closeBeforeMonth:'' });
   return <>
-    {canWrite && <OpportunityCreatePanel title="Nova oportunidade" currentUser={currentUser} canWrite={canWrite} companies={companies} setCompanies={setCompanies} contacts={contacts} setContacts={setContacts} deals={deals} setDeals={setDeals} products={products} stages={stages} notes={notes} setNotes={setNotes} stageHistory={stageHistory} setStageHistory={setStageHistory}/>}
+    {canWrite && <Panel title="Nova oportunidade"><div className="formGrid"><Input label="Título" field="title" form={form} setForm={setForm}/><Select label="Empresa *" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Contato" field="contactId" form={form} setForm={setForm} options={[["", availableContacts.length ? "Selecione" : "Sem contatos desta empresa"],...availableContacts.map(c=>[c.id,c.name])]}/><DealProductFields form={form} setForm={setForm} products={products}/><Input label="Receita mensal" field="value" form={form} setForm={setForm} type="number"/><Input label="Implantação" field="setup" form={form} setForm={setForm} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(form.stage,form.probability)} readOnly/></label><Select label="Etapa" field="stage" form={form} setForm={setForm} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável *" field="owner" form={form} setForm={setForm} options={USERS.map(u=>[u,u])}/><Input label="Fechamento previsto" field="closeDate" form={form} setForm={setForm} type="date"/><Input label="Próximo passo *" field="nextStep" form={form} setForm={setForm}/><label><span>Valor total do contrato</span><input value={money(dealTcv(form))} readOnly/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Criar oportunidade</button></div></Panel>}
     <Panel title="Filtros de oportunidades"><div className="formGrid">
       <Select label="Empresa" field="companyId" form={filters} setForm={setFilters} options={[["","Todas"],...safeArray(companies).map(c=>[c.id,c.name])]}/>
       <Select label="Produto" field="product" form={filters} setForm={setFilters} options={[["","Todos"],...safeArray(products).map(p=>[p,p])]}/>
@@ -3240,7 +3093,7 @@ function Deals({currentUser,deals,setDeals,companies,setCompanies,contacts,setCo
         <span>{selectedDeals.length} selecionada(s)</span>
         <button className="mini" onClick={removeSelectedDeals} disabled={!selectedDeals.length}><Trash2 size={15}/>Excluir selecionadas</button>
       </div>}
-      <Table headers={['Sel.','Oportunidade','Empresa','Produto','Receita mensal','Prazo','Contrato total','Etapa','Responsável','Ações']}>{list.map(d=>{ const linkedCompany = companyForDeal(d,companies,contacts); const relationship = relationshipStatusForDeal(d, interactions, activities); const activityAlert = activityAlertForDeal(d,activities); return <tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><input className="rowSelect" type="checkbox" checked={selectedDealIds.some(id=>sameId(id,d.id))} onChange={(e)=>{e.stopPropagation(); toggleDealSelection(d.id);}} onClick={e=>e.stopPropagation()} disabled={!canWrite}/></td><td><div className="dealHealthLine">{activityAlert && <i className={`dealHealthDot ${activityAlert.tone}`} title={activityAlert.label}></i>}<i className={`dealHealthDot ${relationship.tone}`} title={relationship.label}></i><b>{d.title}</b></div><span>{activityAlert?.label || relationship.label}</span><span>{d.nextStep}</span></td><td>{linkedCompany?.name || '-'}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>{dealProductValues(d).map(product=><button className="mini" key={product} onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(product)}}>{product}</button>)}</div></td><td><b>{money(dealMrr(d))}</b></td><td>{dealMonths(d)} meses</td><td>{money(dealTcv(d))}</td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>})}</Table>
+      <Table headers={['Sel.','Oportunidade','Empresa','Produto','Receita mensal','Prazo','Contrato total','Etapa','Responsável','Ações']}>{list.map(d=>{ const linkedCompany = companyForDeal(d,companies,contacts); const relationship = relationshipStatusForDeal(d, interactions, activities); return <tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><input className="rowSelect" type="checkbox" checked={selectedDealIds.some(id=>sameId(id,d.id))} onChange={(e)=>{e.stopPropagation(); toggleDealSelection(d.id);}} onClick={e=>e.stopPropagation()} disabled={!canWrite}/></td><td><div className="dealHealthLine"><i className={`dealHealthDot ${relationship.tone}`} title={relationship.label}></i><b>{d.title}</b></div><span>{relationship.label}</span><span>{d.nextStep}</span></td><td>{linkedCompany?.name || '-'}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>{dealProductValues(d).map(product=><button className="mini" key={product} onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(product)}}>{product}</button>)}</div></td><td><b>{money(dealMrr(d))}</b></td><td>{dealMonths(d)} meses</td><td>{money(dealTcv(d))}</td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>})}</Table>
     </Panel>
   </>;
 }
