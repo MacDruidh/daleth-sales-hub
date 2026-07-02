@@ -265,6 +265,8 @@ def build_story():
         "Cada card mostra a receita mensal da oportunidade.",
         "Clique no card para abrir a oportunidade.",
         "Use o seletor do card para mover a oportunidade de etapa.",
+        "Use o botao + da etapa para criar uma nova oportunidade ja posicionada naquela etapa.",
+        "Os circulos nos cards indicam atividades: verde para hoje, amarelo para vencida ate 3 dias e vermelho para vencida ha mais de 3 dias.",
         "Ao clicar no nome da etapa, aparece a lista de oportunidades daquela etapa.",
     ]:
         story.append(bullet(item))
@@ -287,6 +289,7 @@ def build_story():
         "Oportunidades abertas: quantidade de negocios abertos no filtro.",
         "Contrato total filtrado: valor total dos contratos como apoio, nao como metrica principal.",
         "Na tabela, Receita mensal aparece com destaque. Contrato total fica como complemento.",
+        "Ao criar uma oportunidade, e possivel cadastrar uma nova empresa e um novo contato no mesmo formulario.",
     ]:
         story.append(bullet(item))
     story.append(p("Ficha da oportunidade", "Heading"))
