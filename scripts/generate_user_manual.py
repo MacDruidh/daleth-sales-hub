@@ -122,7 +122,7 @@ def build_story():
     ))
     story.append(Spacer(1, 0.8 * cm))
     story.append(p(
-        "Versao atualizada: 03/07/2026. Inclui Cockpit Diario em Pendencias, Menções para mim, sincronizacao prudente das listas principais, assinatura de calendario externo, exclusao de atividades, cadastro de motivos de perda, multiplos produtos por oportunidade, edicao do historico e criacao rapida de oportunidade no Pipeline.",
+        "Versao atualizada: 03/07/2026. Inclui Growth Daleth em Insights, Cockpit Diario em Pendencias, Menções para mim, sincronizacao prudente das listas principais, assinatura de calendario externo, exclusao de atividades, cadastro de motivos de perda, multiplos produtos por oportunidade, edicao do historico e criacao rapida de oportunidade no Pipeline.",
         "CoverSubtitle",
     ))
     story.append(Spacer(1, 5.2 * cm))
@@ -175,7 +175,7 @@ def build_story():
     ], [4 * cm, 11.7 * cm]))
     for item in [
         "Dashboard: visao executiva mensal e indicadores gerais.",
-        "Insights Daleth: analises por responsavel, produto, segmento, risco e contratos.",
+        "Insights Daleth: analises por responsavel, produto, segmento, risco, contratos e Growth Daleth.",
         "Funil Comercial: desempenho por etapa com receita mensal e previsao mensal.",
         "Pendencias: Cockpit Diario com agenda, calendario compacto, acoes imediatas, oportunidades em foco e mencoes para o usuario logado.",
         "Qualidade do CRM: cadastros incompletos e possiveis duplicidades.",
@@ -201,10 +201,19 @@ def build_story():
         "Pipeline mensal aberto: soma mensal das oportunidades abertas dentro do filtro.",
         "Previsao mensal ponderada: receita mensal x probabilidade da etapa.",
         "Receita mensal ganha e perdida: leitura mensal das oportunidades finalizadas.",
+        "Growth Daleth mostra prioridades recomendadas, alavancas de crescimento, gargalos do funil e riscos comerciais.",
         "Desempenho por responsavel, produto e segmento mostra pipeline mensal e previsao mensal.",
         "Ao clicar em uma linha, o Detalhe do insight abre as oportunidades correspondentes em receita mensal.",
     ]:
         story.append(bullet(item))
+    story.append(table([
+        ["Bloco Growth", "Como usar"],
+        ["Prioridades recomendadas", "Mostra oportunidades onde a acao comercial tende a gerar mais impacto imediato."],
+        ["Alavancas de crescimento", "Mostra segmentos e produtos com maior previsao mensal ponderada."],
+        ["Gargalos do funil", "Mostra etapas com mais alertas, oportunidades paradas ou sem agenda futura."],
+        ["Riscos comerciais", "Mostra problemas que podem travar receita: follow-up ausente, atividades vencidas e falta de proximo passo."],
+    ], [5 * cm, 10.7 * cm]))
+    story.append(Spacer(1, 6))
     story.append(table([
         ["Filtro", "Como usar"],
         ["Periodo", "Todos, este mes, proximos 90 dias ou fechamento vencido."],

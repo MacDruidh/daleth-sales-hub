@@ -2375,7 +2375,7 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
   </>;
 }
 
-function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contracts=[],interactions=[],stages=STAGES,lossReasons={},setSelectedDealId,setSelectedActivityId,setSelectedContractId}){
+function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contracts=[],interactions=[],stages=STAGES,stageHistory=[],lossReasons={},setSelectedDealId,setSelectedActivityId,setSelectedContractId}){
   const [filters,setFilters] = useState({period:'all',owner:'',product:'',segment:''});
   const [selectedBreakdown,setSelectedBreakdown] = useState(null);
   const currentMonth = today().slice(0,7);
@@ -2434,6 +2434,89 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
     .map(deal=>({...deal,relationship:relationshipStatusForDeal(deal,interactions,activities)}))
     .filter(deal=>deal.relationship.tone === 'danger' || deal.relationship.tone === 'none')
     .sort((a,b)=>(b.relationship.days ?? 9999)-(a.relationship.days ?? 9999));
+  const addDaysKey = (dateString, days) => {
+    const date = new Date(`${dateString}T12:00:00`);
+    date.setDate(date.getDate() + days);
+    return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+  };
+  const next30 = addDaysKey(today(),30);
+  const hotStages = ['Proposta Enviada','Negociação','Contrato'];
+  const pendingActivitiesForDeal = (deal) => pendingActivities.filter(activity=>sameId(activity.dealId,deal.id));
+  const hasFutureActivity = (deal) => pendingActivitiesForDeal(deal).some(activity=>activity.dueDate && activity.dueDate >= today());
+  const hasOverdueActivity = (deal) => pendingActivitiesForDeal(deal).some(activity=>activity.dueDate && activity.dueDate < today());
+  const growthPriorityDeals = openDeals.map(deal=>{
+    const relationship = relationshipStatusForDeal(deal,interactions,activities);
+    const closeSoon = deal.closeDate && deal.closeDate >= today() && deal.closeDate <= next30;
+    const noFollowup = !hasFutureActivity(deal);
+    const overdue = hasOverdueActivity(deal);
+    const hotStage = hotStages.includes(deal.stage);
+    const noNextStep = !String(deal.nextStep || '').trim();
+    const reasons = [
+      closeSoon ? 'fechamento em ate 30 dias' : '',
+      hotStage ? `etapa ${deal.stage}` : '',
+      overdue ? 'atividade vencida' : '',
+      noFollowup ? 'sem follow-up futuro' : '',
+      noNextStep ? 'sem proximo passo' : '',
+      relationship.tone === 'danger' || relationship.tone === 'none' ? relationship.label : '',
+    ].filter(Boolean);
+    const score = (closeSoon ? 35 : 0) + (hotStage ? 28 : 0) + (overdue ? 22 : 0) + (noFollowup ? 18 : 0) + (noNextStep ? 15 : 0) + (relationship.tone === 'danger' || relationship.tone === 'none' ? 14 : 0) + Math.min(25,dealMrr(deal)/4000);
+    return {deal,score,reasons,relationship};
+  }).filter(item=>item.score >= 36).sort((a,b)=>b.score-a.score || dealMrr(b.deal)-dealMrr(a.deal)).slice(0,8);
+  const stageEntryDateForDeal = (deal) => safeArray(stageHistory)
+    .filter(entry=>sameId(entry.dealId,deal.id) && entry.toStage === deal.stage)
+    .sort((a,b)=>String(b.changedAt || '').localeCompare(String(a.changedAt || '')))[0]?.changedAt?.slice(0,10);
+  const stageBottlenecks = safeArray(stages).map(stage=>{
+    const stageDeals = openDeals.filter(deal=>deal.stage === stage);
+    const staleCount = stageDeals.filter(deal=>{
+      const status = relationshipStatusForDeal(deal,interactions,activities);
+      return status.tone === 'danger' || status.tone === 'none';
+    }).length;
+    const noFutureFollowup = stageDeals.filter(deal=>!hasFutureActivity(deal)).length;
+    const noNextStep = stageDeals.filter(deal=>!String(deal.nextStep || '').trim()).length;
+    const daysInStage = stageDeals.map(stageEntryDateForDeal).filter(Boolean).map(date=>daysSinceCrmDate(date)).filter(value=>value !== null);
+    const averageDays = daysInStage.length ? daysInStage.reduce((total,value)=>total+value,0) / daysInStage.length : null;
+    return {
+      stage,
+      count:stageDeals.length,
+      value:stageDeals.reduce((total,deal)=>total+dealMrr(deal),0),
+      weighted:stageDeals.reduce((total,deal)=>total+dealWeightedMrr(deal),0),
+      staleCount,
+      noFutureFollowup,
+      noNextStep,
+      averageDays,
+      risk:staleCount + noFutureFollowup + noNextStep
+    };
+  }).filter(row=>row.count).sort((a,b)=>(b.risk-a.risk) || (b.value-a.value)).slice(0,6);
+  const growthSegments = Object.values(openDeals.reduce((rows,deal)=>{
+    const segment = dealSegment(deal,companies,contacts);
+    if(!rows[segment]) rows[segment] = {name:segment,type:'Segmento',open:0,value:0,weighted:0};
+    rows[segment].open += 1;
+    rows[segment].value += dealMrr(deal);
+    rows[segment].weighted += dealWeightedMrr(deal);
+    return rows;
+  },{})).sort((a,b)=>b.weighted-a.weighted).slice(0,5);
+  const growthProducts = Object.values(openDeals.reduce((rows,deal)=>{
+    const labels = dealProductValues(deal);
+    (labels.length ? labels : ['Sem produto']).forEach(product=>{
+      if(!rows[product]) rows[product] = {name:product,type:'Produto',open:0,value:0,weighted:0};
+      rows[product].open += 1;
+      rows[product].value += dealMrr(deal);
+      rows[product].weighted += dealWeightedMrr(deal);
+    });
+    return rows;
+  },{})).sort((a,b)=>b.weighted-a.weighted).slice(0,5);
+  const growthLevers = [...growthSegments,...growthProducts].sort((a,b)=>b.weighted-a.weighted).slice(0,8);
+  const hotOpenDeals = openDeals.filter(deal=>hotStages.includes(deal.stage));
+  const noFutureFollowupDeals = openDeals.filter(deal=>!hasFutureActivity(deal));
+  const noNextStepDeals = openDeals.filter(deal=>!String(deal.nextStep || '').trim());
+  const closeNext30Deals = openDeals.filter(deal=>deal.closeDate && deal.closeDate >= today() && deal.closeDate <= next30);
+  const riskRows = [
+    {risk:'Propostas/negociacoes sem follow-up futuro',count:hotOpenDeals.filter(deal=>!hasFutureActivity(deal)).length,value:hotOpenDeals.filter(deal=>!hasFutureActivity(deal)).reduce((total,deal)=>total+dealMrr(deal),0),reading:'Pode haver venda pronta sem proxima acao marcada.'},
+    {risk:'Oportunidades abertas sem proximo passo',count:noNextStepDeals.length,value:noNextStepDeals.reduce((total,deal)=>total+dealMrr(deal),0),reading:'Carteira sem orientacao operacional clara.'},
+    {risk:'Atividades vencidas',count:overdueActivities.length,value:overdueActivities.reduce((total,activity)=>total+dealMrr(byId(deals,activity.dealId)),0),reading:'Execucao comercial atrasada.'},
+    {risk:'Oportunidades sem follow-up futuro',count:noFutureFollowupDeals.length,value:noFutureFollowupDeals.reduce((total,deal)=>total+dealMrr(deal),0),reading:'Pipeline sem agenda futura.'},
+  ].filter(row=>row.count).sort((a,b)=>b.value-a.value);
+  const closeNext30Value = closeNext30Deals.reduce((total,deal)=>total+dealWeightedMrr(deal),0);
   const ownerRows = Object.values(filteredDeals.reduce((rows,deal)=>{
     const owner = deal.owner || 'Sem responsável';
     if(!rows[owner]) rows[owner] = {owner,open:0,won:0,value:0,weighted:0};
@@ -2510,6 +2593,39 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
       <Kpi icon={Clock3} label="Atividades abertas" value={pendingActivities.length}/>
       <Kpi icon={CheckCircle2} label="Atividades concluídas" value={completedActivities.length}/>
       <Kpi icon={AlertTriangle} label="Atividades vencidas" value={overdueActivities.length}/>
+    </section>
+    <Panel title="Growth Daleth">
+      <p className="muted" style={{margin:'0 0 14px'}}>Leitura consultiva para crescimento: onde agir primeiro, quais alavancas puxam receita mensal e quais gargalos podem travar fechamento.</p>
+      <section className="cards" style={{marginBottom:0}}>
+        <Kpi icon={TrendingUp} label="Potencial ponderado 30 dias" value={moneyShort(closeNext30Value)}/>
+        <Kpi icon={BriefcaseBusiness} label="Oportunidades prioritárias" value={growthPriorityDeals.length}/>
+        <Kpi icon={AlertTriangle} label="Riscos comerciais" value={riskRows.length}/>
+        <Kpi icon={Clock3} label="Etapas com gargalo" value={stageBottlenecks.length}/>
+      </section>
+    </Panel>
+    <section className="grid2 compact">
+      <Panel title="Prioridades recomendadas">
+        <DashboardTable headers={['Oportunidade','Por que agir','Receita mensal','Ação']}>
+          {growthPriorityDeals.length ? growthPriorityDeals.map(({deal,reasons})=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b><span>{companyForDeal(deal,companies,contacts)?.name || '-'}</span></td><td>{reasons.slice(0,3).join(' · ') || 'Alta relevância comercial'}</td><td>{moneyShort(dealMrr(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma prioridade crítica no filtro</td><td>-</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+      <Panel title="Alavancas de crescimento">
+        <DashboardTable headers={['Alavanca','Tipo','Abertas','Pipeline mensal','Previsão mensal']}>
+          {growthLevers.length ? growthLevers.map(row=><tr key={`${row.type}-${row.name}`}><td><b>{row.name}</b></td><td>{row.type}</td><td>{row.open}</td><td>{moneyShort(row.value)}</td><td>{moneyShort(row.weighted)}</td></tr>) : <tr><td>Nenhuma alavanca no filtro</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+    </section>
+    <section className="grid2 compact">
+      <Panel title="Gargalos do funil">
+        <DashboardTable headers={['Etapa','Oportunidades','Pipeline mensal','Alertas','Tempo médio']}>
+          {stageBottlenecks.length ? stageBottlenecks.map(row=><tr key={row.stage}><td><span className="pill">{row.stage}</span></td><td>{row.count}</td><td>{moneyShort(row.value)}</td><td>{row.risk}</td><td>{row.averageDays === null ? 'Sem histórico' : `${row.averageDays.toFixed(1)} dias`}</td></tr>) : <tr><td>Nenhum gargalo no filtro</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+      <Panel title="Riscos comerciais">
+        <DashboardTable headers={['Risco','Qtd.','Receita mensal','Leitura']}>
+          {riskRows.length ? riskRows.map(row=><tr key={row.risk}><td><b>{row.risk}</b></td><td>{row.count}</td><td>{moneyShort(row.value)}</td><td>{row.reading}</td></tr>) : <tr><td>Nenhum risco crítico no filtro</td><td>-</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
     </section>
     <section className="grid2 compact">
       <Panel title="Desempenho por responsável">
