@@ -1646,11 +1646,14 @@ function UXStyle(){
     }
     body{background:var(--ux-bg)!important;}
     .app{grid-template-columns:80px minmax(0,1fr)!important;background:var(--ux-bg)!important;}
-    .sidebar{width:80px!important;min-width:80px!important;padding:18px 12px!important;border-right:1px solid var(--ux-border)!important;background:#ffffff!important;box-shadow:8px 0 28px rgba(15,23,42,.04)!important;align-items:center!important;}
+    .sidebar{width:80px!important;min-width:80px!important;padding:18px 12px!important;border-right:1px solid var(--ux-border)!important;background:#ffffff!important;box-shadow:8px 0 28px rgba(15,23,42,.04)!important;align-items:center!important;display:flex!important;flex-direction:column!important;overflow-y:auto!important;overflow-x:visible!important;overscroll-behavior-y:contain!important;scrollbar-width:thin!important;}
+    .sidebar::-webkit-scrollbar{width:7px!important;}
+    .sidebar::-webkit-scrollbar-thumb{background:#cbd5e1!important;border-radius:999px!important;}
+    .sidebar::-webkit-scrollbar-track{background:transparent!important;}
     .brand{height:56px!important;width:100%!important;display:grid!important;place-items:center!important;margin-bottom:14px!important;padding:0!important;}
     .brandLogo{max-width:44px!important;max-height:44px!important;object-fit:contain!important;}
     .brand div{display:none!important;}
-    .sidebar nav{width:100%!important;display:flex!important;flex-direction:column!important;gap:10px!important;align-items:center!important;}
+    .sidebar nav{width:100%!important;display:flex!important;flex-direction:column!important;gap:10px!important;align-items:center!important;flex:0 0 auto!important;}
     .sidebar nav button{width:52px!important;height:52px!important;min-height:52px!important;padding:0!important;display:grid!important;place-items:center!important;border-radius:16px!important;position:relative!important;color:#64748b!important;background:transparent!important;border:1px solid transparent!important;transition:all .18s ease!important;}
     .sidebar nav button svg{width:21px!important;height:21px!important;margin:0!important;}
     .sidebar nav button:hover{background:var(--ux-blue-soft)!important;color:var(--ux-blue)!important;transform:translateY(-1px)!important;}
@@ -1658,7 +1661,7 @@ function UXStyle(){
     .sidebar nav button::after{content:attr(data-label);position:absolute;left:64px;top:50%;transform:translateY(-50%);background:#0f172a;color:#fff;font-size:13px;font-weight:700;padding:8px 10px;border-radius:10px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s ease, transform .15s ease;z-index:50;box-shadow:0 10px 24px rgba(15,23,42,.18);}
     .sidebar nav button:hover::after{opacity:1;transform:translateY(-50%) translateX(4px);}
     .navLabel{display:none!important;}
-    .sidebarBox{width:52px!important;height:52px!important;margin-top:auto!important;padding:7px!important;border-radius:50%!important;display:grid!important;place-items:center!important;background:#e6f8fd!important;border:1px solid #c9eef8!important;overflow:hidden!important;position:relative!important;}
+    .sidebarBox{width:52px!important;height:52px!important;margin-top:14px!important;padding:7px!important;border-radius:50%!important;display:grid!important;place-items:center!important;background:#e6f8fd!important;border:1px solid #c9eef8!important;overflow:hidden!important;position:relative!important;flex:0 0 auto!important;}
     .sidebarBox b{display:none!important;}
     .sidebarBox::after{content:'';width:100%!important;height:100%!important;background:url('/daleth-star.png') center/contain no-repeat!important;display:block!important;}
     .sidebarBox span{display:none!important;}
@@ -1781,7 +1784,7 @@ function UXStyle(){
     @media(max-width:760px){
       body{overflow-x:hidden!important;}
       .app{display:block!important;min-width:0!important;}
-      .sidebar{position:sticky!important;top:0!important;z-index:40!important;width:100%!important;min-width:0!important;height:auto!important;padding:8px 10px!important;border-right:0!important;border-bottom:1px solid var(--ux-border)!important;box-shadow:0 8px 24px rgba(15,23,42,.08)!important;}
+      .sidebar{position:sticky!important;top:0!important;z-index:40!important;width:100%!important;min-width:0!important;height:auto!important;padding:8px 10px!important;border-right:0!important;border-bottom:1px solid var(--ux-border)!important;box-shadow:0 8px 24px rgba(15,23,42,.08)!important;overflow:visible!important;}
       .brand,.sidebarBox{display:none!important;}
       .sidebar nav{display:flex!important;flex-direction:row!important;align-items:center!important;gap:6px!important;width:100%!important;overflow-x:auto!important;overscroll-behavior-x:contain!important;scrollbar-width:none!important;padding:2px 0!important;}
       .sidebar nav::-webkit-scrollbar{display:none!important;}
