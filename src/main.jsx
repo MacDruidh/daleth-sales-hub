@@ -1717,6 +1717,36 @@ function UXStyle(){
     .relationshipPill.warn{background:#fff5dc!important;color:#956000!important;}
     .relationshipPill.danger{background:#fdecec!important;color:#a72f2f!important;}
     .relationshipPill.none{background:#f1f5f9!important;color:#475569!important;}
+    .cockpitHero{display:flex!important;justify-content:space-between!important;gap:18px!important;align-items:center!important;flex-wrap:wrap!important;}
+    .cockpitHero h2{font-size:34px!important;margin:4px 0 8px!important;color:var(--ux-text)!important;letter-spacing:-.04em!important;}
+    .cockpitHero p{max-width:760px!important;margin:0!important;line-height:1.45!important;}
+    .cockpitStatus{min-width:220px!important;border-radius:20px!important;padding:16px 18px!important;border:1px solid var(--ux-border)!important;background:#f7fbfe!important;display:grid!important;gap:4px!important;text-align:right!important;}
+    .cockpitStatus b{color:var(--ux-text)!important;font-size:18px!important;}
+    .cockpitStatus span{color:var(--ux-muted)!important;font-weight:800!important;}
+    .cockpitStatus.attention{background:#fff7ed!important;border-color:#fed7aa!important;}
+    .cockpitStatus.attention b{color:#b45309!important;}
+    .cockpitStatus.clear{background:#ecfdf5!important;border-color:#bbf7d0!important;}
+    .cockpitStatus.clear b{color:#047857!important;}
+    .cockpitGrid{display:grid!important;grid-template-columns:1.25fr .75fr!important;gap:16px!important;}
+    .cockpitCalendarHead{display:flex!important;justify-content:space-between!important;align-items:center!important;gap:12px!important;flex-wrap:wrap!important;margin-bottom:12px!important;}
+    .cockpitCalendarHead b{display:block!important;color:var(--ux-text)!important;font-size:18px!important;text-transform:capitalize!important;}
+    .cockpitCalendarHead span{display:block!important;color:var(--ux-muted)!important;font-size:13px!important;margin-top:3px!important;}
+    .cockpitCalendar{display:grid!important;grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:6px!important;}
+    .cockpitWeekday{font-size:11px!important;font-weight:900!important;text-align:center!important;color:var(--ux-muted)!important;text-transform:uppercase!important;padding:4px!important;}
+    .cockpitDay{position:relative!important;min-height:66px!important;border:1px solid var(--ux-border)!important;background:#fff!important;border-radius:14px!important;padding:7px!important;text-align:left!important;cursor:pointer!important;display:grid!important;align-content:start!important;gap:4px!important;}
+    .cockpitDay:hover{box-shadow:inset 0 0 0 2px rgba(0,160,209,.16)!important;background:#f8fcff!important;}
+    .cockpitDay.outsideMonth{opacity:.45!important;background:#f7f9fb!important;}
+    .cockpitDay.today{border-color:var(--ux-blue)!important;box-shadow:inset 0 0 0 2px rgba(0,160,209,.24)!important;}
+    .cockpitDay span{font-weight:900!important;color:var(--ux-text)!important;font-size:13px!important;}
+    .cockpitDay i{position:absolute!important;top:6px!important;right:7px!important;font-style:normal!important;background:#e8f6fc!important;color:var(--ux-blue)!important;border-radius:999px!important;min-width:18px!important;height:18px!important;display:grid!important;place-items:center!important;font-size:10px!important;font-weight:900!important;}
+    .cockpitDay em{width:100%!important;height:4px!important;border-radius:999px!important;display:block!important;}
+    .cockpitAgenda{display:grid!important;gap:10px!important;}
+    .cockpitAgendaItem{border:1px solid var(--ux-border)!important;background:#f8fcff!important;border-radius:16px!important;padding:12px!important;display:grid!important;grid-template-columns:58px 1fr auto!important;gap:10px!important;align-items:center!important;text-align:left!important;cursor:pointer!important;color:inherit!important;}
+    .cockpitAgendaItem:hover{background:#eef8fd!important;}
+    .cockpitAgendaItem strong{color:var(--ux-blue)!important;font-size:18px!important;}
+    .cockpitAgendaItem span b{display:block!important;color:var(--ux-text)!important;margin-bottom:3px!important;}
+    .cockpitAgendaItem span{color:var(--ux-muted)!important;font-size:13px!important;}
+    .cockpitAgendaItem a{color:var(--ux-blue)!important;font-weight:900!important;white-space:nowrap!important;}
     .timelineItem{position:relative!important;}
     .timelineNote:hover::after{content:attr(data-full-note);position:absolute;left:18px;top:calc(100% + 8px);width:min(520px,72vw);max-height:260px;overflow:auto;white-space:pre-wrap;background:#0f172a;color:#fff;border-radius:14px;padding:14px 16px;font-size:13px;line-height:1.5;font-weight:500;box-shadow:0 18px 44px rgba(15,23,42,.28);z-index:80;}
     .dealCard{padding:10px!important;margin-bottom:10px!important;border-radius:14px!important;}
@@ -1732,6 +1762,8 @@ function UXStyle(){
     @media(max-width:1100px){
       .cards{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
       .grid2{grid-template-columns:1fr!important;}
+      .cockpitGrid{grid-template-columns:1fr!important;}
+      .cockpitStatus{text-align:left!important;}
       .topbar{align-items:flex-start!important;flex-direction:column!important;}
       .topActions{width:100%!important;justify-content:flex-start!important;flex-wrap:wrap!important;}
       .topUserCard{flex:1 1 180px!important;}
@@ -1799,6 +1831,11 @@ function UXStyle(){
       .modalHead h2{font-size:20px!important;}
       .timelineItem{padding:12px!important;}
       .timelineNote:hover::after{left:8px!important;width:calc(100vw - 56px)!important;}
+      .cockpitHero h2{font-size:27px!important;}
+      .cockpitAgendaItem{grid-template-columns:1fr!important;}
+      .cockpitCalendar{gap:4px!important;}
+      .cockpitDay{min-height:52px!important;border-radius:10px!important;padding:5px!important;}
+      .cockpitDay span{font-size:12px!important;}
       button,.mini,.saveBtn{touch-action:manipulation;}
     }
     @media(max-width:430px){
@@ -2618,8 +2655,10 @@ function FunnelAnalytics({stages=STAGES,deals=[],companies=[],contacts=[],stageH
   </>;
 }
 
-function PendingPanel({currentUser,companies=[],contacts=[],deals=[],activities=[],notes=[],interactions=[],contracts=[],setSelectedDealId,setSelectedActivityId,setSelectedContractId}){
+function PendingPanel({currentUser,canWrite,companies=[],contacts=[],deals=[],activities=[],setActivities,notes=[],interactions=[],contracts=[],setSelectedDealId,setSelectedActivityId,setSelectedContractId}){
   const currentDate = today();
+  const [month,setMonth] = useState(() => new Date(`${today()}T12:00:00`));
+  const [calendarDraft,setCalendarDraft] = useState(null);
   const pendingActivities = safeArray(activities).filter(activity=>activity.status !== 'Concluída');
   const overdueActivities = pendingActivities.filter(activity=>activity.dueDate && activity.dueDate < currentDate).sort((a,b)=>(String(a.dueDate || '') + String(a.dueTime || '')).localeCompare(String(b.dueDate || '') + String(b.dueTime || '')));
   const meetingsToday = safeArray(activities).filter(activity=>dateOnlyFromCrmValue(activity.dueDate) === currentDate && isMeetingActivity(activity)).sort((a,b)=>String(a.dueTime || '').localeCompare(String(b.dueTime || '')));
@@ -2629,52 +2668,220 @@ function PendingPanel({currentUser,companies=[],contacts=[],deals=[],activities=
   const userMentions = mentionsForUser({currentUser,deals,activities,notes,interactions});
   const totalPendingItems = overdueActivities.length + meetingsToday.length + proposalsWithoutFollowup.length + dealsWithoutNextStep.length + expiringContracts.length + userMentions.length;
   const dealForActivity = activity => byId(deals,activity.dealId);
+  const addDaysKey = (dateString, days) => {
+    const date = new Date(`${dateString}T12:00:00`);
+    date.setDate(date.getDate() + days);
+    return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+  };
+  const nextSevenDays = addDaysKey(currentDate,7);
+  const closeThisWeek = safeArray(deals)
+    .filter(deal=>!['Ganho','Perdido'].includes(deal.stage) && deal.closeDate && deal.closeDate >= currentDate && deal.closeDate <= nextSevenDays)
+    .sort((a,b)=>String(a.closeDate || '').localeCompare(String(b.closeDate || '')) || dealMrr(b)-dealMrr(a));
+  const focusDeals = safeArray(deals)
+    .filter(deal=>!['Ganho','Perdido'].includes(deal.stage))
+    .map(deal=>{
+      const hasFutureActivity = pendingActivities.some(activity=>sameId(activity.dealId,deal.id) && activity.dueDate && activity.dueDate >= currentDate);
+      const hasOverdueActivity = overdueActivities.some(activity=>sameId(activity.dealId,deal.id));
+      const hotStage = ['Proposta Enviada','Negociação','Contrato'].includes(deal.stage);
+      const closeSoon = deal.closeDate && deal.closeDate >= currentDate && deal.closeDate <= nextSevenDays;
+      const score = (hotStage ? 40 : 0) + (closeSoon ? 30 : 0) + (!hasFutureActivity ? 20 : 0) + (hasOverdueActivity ? 15 : 0) + Math.min(20,dealMrr(deal)/5000);
+      return {deal,score,hasFutureActivity,hasOverdueActivity,closeSoon};
+    })
+    .filter(item=>item.score >= 35)
+    .sort((a,b)=>b.score-a.score || dealMrr(b.deal)-dealMrr(a.deal))
+    .slice(0,8);
+  const todayAgenda = pendingActivities
+    .filter(activity=>dateOnlyFromCrmValue(activity.dueDate) === currentDate)
+    .sort((a,b)=>String(a.dueTime || '').localeCompare(String(b.dueTime || '')));
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const monthLabel = month.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const calendarStart = new Date(year,monthIndex,1 - new Date(year,monthIndex,1).getDay());
+  const calendarDays = Array.from({length:42},(_,index)=>{
+    const date = new Date(calendarStart);
+    date.setDate(calendarStart.getDate()+index);
+    return date;
+  });
+  const dateKey = (date) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+  const monthPrefix = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
+  const calendarActivities = pendingActivities.filter(activity=>activity.dueDate);
+  const monthActivityCount = calendarActivities.filter(activity=>String(activity.dueDate || '').startsWith(monthPrefix)).length;
+  const dealOptions = safeArray(deals).filter(deal=>!['Ganho','Perdido'].includes(deal.stage)).slice().sort((a,b)=>String(a.title || '').localeCompare(String(b.title || ''),'pt-BR'));
+  const changeMonth = (offset) => setMonth(new Date(year,monthIndex+offset,1,12));
+  const activityColor = (type) => {
+    const normalized = String(type || '').toLowerCase();
+    if(normalized.includes('reuni')) return '#007fa8';
+    if(normalized.includes('liga')) return '#16865f';
+    if(normalized.includes('whats')) return '#218a72';
+    if(normalized.includes('proposta')) return '#b36b00';
+    if(normalized.includes('mail')) return '#6d5aa8';
+    return '#426783';
+  };
+  const openNewActivity = (date) => {
+    if(!canWrite) return;
+    setCalendarDraft({
+      dealId:'',
+      type:'Reunião',
+      title:'Reunião',
+      dueDate:dateKey(date),
+      dueTime:'',
+      meetingLink:'',
+      status:'Pendente',
+      owner:currentUser?.name || '',
+      notes:''
+    });
+  };
+  const updateCalendarDraft = (field,value) => {
+    setCalendarDraft(draft => {
+      const nextDraft = {...draft,[field]:value};
+      if(field === 'dealId'){
+        const deal = byId(deals,value);
+        if(deal){
+          nextDraft.owner = draft.owner || deal.owner || currentUser?.name || '';
+          nextDraft.title = draft.title && draft.title !== 'Reunião' ? draft.title : `Reunião - ${deal.title}`;
+        }
+      }
+      return nextDraft;
+    });
+  };
+  const saveCalendarActivity = async () => {
+    if(!canWrite || !calendarDraft) return;
+    if(!calendarDraft.dealId){ window.alert('Selecione a oportunidade.'); return; }
+    if(!calendarDraft.dueDate){ window.alert('Informe a data da atividade.'); return; }
+    if(!calendarDraft.dueTime){ window.alert('Informe o horário da atividade.'); return; }
+    const nextActivity = {
+      ...calendarDraft,
+      id:Date.now(),
+      title:String(calendarDraft.title || '').trim() || 'Reunião',
+      meetingLink:dropboxHref(calendarDraft.meetingLink),
+    };
+    try {
+      const saved = await saveActivityToSupabase(nextActivity, deals);
+      setActivities?.([saved,...activities]);
+      setCalendarDraft(null);
+    } catch (error) {
+      console.warn('Falha ao criar atividade pelo cockpit no Supabase:', error);
+      setActivities?.([nextActivity,...activities]);
+      setCalendarDraft(null);
+      window.alert('Atividade salva localmente. O Supabase não aceitou a gravação agora.');
+    }
+  };
   return <>
-    <Panel title="Painel de Pendências">
-      <p className="muted" style={{margin:'0 0 8px'}}>Acompanhe os itens que exigem ação comercial. Clique em uma linha para abrir o cadastro correspondente.</p>
-      {!totalPendingItems && <p style={{margin:0,color:'#1a9b6c',fontWeight:900}}>Nenhuma pendência comercial encontrada.</p>}
+    <Panel title="Cockpit Diário">
+      <div className="cockpitHero">
+        <div>
+          <span className="uxEyebrow">Pendências + Agenda + Foco comercial</span>
+          <h2>Seu comando do dia</h2>
+          <p className="muted">Comece por aqui: reuniões, tarefas vencidas, propostas sem follow-up, menções e oportunidades com maior chance de virar ação comercial.</p>
+        </div>
+        <div className={`cockpitStatus ${totalPendingItems ? 'attention' : 'clear'}`}>
+          <b>{totalPendingItems ? `${totalPendingItems} ponto(s) de atenção` : 'Tudo em ordem'}</b>
+          <span>{currentDate ? formatDate(currentDate) : ''}</span>
+        </div>
+      </div>
     </Panel>
     <section className="cards">
+      <Kpi icon={CalendarDays} label="Reuniões hoje" value={meetingsToday.length}/>
       <Kpi icon={AlertTriangle} label="Atividades vencidas" value={overdueActivities.length}/>
       <Kpi icon={BriefcaseBusiness} label="Propostas sem follow-up" value={proposalsWithoutFollowup.length}/>
-      <Kpi icon={CalendarDays} label="Reuniões hoje" value={meetingsToday.length}/>
-      <Kpi icon={Clock3} label="Contratos vencendo em 90 dias" value={expiringContracts.length}/>
       <Kpi icon={MessageSquare} label="Menções para mim" value={userMentions.length}/>
+      <Kpi icon={TrendingUp} label="Fechamentos em 7 dias" value={closeThisWeek.length}/>
     </section>
-    <Panel title={`Menções para mim (${userMentions.length})`}>
-      <DashboardTable headers={['Origem','Oportunidade','Trecho','Data','Ações']}>
-        {userMentions.length ? userMentions.map(item=><tr key={item.id} onClick={()=>item.activityId ? setSelectedActivityId?.(item.activityId) : setSelectedDealId?.(item.dealId)} style={{cursor:'pointer'}}><td><b>{item.title}</b><span>{item.type}</span></td><td>{item.deal?.title || '-'}</td><td>{item.text}</td><td>{item.date ? formatDateTime(item.date) : '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation(); item.activityId ? setSelectedActivityId?.(item.activityId) : setSelectedDealId?.(item.dealId)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma menção encontrada</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
-      </DashboardTable>
-    </Panel>
+    <section className="cockpitGrid">
+      <Panel title="Calendário do cockpit">
+        <div className="cockpitCalendarHead">
+          <div>
+            <b>{monthLabel}</b>
+            <span>{monthActivityCount} atividade(s) pendente(s)</span>
+          </div>
+          <div className="calendarNav">
+            <button className="iconBtn" title="Mês anterior" onClick={()=>changeMonth(-1)}><ChevronLeft size={18}/></button>
+            <button className="mini" onClick={()=>setMonth(new Date(`${today()}T12:00:00`))}>Hoje</button>
+            <button className="iconBtn" title="Próximo mês" onClick={()=>changeMonth(1)}><ChevronRight size={18}/></button>
+          </div>
+        </div>
+        <div className="cockpitCalendar">
+          {['D','S','T','Q','Q','S','S'].map((day,index)=><div className="cockpitWeekday" key={`${day}-${index}`}>{day}</div>)}
+          {calendarDays.map(date=>{
+            const key = dateKey(date);
+            const dayActivities = calendarActivities.filter(activity=>dateOnlyFromCrmValue(activity.dueDate) === key).sort((a,b)=>String(a.dueTime || '').localeCompare(String(b.dueTime || '')));
+            return <button className={`cockpitDay ${date.getMonth()!==monthIndex ? 'outsideMonth' : ''} ${key===currentDate ? 'today' : ''}`} onClick={()=>openNewActivity(date)} title={canWrite ? 'Clique para criar atividade nesta data' : undefined} key={key}>
+              <span>{date.getDate()}</span>
+              <i>{dayActivities.length ? dayActivities.length : ''}</i>
+              {dayActivities.slice(0,3).map(activity=><em key={activity.id} style={{background:activityColor(activity.type)}} onClick={event=>{event.stopPropagation();setSelectedActivityId?.(activity.id)}} title={`${formatActivityDateTime(activity)} · ${activity.title}`}/>)}
+            </button>;
+          })}
+        </div>
+      </Panel>
+      <Panel title={`Agenda de hoje (${todayAgenda.length})`}>
+        <div className="cockpitAgenda">
+          {todayAgenda.length ? todayAgenda.map(activity=>{const deal=dealForActivity(activity);return <div className="cockpitAgendaItem" role="button" tabIndex={0} key={activity.id} onClick={()=>setSelectedActivityId?.(activity.id)} onKeyDown={event=>{if(event.key === 'Enter' || event.key === ' ') setSelectedActivityId?.(activity.id)}}>
+            <strong>{activity.dueTime ? String(activity.dueTime).slice(0,5) : 'Dia'}</strong>
+            <span><b>{activity.title}</b>{deal?.title || 'Sem oportunidade'}</span>
+            {activity.meetingLink && <a href={activity.meetingLink} target="_blank" rel="noreferrer" onClick={event=>event.stopPropagation()}>Abrir chamada</a>}
+          </div>}) : <p className="muted" style={{margin:0}}>Nenhuma atividade pendente para hoje.</p>}
+        </div>
+      </Panel>
+    </section>
     <section className="grid2 compact">
-      <Panel title={`Atividades vencidas (${overdueActivities.length})`}>
+      <Panel title={`Ação imediata: vencidas (${overdueActivities.length})`}>
         <DashboardTable headers={['Atividade','Oportunidade','Vencimento','Responsável','Ações']}>
           {overdueActivities.length ? overdueActivities.map(activity=>{const deal=dealForActivity(activity);return <tr key={activity.id} onClick={()=>setSelectedActivityId?.(activity.id)} style={{cursor:'pointer'}}><td><b>{activity.title}</b><span>{activity.type}</span></td><td>{deal?.title || '-'}</td><td><b style={{color:'#dc2626'}}>{formatActivityDateTime(activity)}</b></td><td>{activity.owner || '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedActivityId?.(activity.id)}}><Edit3 size={15}/>Resolver</button></td></tr>}) : <tr><td>Nenhuma atividade vencida</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
-      <Panel title={`Propostas sem follow-up (${proposalsWithoutFollowup.length})`}>
+      <Panel title={`Ação imediata: propostas sem follow-up (${proposalsWithoutFollowup.length})`}>
         <DashboardTable headers={['Oportunidade','Empresa','Responsável','Receita mensal','Ações']}>
           {proposalsWithoutFollowup.length ? proposalsWithoutFollowup.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b><span>{deal.closeDate ? `Previsão: ${formatDate(deal.closeDate)}` : 'Sem previsão'}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{deal.owner || '-'}</td><td>{moneyShort(dealMrr(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Criar follow-up</button></td></tr>) : <tr><td>Nenhuma proposta sem follow-up</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
     </section>
     <section className="grid2 compact">
-      <Panel title={`Reuniões de hoje (${meetingsToday.length})`}>
-        <DashboardTable headers={['Horário','Reunião','Oportunidade','Responsável','Ações']}>
-          {meetingsToday.length ? meetingsToday.map(activity=>{const deal=dealForActivity(activity);return <tr key={activity.id} onClick={()=>setSelectedActivityId?.(activity.id)} style={{cursor:'pointer'}}><td><b>{activity.dueTime ? String(activity.dueTime).slice(0,5) : 'Dia todo'}</b></td><td>{activity.title}</td><td>{deal?.title || '-'}</td><td>{activity.owner || '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedActivityId?.(activity.id)}}><Edit3 size={15}/>Abrir</button></td></tr>}) : <tr><td>Nenhuma reunião hoje</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+      <Panel title={`Oportunidades em foco (${focusDeals.length})`}>
+        <DashboardTable headers={['Oportunidade','Empresa','Motivo','Receita mensal','Ações']}>
+          {focusDeals.length ? focusDeals.map(({deal,hasFutureActivity,hasOverdueActivity,closeSoon})=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b><span>{deal.stage}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{[closeSoon ? 'Fecha em até 7 dias' : '', hasOverdueActivity ? 'Atividade vencida' : '', !hasFutureActivity ? 'Sem follow-up futuro' : ''].filter(Boolean).join(' · ') || 'Etapa quente'}</td><td>{moneyShort(dealMrr(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade crítica agora</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
+      <Panel title={`Menções para mim (${userMentions.length})`}>
+        <DashboardTable headers={['Origem','Oportunidade','Trecho','Data','Ações']}>
+          {userMentions.length ? userMentions.slice(0,8).map(item=><tr key={item.id} onClick={()=>item.activityId ? setSelectedActivityId?.(item.activityId) : setSelectedDealId?.(item.dealId)} style={{cursor:'pointer'}}><td><b>{item.title}</b><span>{item.type}</span></td><td>{item.deal?.title || '-'}</td><td>{item.text}</td><td>{item.date ? formatDateTime(item.date) : '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation(); item.activityId ? setSelectedActivityId?.(item.activityId) : setSelectedDealId?.(item.dealId)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma menção encontrada</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
+    </section>
+    <section className="grid2 compact">
       <Panel title={`Contratos vencendo em 90 dias (${expiringContracts.length})`}>
         <DashboardTable headers={['Cliente','Produto','Término','Prazo','Receita mensal','Ações']}>
           {expiringContracts.length ? expiringContracts.map(({contract,days})=>{const company=byId(companies,contract.companyId);return <tr key={contract.id} onClick={()=>setSelectedContractId?.(contract.id)} style={{cursor:'pointer'}}><td><b>{company?.name || 'Sem cliente'}</b></td><td>{contract.product || '-'}</td><td>{formatDate(contract.endDate)}</td><td>{days} dias</td><td>{moneyShort(contractMrr(contract))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedContractId?.(contract.id)}}><Edit3 size={15}/>Abrir</button></td></tr>}) : <tr><td>Nenhum contrato vencendo</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
+      <Panel title={`Oportunidades sem próximo passo (${dealsWithoutNextStep.length})`}>
+        <DashboardTable headers={['Oportunidade','Empresa','Etapa','Receita mensal','Ações']}>
+          {dealsWithoutNextStep.length ? dealsWithoutNextStep.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{deal.stage || '-'}</td><td>{moneyShort(dealMrr(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Definir próximo passo</button></td></tr>) : <tr><td>Todas as oportunidades abertas possuem próximo passo</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+        </DashboardTable>
+      </Panel>
     </section>
-    <Panel title={`Oportunidades sem próximo passo (${dealsWithoutNextStep.length})`}>
-      <DashboardTable headers={['Oportunidade','Empresa','Etapa','Responsável','Receita mensal','Ações']}>
-        {dealsWithoutNextStep.length ? dealsWithoutNextStep.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{deal.stage || '-'}</td><td>{deal.owner || '-'}</td><td>{moneyShort(dealMrr(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Definir próximo passo</button></td></tr>) : <tr><td>Todas as oportunidades abertas possuem próximo passo</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
-      </DashboardTable>
-    </Panel>
+    {calendarDraft && <div className="modalBackdrop">
+      <div className="modal">
+        <div className="modalHead">
+          <div>
+            <h2>Nova atividade pelo cockpit</h2>
+            <span>{formatDate(calendarDraft.dueDate)} · agenda comercial</span>
+          </div>
+          <button className="iconBtn" onClick={()=>setCalendarDraft(null)}><X/></button>
+        </div>
+        <div className="formGrid modalGrid">
+          <label><span>Oportunidade</span><select value={calendarDraft.dealId} onChange={event=>updateCalendarDraft('dealId',event.target.value)}><option value="">Selecione</option>{dealOptions.map(deal=><option value={deal.id} key={deal.id}>{deal.title}</option>)}</select></label>
+          <label><span>Tipo</span><select value={calendarDraft.type} onChange={event=>updateCalendarDraft('type',event.target.value)}>{['Reunião','Follow-up','Ligação','WhatsApp','Proposta'].map(type=><option value={type} key={type}>{type}</option>)}</select></label>
+          <label><span>Título</span><input value={calendarDraft.title} onChange={event=>updateCalendarDraft('title',event.target.value)}/></label>
+          <label><span>Data</span><input type="date" value={calendarDraft.dueDate} onChange={event=>updateCalendarDraft('dueDate',event.target.value)}/></label>
+          <label><span>Hora</span><input type="time" value={calendarDraft.dueTime} onChange={event=>updateCalendarDraft('dueTime',event.target.value)}/></label>
+          <label><span>Link da reunião</span><input type="url" value={calendarDraft.meetingLink} onChange={event=>updateCalendarDraft('meetingLink',event.target.value)} placeholder="https://meet.google.com/..."/></label>
+          <label><span>Responsável</span><select value={calendarDraft.owner} onChange={event=>updateCalendarDraft('owner',event.target.value)}><option value="">Selecione</option>{USERS.map(user=><option value={user} key={user}>{user}</option>)}</select></label>
+          <label><span>Status</span><select value={calendarDraft.status} onChange={event=>updateCalendarDraft('status',event.target.value)}><option value="Pendente">Pendente</option><option value="Concluída">Concluída</option></select></label>
+          <Textarea label="Observações" field="notes" form={calendarDraft} setForm={setCalendarDraft}/>
+          <button className="saveBtn" onClick={saveCalendarActivity}><Save size={16}/>Salvar atividade</button>
+        </div>
+      </div>
+    </div>}
   </>;
 }
 

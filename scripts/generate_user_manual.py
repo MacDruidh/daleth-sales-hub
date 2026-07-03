@@ -122,7 +122,7 @@ def build_story():
     ))
     story.append(Spacer(1, 0.8 * cm))
     story.append(p(
-        "Versao atualizada: 02/07/2026. Inclui Menções para mim, sincronizacao prudente das listas principais, assinatura de calendario externo, exclusao de atividades, cadastro de motivos de perda, multiplos produtos por oportunidade, edicao do historico e criacao rapida de oportunidade no Pipeline.",
+        "Versao atualizada: 03/07/2026. Inclui Cockpit Diario em Pendencias, Menções para mim, sincronizacao prudente das listas principais, assinatura de calendario externo, exclusao de atividades, cadastro de motivos de perda, multiplos produtos por oportunidade, edicao do historico e criacao rapida de oportunidade no Pipeline.",
         "CoverSubtitle",
     ))
     story.append(Spacer(1, 5.2 * cm))
@@ -135,7 +135,7 @@ def build_story():
         "3. Dashboard",
         "4. Insights Daleth",
         "5. Funil Comercial Aprimorado",
-        "6. Painel de Pendencias",
+        "6. Cockpit Diario em Pendencias",
         "7. Mencoes e trabalho em equipe",
         "8. Qualidade do CRM",
         "9. Pipeline",
@@ -177,7 +177,7 @@ def build_story():
         "Dashboard: visao executiva mensal e indicadores gerais.",
         "Insights Daleth: analises por responsavel, produto, segmento, risco e contratos.",
         "Funil Comercial: desempenho por etapa com receita mensal e previsao mensal.",
-        "Pendencias: itens que exigem acao comercial, incluindo mencoes para o usuario logado.",
+        "Pendencias: Cockpit Diario com agenda, calendario compacto, acoes imediatas, oportunidades em foco e mencoes para o usuario logado.",
         "Qualidade do CRM: cadastros incompletos e possiveis duplicidades.",
         "Pipeline: kanban das oportunidades por etapa.",
         "Cadastros: empresas, contatos e produtos.",
@@ -224,13 +224,16 @@ def build_story():
     story.append(p("Conversao e tempo medio dependem do historico de mudanca de etapa. Eles ficam melhores conforme o time movimenta as oportunidades corretamente."))
 
     story.append(PageBreak())
-    story.append(p("6. Painel de Pendencias", "Heading"))
-    story.append(p("O Painel de Pendencias organiza o que exige acao imediata. As oportunidades exibidas nessa tela mostram receita mensal, pois o foco e priorizacao comercial."))
+    story.append(p("6. Cockpit Diario em Pendencias", "Heading"))
+    story.append(p("Pendencias funciona como Cockpit Diario: a tela para abrir o dia comercial, ver agenda, identificar urgencias e decidir quais oportunidades merecem acao imediata. As oportunidades exibidas nessa tela mostram receita mensal, pois o foco e priorizacao comercial."))
     story.append(table([
         ["Bloco", "O que mostra"],
+        ["Calendario do cockpit", "Calendario compacto com atividades pendentes. Clique em uma data para criar uma nova atividade."],
+        ["Agenda de hoje", "Atividades e reunioes pendentes do dia, com link de chamada quando houver."],
+        ["Oportunidades em foco", "Negocios em etapa quente, fechamento proximo, atividade vencida ou sem follow-up futuro."],
         ["Atividades vencidas", "Atividades pendentes com data anterior ao dia atual."],
         ["Propostas sem follow-up", "Oportunidades em Proposta Enviada sem atividade futura, com receita mensal."],
-        ["Reunioes de hoje", "Atividades do tipo reuniao previstas para hoje."],
+        ["Fechamentos em 7 dias", "Oportunidades abertas com fechamento previsto para os proximos sete dias."],
         ["Contratos vencendo em 90 dias", "Contratos ativos proximos do fim, com receita mensal."],
         ["Oportunidades sem proximo passo", "Negocios abertos sem orientacao clara, com receita mensal."],
         ["Mencoes para mim", "Registros em que o usuario logado foi citado com @Nome."],
@@ -342,7 +345,7 @@ def build_story():
         "Crie sempre uma proxima atividade quando enviar proposta.",
         "Use @Nome quando uma acao depender de outra pessoa do time.",
         "Mantenha segmento da empresa preenchido.",
-        "Use Pendencias e Qualidade do CRM como rotina de higiene comercial.",
+        "Use o Cockpit Diario em Pendencias e Qualidade do CRM como rotina de higiene comercial.",
         "Para priorizacao, olhe receita mensal antes de contrato total.",
     ]:
         story.append(bullet(item))
@@ -351,7 +354,7 @@ def build_story():
     story.append(p("16. Rotina sugerida", "Heading"))
     story.append(table([
         ["Momento", "Acao recomendada"],
-        ["Inicio do dia", "Abrir Pendencias e verificar atividades vencidas, reunioes, propostas sem follow-up e Menções para mim."],
+        ["Inicio do dia", "Abrir o Cockpit Diario em Pendencias e verificar agenda, atividades vencidas, oportunidades em foco, propostas sem follow-up e Menções para mim."],
         ["Durante o dia", "Atualizar oportunidades, registrar interacoes, criar proximas atividades e citar usuarios quando houver dependencia."],
         ["Fim do dia", "Revisar Pipeline, receita mensal por etapa e oportunidades sem proximo passo."],
         ["Semanalmente", "Analisar Insights por responsavel, produto e segmento."],
