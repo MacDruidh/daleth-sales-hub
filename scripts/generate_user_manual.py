@@ -177,7 +177,7 @@ def build_story():
         "Dashboard: visao executiva mensal e indicadores gerais.",
         "Insights Daleth: analises por responsavel, produto, segmento, risco, contratos e Growth Daleth.",
         "Funil Comercial: desempenho por etapa com receita mensal e previsao mensal.",
-        "Pendencias: Cockpit Diario com agenda, calendario compacto, acoes imediatas, oportunidades em foco e mencoes para o usuario logado.",
+        "Pendencias: Cockpit Diario com agenda do dia, acoes imediatas, oportunidades em foco e mencoes para o usuario logado.",
         "Qualidade do CRM: cadastros incompletos e possiveis duplicidades.",
         "Pipeline: kanban das oportunidades por etapa.",
         "Cadastros: empresas, contatos e produtos.",
@@ -237,7 +237,6 @@ def build_story():
     story.append(p("Pendencias funciona como Cockpit Diario: a tela para abrir o dia comercial, ver agenda, identificar urgencias e decidir quais oportunidades merecem acao imediata. As oportunidades exibidas nessa tela mostram receita mensal, pois o foco e priorizacao comercial."))
     story.append(table([
         ["Bloco", "O que mostra"],
-        ["Calendario do cockpit", "Calendario compacto com atividades pendentes. Clique em uma data para criar uma nova atividade."],
         ["Agenda de hoje", "Atividades e reunioes pendentes do dia, com link de chamada quando houver."],
         ["Oportunidades em foco", "Negocios em etapa quente, fechamento proximo, atividade vencida ou sem follow-up futuro."],
         ["Atividades vencidas", "Atividades pendentes com data anterior ao dia atual."],

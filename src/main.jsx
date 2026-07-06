@@ -1731,18 +1731,6 @@ function UXStyle(){
     .cockpitStatus.clear{background:#ecfdf5!important;border-color:#bbf7d0!important;}
     .cockpitStatus.clear b{color:#047857!important;}
     .cockpitGrid{display:grid!important;grid-template-columns:1.25fr .75fr!important;gap:16px!important;}
-    .cockpitCalendarHead{display:flex!important;justify-content:space-between!important;align-items:center!important;gap:12px!important;flex-wrap:wrap!important;margin-bottom:12px!important;}
-    .cockpitCalendarHead b{display:block!important;color:var(--ux-text)!important;font-size:18px!important;text-transform:capitalize!important;}
-    .cockpitCalendarHead span{display:block!important;color:var(--ux-muted)!important;font-size:13px!important;margin-top:3px!important;}
-    .cockpitCalendar{display:grid!important;grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:6px!important;}
-    .cockpitWeekday{font-size:11px!important;font-weight:900!important;text-align:center!important;color:var(--ux-muted)!important;text-transform:uppercase!important;padding:4px!important;}
-    .cockpitDay{position:relative!important;min-height:66px!important;border:1px solid var(--ux-border)!important;background:#fff!important;border-radius:14px!important;padding:7px!important;text-align:left!important;cursor:pointer!important;display:grid!important;align-content:start!important;gap:4px!important;}
-    .cockpitDay:hover{box-shadow:inset 0 0 0 2px rgba(0,160,209,.16)!important;background:#f8fcff!important;}
-    .cockpitDay.outsideMonth{opacity:.45!important;background:#f7f9fb!important;}
-    .cockpitDay.today{border-color:var(--ux-blue)!important;box-shadow:inset 0 0 0 2px rgba(0,160,209,.24)!important;}
-    .cockpitDay span{font-weight:900!important;color:var(--ux-text)!important;font-size:13px!important;}
-    .cockpitDay i{position:absolute!important;top:6px!important;right:7px!important;font-style:normal!important;background:#e8f6fc!important;color:var(--ux-blue)!important;border-radius:999px!important;min-width:18px!important;height:18px!important;display:grid!important;place-items:center!important;font-size:10px!important;font-weight:900!important;}
-    .cockpitDay em{width:100%!important;height:4px!important;border-radius:999px!important;display:block!important;}
     .cockpitAgenda{display:grid!important;gap:10px!important;}
     .cockpitAgendaItem{border:1px solid var(--ux-border)!important;background:#f8fcff!important;border-radius:16px!important;padding:12px!important;display:grid!important;grid-template-columns:58px 1fr auto!important;gap:10px!important;align-items:center!important;text-align:left!important;cursor:pointer!important;color:inherit!important;}
     .cockpitAgendaItem:hover{background:#eef8fd!important;}
@@ -1836,9 +1824,6 @@ function UXStyle(){
       .timelineNote:hover::after{left:8px!important;width:calc(100vw - 56px)!important;}
       .cockpitHero h2{font-size:27px!important;}
       .cockpitAgendaItem{grid-template-columns:1fr!important;}
-      .cockpitCalendar{gap:4px!important;}
-      .cockpitDay{min-height:52px!important;border-radius:10px!important;padding:5px!important;}
-      .cockpitDay span{font-size:12px!important;}
       button,.mini,.saveBtn{touch-action:manipulation;}
     }
     @media(max-width:430px){
@@ -2776,8 +2761,6 @@ function FunnelAnalytics({stages=STAGES,deals=[],companies=[],contacts=[],stageH
 
 function PendingPanel({currentUser,canWrite,companies=[],contacts=[],deals=[],activities=[],setActivities,notes=[],interactions=[],contracts=[],setSelectedDealId,setSelectedActivityId,setSelectedContractId}){
   const currentDate = today();
-  const [month,setMonth] = useState(() => new Date(`${today()}T12:00:00`));
-  const [calendarDraft,setCalendarDraft] = useState(null);
   const pendingActivities = safeArray(activities).filter(activity=>activity.status !== 'Concluída');
   const overdueActivities = pendingActivities.filter(activity=>activity.dueDate && activity.dueDate < currentDate).sort((a,b)=>(String(a.dueDate || '') + String(a.dueTime || '')).localeCompare(String(b.dueDate || '') + String(b.dueTime || '')));
   const meetingsToday = safeArray(activities).filter(activity=>dateOnlyFromCrmValue(activity.dueDate) === currentDate && isMeetingActivity(activity)).sort((a,b)=>String(a.dueTime || '').localeCompare(String(b.dueTime || '')));
@@ -2812,79 +2795,6 @@ function PendingPanel({currentUser,canWrite,companies=[],contacts=[],deals=[],ac
   const todayAgenda = pendingActivities
     .filter(activity=>dateOnlyFromCrmValue(activity.dueDate) === currentDate)
     .sort((a,b)=>String(a.dueTime || '').localeCompare(String(b.dueTime || '')));
-  const year = month.getFullYear();
-  const monthIndex = month.getMonth();
-  const monthLabel = month.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
-  const calendarStart = new Date(year,monthIndex,1 - new Date(year,monthIndex,1).getDay());
-  const calendarDays = Array.from({length:42},(_,index)=>{
-    const date = new Date(calendarStart);
-    date.setDate(calendarStart.getDate()+index);
-    return date;
-  });
-  const dateKey = (date) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
-  const monthPrefix = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
-  const calendarActivities = pendingActivities.filter(activity=>activity.dueDate);
-  const monthActivityCount = calendarActivities.filter(activity=>String(activity.dueDate || '').startsWith(monthPrefix)).length;
-  const dealOptions = safeArray(deals).filter(deal=>!['Ganho','Perdido'].includes(deal.stage)).slice().sort((a,b)=>String(a.title || '').localeCompare(String(b.title || ''),'pt-BR'));
-  const changeMonth = (offset) => setMonth(new Date(year,monthIndex+offset,1,12));
-  const activityColor = (type) => {
-    const normalized = String(type || '').toLowerCase();
-    if(normalized.includes('reuni')) return '#007fa8';
-    if(normalized.includes('liga')) return '#16865f';
-    if(normalized.includes('whats')) return '#218a72';
-    if(normalized.includes('proposta')) return '#b36b00';
-    if(normalized.includes('mail')) return '#6d5aa8';
-    return '#426783';
-  };
-  const openNewActivity = (date) => {
-    if(!canWrite) return;
-    setCalendarDraft({
-      dealId:'',
-      type:'Reunião',
-      title:'Reunião',
-      dueDate:dateKey(date),
-      dueTime:'',
-      meetingLink:'',
-      status:'Pendente',
-      owner:currentUser?.name || '',
-      notes:''
-    });
-  };
-  const updateCalendarDraft = (field,value) => {
-    setCalendarDraft(draft => {
-      const nextDraft = {...draft,[field]:value};
-      if(field === 'dealId'){
-        const deal = byId(deals,value);
-        if(deal){
-          nextDraft.owner = draft.owner || deal.owner || currentUser?.name || '';
-          nextDraft.title = draft.title && draft.title !== 'Reunião' ? draft.title : `Reunião - ${deal.title}`;
-        }
-      }
-      return nextDraft;
-    });
-  };
-  const saveCalendarActivity = async () => {
-    if(!canWrite || !calendarDraft) return;
-    if(!calendarDraft.dealId){ window.alert('Selecione a oportunidade.'); return; }
-    if(!calendarDraft.dueDate){ window.alert('Informe a data da atividade.'); return; }
-    if(!calendarDraft.dueTime){ window.alert('Informe o horário da atividade.'); return; }
-    const nextActivity = {
-      ...calendarDraft,
-      id:Date.now(),
-      title:String(calendarDraft.title || '').trim() || 'Reunião',
-      meetingLink:dropboxHref(calendarDraft.meetingLink),
-    };
-    try {
-      const saved = await saveActivityToSupabase(nextActivity, deals);
-      setActivities?.([saved,...activities]);
-      setCalendarDraft(null);
-    } catch (error) {
-      console.warn('Falha ao criar atividade pelo cockpit no Supabase:', error);
-      setActivities?.([nextActivity,...activities]);
-      setCalendarDraft(null);
-      window.alert('Atividade salva localmente. O Supabase não aceitou a gravação agora.');
-    }
-  };
   return <>
     <Panel title="Cockpit Diário">
       <div className="cockpitHero">
@@ -2906,32 +2816,7 @@ function PendingPanel({currentUser,canWrite,companies=[],contacts=[],deals=[],ac
       <Kpi icon={MessageSquare} label="Menções para mim" value={userMentions.length}/>
       <Kpi icon={TrendingUp} label="Fechamentos em 7 dias" value={closeThisWeek.length}/>
     </section>
-    <section className="cockpitGrid">
-      <Panel title="Calendário do cockpit">
-        <div className="cockpitCalendarHead">
-          <div>
-            <b>{monthLabel}</b>
-            <span>{monthActivityCount} atividade(s) pendente(s)</span>
-          </div>
-          <div className="calendarNav">
-            <button className="iconBtn" title="Mês anterior" onClick={()=>changeMonth(-1)}><ChevronLeft size={18}/></button>
-            <button className="mini" onClick={()=>setMonth(new Date(`${today()}T12:00:00`))}>Hoje</button>
-            <button className="iconBtn" title="Próximo mês" onClick={()=>changeMonth(1)}><ChevronRight size={18}/></button>
-          </div>
-        </div>
-        <div className="cockpitCalendar">
-          {['D','S','T','Q','Q','S','S'].map((day,index)=><div className="cockpitWeekday" key={`${day}-${index}`}>{day}</div>)}
-          {calendarDays.map(date=>{
-            const key = dateKey(date);
-            const dayActivities = calendarActivities.filter(activity=>dateOnlyFromCrmValue(activity.dueDate) === key).sort((a,b)=>String(a.dueTime || '').localeCompare(String(b.dueTime || '')));
-            return <button className={`cockpitDay ${date.getMonth()!==monthIndex ? 'outsideMonth' : ''} ${key===currentDate ? 'today' : ''}`} onClick={()=>openNewActivity(date)} title={canWrite ? 'Clique para criar atividade nesta data' : undefined} key={key}>
-              <span>{date.getDate()}</span>
-              <i>{dayActivities.length ? dayActivities.length : ''}</i>
-              {dayActivities.slice(0,3).map(activity=><em key={activity.id} style={{background:activityColor(activity.type)}} onClick={event=>{event.stopPropagation();setSelectedActivityId?.(activity.id)}} title={`${formatActivityDateTime(activity)} · ${activity.title}`}/>)}
-            </button>;
-          })}
-        </div>
-      </Panel>
+    <section className="grid2 compact">
       <Panel title={`Agenda de hoje (${todayAgenda.length})`}>
         <div className="cockpitAgenda">
           {todayAgenda.length ? todayAgenda.map(activity=>{const deal=dealForActivity(activity);return <div className="cockpitAgendaItem" role="button" tabIndex={0} key={activity.id} onClick={()=>setSelectedActivityId?.(activity.id)} onKeyDown={event=>{if(event.key === 'Enter' || event.key === ' ') setSelectedActivityId?.(activity.id)}}>
@@ -2941,8 +2826,6 @@ function PendingPanel({currentUser,canWrite,companies=[],contacts=[],deals=[],ac
           </div>}) : <p className="muted" style={{margin:0}}>Nenhuma atividade pendente para hoje.</p>}
         </div>
       </Panel>
-    </section>
-    <section className="grid2 compact">
       <Panel title={`Ação imediata: vencidas (${overdueActivities.length})`}>
         <DashboardTable headers={['Atividade','Oportunidade','Vencimento','Responsável','Ações']}>
           {overdueActivities.length ? overdueActivities.map(activity=>{const deal=dealForActivity(activity);return <tr key={activity.id} onClick={()=>setSelectedActivityId?.(activity.id)} style={{cursor:'pointer'}}><td><b>{activity.title}</b><span>{activity.type}</span></td><td>{deal?.title || '-'}</td><td><b style={{color:'#dc2626'}}>{formatActivityDateTime(activity)}</b></td><td>{activity.owner || '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedActivityId?.(activity.id)}}><Edit3 size={15}/>Resolver</button></td></tr>}) : <tr><td>Nenhuma atividade vencida</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
@@ -2978,29 +2861,6 @@ function PendingPanel({currentUser,canWrite,companies=[],contacts=[],deals=[],ac
         </DashboardTable>
       </Panel>
     </section>
-    {calendarDraft && <div className="modalBackdrop">
-      <div className="modal">
-        <div className="modalHead">
-          <div>
-            <h2>Nova atividade pelo cockpit</h2>
-            <span>{formatDate(calendarDraft.dueDate)} · agenda comercial</span>
-          </div>
-          <button className="iconBtn" onClick={()=>setCalendarDraft(null)}><X/></button>
-        </div>
-        <div className="formGrid modalGrid">
-          <label><span>Oportunidade</span><select value={calendarDraft.dealId} onChange={event=>updateCalendarDraft('dealId',event.target.value)}><option value="">Selecione</option>{dealOptions.map(deal=><option value={deal.id} key={deal.id}>{deal.title}</option>)}</select></label>
-          <label><span>Tipo</span><select value={calendarDraft.type} onChange={event=>updateCalendarDraft('type',event.target.value)}>{['Reunião','Follow-up','Ligação','WhatsApp','Proposta'].map(type=><option value={type} key={type}>{type}</option>)}</select></label>
-          <label><span>Título</span><input value={calendarDraft.title} onChange={event=>updateCalendarDraft('title',event.target.value)}/></label>
-          <label><span>Data</span><input type="date" value={calendarDraft.dueDate} onChange={event=>updateCalendarDraft('dueDate',event.target.value)}/></label>
-          <label><span>Hora</span><input type="time" value={calendarDraft.dueTime} onChange={event=>updateCalendarDraft('dueTime',event.target.value)}/></label>
-          <label><span>Link da reunião</span><input type="url" value={calendarDraft.meetingLink} onChange={event=>updateCalendarDraft('meetingLink',event.target.value)} placeholder="https://meet.google.com/..."/></label>
-          <label><span>Responsável</span><select value={calendarDraft.owner} onChange={event=>updateCalendarDraft('owner',event.target.value)}><option value="">Selecione</option>{USERS.map(user=><option value={user} key={user}>{user}</option>)}</select></label>
-          <label><span>Status</span><select value={calendarDraft.status} onChange={event=>updateCalendarDraft('status',event.target.value)}><option value="Pendente">Pendente</option><option value="Concluída">Concluída</option></select></label>
-          <Textarea label="Observações" field="notes" form={calendarDraft} setForm={setCalendarDraft}/>
-          <button className="saveBtn" onClick={saveCalendarActivity}><Save size={16}/>Salvar atividade</button>
-        </div>
-      </div>
-    </div>}
   </>;
 }
 
@@ -3539,7 +3399,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
 function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,opportunityFiles=[],setOpportunityFiles,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,stageHistory=[],setStageHistory,lossReasons={},setLossReasons,lossReasonOptions=LOSS_REASONS,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName}){
   const initialContact = byId(contacts, deal.contactId);
   const inferredCompany = companyForDeal(deal, companies, contacts);
-  const [tab,setTab] = useState('historico');
+  const [tab,setTab] = useState('dados');
   const [draft,setDraft] = useState({contractMonths:12,setup:0,...deal,companyId:inferredCompany?.id || deal.companyId,probability:probabilityForStage(deal.stage,deal.probability),lossReason:lossReasons?.[deal.id] || ''});
   const [note,setNote] = useState('');
   const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),dueTime:'',meetingLink:'',owner:deal.owner || currentUser?.name || 'Sergio Paulo',status:'Pendente',notes:''});
@@ -4629,7 +4489,15 @@ function MeetingReminderModal({activity,deals,onClose,onOpenActivity}){
 }
 
 function ActivityModal({activity,onClose,activities,setActivities,deals,canWrite}){
-  const [draft,setDraft] = useState({...activity});
+  const activityDraftFrom = (item) => ({
+    ...item,
+    dueDate: dateOnlyFromCrmValue(item?.dueDate) || '',
+    dueTime: item?.dueTime || '',
+  });
+  const [draft,setDraft] = useState(activityDraftFrom(activity));
+  useEffect(()=>{
+    setDraft(activityDraftFrom(activity));
+  }, [activity?.id]);
   const save = async () => {
     if(!canWrite) return;
     try {
@@ -4655,7 +4523,15 @@ function ActivityModal({activity,onClose,activities,setActivities,deals,canWrite
       window.alert('Não foi possível excluir esta atividade no Supabase agora.');
     }
   };
-  return <div className="modalBackdrop"><div className="modal"><div className="modalHead"><div><h2>{activity.title}</h2><span>{byId(deals,activity.dealId)?.title || 'Atividade sem oportunidade vinculada'}</span></div><button className="iconBtn" onClick={onClose}><X/></button></div>
+  return <div className="modalBackdrop"><div className="modal"><div className="modalHead"><div><h2>{activity.title}</h2><span>{formatActivityDateTime(draft)} · {byId(deals,activity.dealId)?.title || 'Atividade sem oportunidade vinculada'}</span></div><button className="iconBtn" onClick={onClose}><X/></button></div>
+    <Panel title="Data e horário da atividade">
+      <div className="cards" style={{marginBottom:0}}>
+        <Kpi icon={CalendarDays} label="Data" value={draft.dueDate ? formatDate(draft.dueDate) : 'Sem data'}/>
+        <Kpi icon={Clock3} label="Horário" value={draft.dueTime ? String(draft.dueTime).slice(0,5) : 'Sem horário'}/>
+        <Kpi icon={BriefcaseBusiness} label="Oportunidade" value={byId(deals,draft.dealId)?.title || 'Sem vínculo'}/>
+        <Kpi icon={UserRound} label="Responsável" value={draft.owner || '-'}/>
+      </div>
+    </Panel>
     <div className="formGrid modalGrid"><Select label="Status" field="status" form={draft} setForm={setDraft} options={['Pendente','Concluída'].map(x=>[x,x])}/><Select label="Tipo" field="type" form={draft} setForm={setDraft} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Oportunidade" field="dealId" form={draft} setForm={setDraft} options={[['','Sem oportunidade'],...safeArray(deals).map(d=>[d.id,d.title])]}/><Input label="Data" field="dueDate" form={draft} setForm={setDraft} type="date"/><Input label="Hora" field="dueTime" form={draft} setForm={setDraft} type="time"/><Input label="Link chamada" field="meetingLink" form={draft} setForm={setDraft} type="url"/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}{canWrite && <button className="mini" onClick={remove} style={{borderColor:'#fecaca',color:'#dc2626'}}><Trash2 size={15}/>Excluir atividade</button>}</div>
   </div></div>;
 }
