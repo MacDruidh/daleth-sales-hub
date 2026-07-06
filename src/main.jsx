@@ -1999,23 +1999,29 @@ function App(){
   const alertTotal = overdueCount + meetingsTodayCount + proposalsWithoutFollowup + mentionCount;
   const alertText = `${overdueCount} atividades vencidas · ${proposalsWithoutFollowup} propostas sem follow-up · ${meetingsTodayCount} reuniões hoje · ${mentionCount} menções`;
   const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,contracts,setContracts,products,setProducts,companySegments,setCompanySegments,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,stageHistory,setStageHistory,lossReasons,setLossReasons,lossReasonOptions,setLossReasonOptions,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
-  const logout = async () => {
-    setQuery('');
-    setSelectedDealId(null);
-    setSelectedProductName(null);
-    setSelectedContractId(null);
-    await supabase.auth.signOut();
-    setCurrentUser(null);
-  };
-  const navigate = (id) => {
-    setPage(id);
-    setQuery('');
+  const clearSelectedRecords = () => {
     setSelectedDealId(null);
     setSelectedCompanyId(null);
     setSelectedContactId(null);
     setSelectedContractId(null);
     setSelectedActivityId(null);
     setSelectedProductName(null);
+  };
+  const handleSearchChange = (event) => {
+    const value = event.target.value;
+    setQuery(value);
+    if(value.trim()) clearSelectedRecords();
+  };
+  const logout = async () => {
+    setQuery('');
+    clearSelectedRecords();
+    await supabase.auth.signOut();
+    setCurrentUser(null);
+  };
+  const navigate = (id) => {
+    setPage(id);
+    setQuery('');
+    clearSelectedRecords();
   };
   return <div className="app">
     <UXStyle/>
@@ -2028,8 +2034,8 @@ function App(){
       <div className="sidebarBox"><b>Perfil ativo</b><span>{currentUser.name} · {currentUser.role}</span></div>
     </aside>
     <main className="main" ref={mainRef}>
-      <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresas, contatos e oportunidades..."/></div><button className="notification" style={{cursor:'pointer',textAlign:'left'}} onClick={()=>navigate('pending')} title="Abrir painel de pendências"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></button><div className="notification topUserCard"><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><a className="mini topUtilityBtn" href="/Manual_do_Usuario_Daleth_Sales_Hub.pdf" target="_blank" rel="noreferrer" style={{textDecoration:'none'}}><FileText size={15}/>Manual</a><button className="mini topUtilityBtn" onClick={logout}><X size={15}/>Sair</button></div></header>
-      {selectedDealAsPage ? <DealDetailPage deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/> : (query.trim() ? <GlobalSearch {...context}/> : <>
+      <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={handleSearchChange} placeholder="Buscar empresas, contatos e oportunidades..."/></div><button className="notification" style={{cursor:'pointer',textAlign:'left'}} onClick={()=>navigate('pending')} title="Abrir painel de pendências"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></button><div className="notification topUserCard"><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><a className="mini topUtilityBtn" href="/Manual_do_Usuario_Daleth_Sales_Hub.pdf" target="_blank" rel="noreferrer" style={{textDecoration:'none'}}><FileText size={15}/>Manual</a><button className="mini topUtilityBtn" onClick={logout}><X size={15}/>Sair</button></div></header>
+      {selectedDealAsPage ? <DealDetailPage key={selectedDeal.id} deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/> : (query.trim() ? <GlobalSearch {...context} setQuery={setQuery}/> : <>
         {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='insights' && <InsightsDaleth {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <CrmQuality {...context} selectedDeal={selectedDealInQuality ? selectedDeal : null}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='registrations' && <Registrations {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>}
       </>)}
     </main>
@@ -2043,9 +2049,13 @@ function App(){
 }
 
 
-function GlobalSearch({query,companies,contacts,deals,setDeals,activities,contracts,products,canWrite,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName}){
+function GlobalSearch({query,setQuery,companies,contacts,deals,setDeals,activities,contracts,products,canWrite,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName}){
   const q = query.trim().toLowerCase();
   const includes = (...values) => values.join(' ').toLowerCase().includes(q);
+  const openSearchResult = (setter, id) => {
+    setQuery?.('');
+    setter?.(id);
+  };
   const companyResults = companies.filter(c => includes(c.name,c.segment,c.site,c.status,c.notes)).slice(0,8);
   const contactResults = contacts.filter(c => {
     const company = byId(companies,c.companyId);
@@ -2097,36 +2107,36 @@ function GlobalSearch({query,companies,contacts,deals,setDeals,activities,contra
     <section className="grid2 compact">
       <Panel title="Oportunidades">
         <DashboardTable headers={['Oportunidade','Empresa','Etapa','Receita mensal','Ações']}>
-          {dealResults.length ? dealResults.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{dealProductLabel(d)}</span></td><td>{companyForDeal(d,companies,contacts)?.name || '-'}</td><td>{d.stage}</td><td>{moneyShort(dealMrr(d))}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Editar</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDealFromSearch(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>) : <tr><td>Nenhuma oportunidade</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+          {dealResults.length ? dealResults.map(d=><tr key={d.id} onClick={()=>openSearchResult(setSelectedDealId,d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{dealProductLabel(d)}</span></td><td>{companyForDeal(d,companies,contacts)?.name || '-'}</td><td>{d.stage}</td><td>{moneyShort(dealMrr(d))}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); openSearchResult(setSelectedDealId,d.id)}}><Edit3 size={15}/>Editar</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDealFromSearch(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>) : <tr><td>Nenhuma oportunidade</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
       <Panel title="Empresas">
         <DashboardTable headers={['Empresa','Segmento','Status','Ações']}>
-          {companyResults.length ? companyResults.map(c=><tr key={c.id} onClick={()=>setSelectedCompanyId(c.id)} style={{cursor:'pointer'}}><td><b>{c.name}</b><span>{c.site}</span></td><td>{c.segment || '-'}</td><td>{c.status || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedCompanyId(c.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma empresa</td><td>-</td><td>-</td><td>-</td></tr>}
+          {companyResults.length ? companyResults.map(c=><tr key={c.id} onClick={()=>openSearchResult(setSelectedCompanyId,c.id)} style={{cursor:'pointer'}}><td><b>{c.name}</b><span>{c.site}</span></td><td>{c.segment || '-'}</td><td>{c.status || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); openSearchResult(setSelectedCompanyId,c.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma empresa</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
     </section>
     <section className="grid2 compact">
       <Panel title="Contatos">
         <DashboardTable headers={['Contato','Empresa','E-mail','Telefone','Ações']}>
-          {contactResults.length ? contactResults.map(c=><tr key={c.id} onClick={()=>setSelectedContactId(c.id)} style={{cursor:'pointer'}}><td><b>{c.name}</b><span>{c.role}</span></td><td>{byId(companies,c.companyId)?.name || '-'}</td><td>{c.email || '-'}</td><td>{[c.phone,c.whatsapp].filter(Boolean).join(' / ') || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedContactId(c.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhum contato</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+          {contactResults.length ? contactResults.map(c=><tr key={c.id} onClick={()=>openSearchResult(setSelectedContactId,c.id)} style={{cursor:'pointer'}}><td><b>{c.name}</b><span>{c.role}</span></td><td>{byId(companies,c.companyId)?.name || '-'}</td><td>{c.email || '-'}</td><td>{[c.phone,c.whatsapp].filter(Boolean).join(' / ') || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); openSearchResult(setSelectedContactId,c.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhum contato</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
       <Panel title="Contratos">
         <DashboardTable headers={['Cliente','Produto','Receita mensal','Status','Ações']}>
-          {contractResults.length ? contractResults.map(c=>{ const company = byId(companies,c.companyId); return <tr key={c.id} onClick={()=>setSelectedContractId?.(c.id)} style={{cursor:'pointer'}}><td><b>{company?.name || 'Sem cliente'}</b></td><td>{c.product}</td><td>{moneyShort(contractMrr(c))}</td><td>{c.status}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedContractId?.(c.id)}}><Edit3 size={15}/>Abrir</button></td></tr> }) : <tr><td>Nenhum contrato</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+          {contractResults.length ? contractResults.map(c=>{ const company = byId(companies,c.companyId); return <tr key={c.id} onClick={()=>openSearchResult(setSelectedContractId,c.id)} style={{cursor:'pointer'}}><td><b>{company?.name || 'Sem cliente'}</b></td><td>{c.product}</td><td>{moneyShort(contractMrr(c))}</td><td>{c.status}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); openSearchResult(setSelectedContractId,c.id)}}><Edit3 size={15}/>Abrir</button></td></tr> }) : <tr><td>Nenhum contrato</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
     </section>
     <section className="grid2 compact">
       <Panel title="Produtos">
         <DashboardTable headers={['Produto','Ações']}>
-          {productResults.length ? productResults.map(p=><tr key={p} onClick={()=>setSelectedProductName?.(p)} style={{cursor:'pointer'}}><td><b>{p}</b></td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(p)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhum produto</td><td>-</td></tr>}
+          {productResults.length ? productResults.map(p=><tr key={p} onClick={()=>openSearchResult(setSelectedProductName,p)} style={{cursor:'pointer'}}><td><b>{p}</b></td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); openSearchResult(setSelectedProductName,p)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhum produto</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
       <Panel title="Atividades">
         <DashboardTable headers={['Atividade','Tipo','Data','Responsável','Ações']}>
-          {activityResults.length ? activityResults.map(a=><tr key={a.id} onClick={()=>setSelectedActivityId(a.id)} style={{cursor:'pointer'}}><td><b>{a.title}</b><span>{a.notes}</span></td><td>{a.type}</td><td>{formatActivityDateTime(a)}{a.meetingLink && <span><a href={a.meetingLink} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}>Link chamada</a></span>}</td><td>{a.owner || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedActivityId(a.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma atividade</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+          {activityResults.length ? activityResults.map(a=><tr key={a.id} onClick={()=>openSearchResult(setSelectedActivityId,a.id)} style={{cursor:'pointer'}}><td><b>{a.title}</b><span>{a.notes}</span></td><td>{a.type}</td><td>{formatActivityDateTime(a)}{a.meetingLink && <span><a href={a.meetingLink} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}>Link chamada</a></span>}</td><td>{a.owner || '-'}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); openSearchResult(setSelectedActivityId,a.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma atividade</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
     </section>
