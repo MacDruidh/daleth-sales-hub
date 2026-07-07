@@ -122,7 +122,7 @@ def build_story():
     ))
     story.append(Spacer(1, 0.8 * cm))
     story.append(p(
-        "Versao atualizada: 03/07/2026. Inclui Growth Daleth em Insights, Cockpit Diario em Pendencias, Menções para mim, sincronizacao prudente das listas principais, assinatura de calendario externo, exclusao de atividades, cadastro de motivos de perda, multiplos produtos por oportunidade, edicao do historico e criacao rapida de oportunidade no Pipeline.",
+        "Versao atualizada: 07/07/2026. Inclui Cockpit Diario clicavel, score automatico de oportunidades, Growth Daleth em Insights, Menções para mim, sincronizacao prudente das listas principais, assinatura de calendario externo, exclusao de atividades, cadastro de motivos de perda, multiplos produtos por oportunidade, edicao do historico e criacao rapida de oportunidade no Pipeline.",
         "CoverSubtitle",
     ))
     story.append(Spacer(1, 5.2 * cm))
@@ -177,7 +177,7 @@ def build_story():
         "Dashboard: visao executiva mensal e indicadores gerais.",
         "Insights Daleth: analises por responsavel, produto, segmento, risco, contratos e Growth Daleth.",
         "Funil Comercial: desempenho por etapa com receita mensal e previsao mensal.",
-        "Pendencias: Cockpit Diario com agenda do dia, acoes imediatas, oportunidades em foco e mencoes para o usuario logado.",
+        "Pendencias: Cockpit Diario clicavel com agenda do dia, acoes recomendadas por score, atividades vencidas, propostas sem follow-up e mencoes para o usuario logado.",
         "Qualidade do CRM: cadastros incompletos e possiveis duplicidades.",
         "Pipeline: kanban das oportunidades por etapa.",
         "Cadastros: empresas, contatos e produtos.",
@@ -234,11 +234,12 @@ def build_story():
 
     story.append(PageBreak())
     story.append(p("6. Cockpit Diario em Pendencias", "Heading"))
-    story.append(p("Pendencias funciona como Cockpit Diario: a tela para abrir o dia comercial, ver agenda, identificar urgencias e decidir quais oportunidades merecem acao imediata. As oportunidades exibidas nessa tela mostram receita mensal, pois o foco e priorizacao comercial."))
+    story.append(p("Pendencias funciona como Cockpit Diario: a tela para abrir o dia comercial, ver agenda, identificar urgencias e decidir quais oportunidades merecem acao imediata. Os cartoes superiores sao clicaveis e abrem a lista exata de itens relacionados."))
     story.append(table([
         ["Bloco", "O que mostra"],
+        ["Acoes recomendadas", "Oportunidades priorizadas automaticamente por score comercial."],
         ["Agenda de hoje", "Atividades e reunioes pendentes do dia, com link de chamada quando houver."],
-        ["Oportunidades em foco", "Negocios em etapa quente, fechamento proximo, atividade vencida ou sem follow-up futuro."],
+        ["Score automatico", "Nota de 0 a 100 calculada por etapa, receita mensal, interacao, atividades, responsavel, segmento e fechamento previsto."],
         ["Atividades vencidas", "Atividades pendentes com data anterior ao dia atual."],
         ["Propostas sem follow-up", "Oportunidades em Proposta Enviada sem atividade futura, com receita mensal."],
         ["Fechamentos em 7 dias", "Oportunidades abertas com fechamento previsto para os proximos sete dias."],
@@ -299,11 +300,13 @@ def build_story():
         "Oportunidades abertas: quantidade de negocios abertos no filtro.",
         "Contrato total filtrado: valor total dos contratos como apoio, nao como metrica principal.",
         "Na tabela, Receita mensal aparece com destaque. Contrato total fica como complemento.",
+        "Score mostra uma nota automatica de prioridade comercial para ajudar a ordenar a acao do time.",
     ]:
         story.append(bullet(item))
     story.append(p("Ficha da oportunidade", "Heading"))
     for item in [
         "A aba Dados permite editar informacoes comerciais.",
+        "A ficha mostra o Score comercial e a acao recomendada para aquela oportunidade.",
         "Cada oportunidade pode ter ate tres produtos vinculados: Produto 1, Produto 2 e Produto 3.",
         "Historico registra interacoes e anotacoes; interacoes registradas podem ser editadas pela propria linha do tempo.",
         "Atividades mostra compromissos e follow-ups vinculados.",

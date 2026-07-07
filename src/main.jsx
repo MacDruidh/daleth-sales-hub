@@ -1085,6 +1085,57 @@ function relationshipStatusForDeal(deal, interactions=[], activities=[]){
   if(days <= 4) return {tone:'good', label:`${prefix} ${age}`, shortLabel:age, days};
   return {tone:days <= 9 ? 'warn' : 'danger', label:`Sem interação ${age}`, shortLabel:age, days};
 }
+function opportunityPriorityScore({deal,companies=[],contacts=[],activities=[],interactions=[],currentDate=today()}){
+  if(!deal || ['Ganho','Perdido'].includes(deal.stage)) return {score:0,tone:'none',label:'Fora do funil',reasons:['Oportunidade encerrada'],nextAction:'Acompanhar somente se houver reabertura'};
+  const pendingActivities = safeArray(activities).filter(activity=>String(activity.status || '') !== 'Concluída' && sameId(activity.dealId,deal.id));
+  const overdueActivity = pendingActivities.find(activity=>activity.dueDate && activity.dueDate < currentDate);
+  const todayActivity = pendingActivities.find(activity=>dateOnlyFromCrmValue(activity.dueDate) === currentDate);
+  const futureActivity = pendingActivities.find(activity=>activity.dueDate && activity.dueDate >= currentDate);
+  const relationship = relationshipStatusForDeal(deal,interactions,activities);
+  const segment = dealSegment(deal,companies,contacts);
+  const stagePoints = {
+    'Lead Captado':6,
+    'Primeiro Contato':10,
+    'Levantamento':16,
+    'Reunião Agendada':24,
+    'Proposta Enviada':32,
+    'Negociação':38,
+    'Contrato':42
+  }[deal.stage] || 8;
+  const mrrPoints = Math.min(18, Math.round(dealMrr(deal) / 2500));
+  const probabilityPoints = Math.min(12, Math.round(probabilityForStage(deal.stage,deal.probability) / 10));
+  const interactionPoints = relationship.days === null ? 16 : relationship.days > 10 ? 14 : relationship.days >= 5 ? 8 : 2;
+  const activityPoints = overdueActivity ? 14 : todayActivity ? 8 : futureActivity ? 0 : 10;
+  const ownerPoints = String(deal.owner || '').trim() ? 0 : 8;
+  const segmentPoints = !segment || segment === 'Sem segmento' ? 5 : 0;
+  let closePoints = 0;
+  const closeDays = daysUntil(deal.closeDate);
+  if(closeDays !== null){
+    if(closeDays < 0) closePoints = 10;
+    else if(closeDays <= 7) closePoints = 12;
+    else if(closeDays <= 30) closePoints = 8;
+  }
+  const score = Math.max(0, Math.min(100, stagePoints + mrrPoints + probabilityPoints + interactionPoints + activityPoints + ownerPoints + segmentPoints + closePoints));
+  const reasons = [
+    `Etapa: ${deal.stage || 'sem etapa'}`,
+    dealMrr(deal) ? `Receita mensal ${moneyShort(dealMrr(deal))}` : '',
+    relationship.days === null ? 'Sem interação registrada' : relationship.label,
+    overdueActivity ? 'Atividade vencida' : todayActivity ? 'Atividade para hoje' : !futureActivity ? 'Sem atividade futura' : '',
+    closeDays !== null && closeDays < 0 ? 'Fechamento previsto vencido' : closeDays !== null && closeDays <= 7 ? 'Fechamento em até 7 dias' : '',
+    ownerPoints ? 'Sem responsável' : '',
+    segmentPoints ? 'Sem segmento' : ''
+  ].filter(Boolean);
+  const nextAction = overdueActivity
+    ? `Resolver atividade vencida: ${overdueActivity.title || overdueActivity.type || 'atividade'}`
+    : !futureActivity
+      ? 'Criar próximo follow-up'
+      : closeDays !== null && closeDays <= 7
+        ? 'Priorizar fechamento nesta semana'
+        : 'Manter cadência comercial';
+  const tone = score >= 75 ? 'danger' : score >= 55 ? 'warn' : score >= 35 ? 'good' : 'none';
+  const label = score >= 75 ? 'Prioridade máxima' : score >= 55 ? 'Alta prioridade' : score >= 35 ? 'Prioridade média' : 'Baixa prioridade';
+  return {score,tone,label,reasons,nextAction,relationship,overdueActivity,todayActivity,futureActivity,closeDays};
+}
 function escapeRegExp(value){ return String(value || '').replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
 function textMentionsUser(value,user){
   const name = String(user || '').trim();
@@ -1732,6 +1783,14 @@ function UXStyle(){
     .relationshipPill.warn{background:#fff5dc!important;color:#956000!important;}
     .relationshipPill.danger{background:#fdecec!important;color:#a72f2f!important;}
     .relationshipPill.none{background:#f1f5f9!important;color:#475569!important;}
+    .scorePill{display:inline-flex!important;align-items:center!important;gap:8px!important;border-radius:999px!important;font-weight:900!important;padding:7px 10px!important;font-size:12px!important;background:#f1f5f9!important;color:#475569!important;}
+    .scorePill.good{background:#e8f7f1!important;color:#147856!important;}
+    .scorePill.warn{background:#fff5dc!important;color:#956000!important;}
+    .scorePill.danger{background:#fdecec!important;color:#a72f2f!important;}
+    .scorePill.none{background:#f1f5f9!important;color:#475569!important;}
+    .kpi.clickable{cursor:pointer!important;transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease!important;}
+    .kpi.clickable:hover{transform:translateY(-2px)!important;border-color:#b9dff0!important;box-shadow:0 18px 46px rgba(0,160,209,.14)!important;}
+    .kpi.clickable.active{border-color:var(--ux-blue)!important;box-shadow:inset 0 0 0 2px rgba(0,160,209,.18), var(--ux-shadow)!important;}
     .cockpitHero{display:flex!important;justify-content:space-between!important;gap:18px!important;align-items:center!important;flex-wrap:wrap!important;}
     .cockpitHero h2{font-size:34px!important;margin:4px 0 8px!important;color:var(--ux-text)!important;letter-spacing:-.04em!important;}
     .cockpitHero p{max-width:760px!important;margin:0!important;line-height:1.45!important;}
@@ -2781,16 +2840,25 @@ function FunnelAnalytics({stages=STAGES,deals=[],companies=[],contacts=[],stageH
   </>;
 }
 
-function PendingPanel({currentUser,canWrite,companies=[],contacts=[],deals=[],activities=[],setActivities,notes=[],interactions=[],contracts=[],setSelectedDealId,setSelectedActivityId,setSelectedContractId}){
+function PendingPanel({currentUser,companies=[],contacts=[],deals=[],activities=[],notes=[],interactions=[],contracts=[],setSelectedDealId,setSelectedActivityId,setSelectedContractId}){
+  const [selectedCockpit,setSelectedCockpit] = useState('recommended');
   const currentDate = today();
   const pendingActivities = safeArray(activities).filter(activity=>activity.status !== 'Concluída');
   const overdueActivities = pendingActivities.filter(activity=>activity.dueDate && activity.dueDate < currentDate).sort((a,b)=>(String(a.dueDate || '') + String(a.dueTime || '')).localeCompare(String(b.dueDate || '') + String(b.dueTime || '')));
   const meetingsToday = safeArray(activities).filter(activity=>dateOnlyFromCrmValue(activity.dueDate) === currentDate && isMeetingActivity(activity)).sort((a,b)=>String(a.dueTime || '').localeCompare(String(b.dueTime || '')));
+  const todayAgenda = pendingActivities
+    .filter(activity=>dateOnlyFromCrmValue(activity.dueDate) === currentDate)
+    .sort((a,b)=>String(a.dueTime || '').localeCompare(String(b.dueTime || '')));
   const proposalsWithoutFollowup = safeArray(deals).filter(deal=>deal.stage === 'Proposta Enviada' && !pendingActivities.some(activity=>sameId(activity.dealId,deal.id) && activity.dueDate && activity.dueDate >= currentDate));
   const dealsWithoutNextStep = safeArray(deals).filter(deal=>!['Ganho','Perdido'].includes(deal.stage) && !String(deal.nextStep || '').trim());
   const expiringContracts = safeArray(contracts).map(contract=>({contract,days:daysUntil(contract.endDate)})).filter(({contract,days})=>contractStatus(contract) === 'Ativo' && days !== null && days >= 0 && days <= 90).sort((a,b)=>a.days-b.days);
   const userMentions = mentionsForUser({currentUser,deals,activities,notes,interactions});
-  const totalPendingItems = overdueActivities.length + meetingsToday.length + proposalsWithoutFollowup.length + dealsWithoutNextStep.length + expiringContracts.length + userMentions.length;
+  const scoreRows = safeArray(deals)
+    .filter(deal=>!['Ganho','Perdido'].includes(deal.stage))
+    .map(deal=>({deal,...opportunityPriorityScore({deal,companies,contacts,activities,interactions,currentDate})}))
+    .sort((a,b)=>b.score-a.score || dealMrr(b.deal)-dealMrr(a.deal));
+  const recommendedDeals = scoreRows.filter(item=>item.score >= 55).slice(0,10);
+  const totalPendingItems = overdueActivities.length + meetingsToday.length + proposalsWithoutFollowup.length + dealsWithoutNextStep.length + expiringContracts.length + userMentions.length + recommendedDeals.length;
   const dealForActivity = activity => byId(deals,activity.dealId);
   const addDaysKey = (dateString, days) => {
     const date = new Date(`${dateString}T12:00:00`);
@@ -2801,29 +2869,44 @@ function PendingPanel({currentUser,canWrite,companies=[],contacts=[],deals=[],ac
   const closeThisWeek = safeArray(deals)
     .filter(deal=>!['Ganho','Perdido'].includes(deal.stage) && deal.closeDate && deal.closeDate >= currentDate && deal.closeDate <= nextSevenDays)
     .sort((a,b)=>String(a.closeDate || '').localeCompare(String(b.closeDate || '')) || dealMrr(b)-dealMrr(a));
-  const focusDeals = safeArray(deals)
-    .filter(deal=>!['Ganho','Perdido'].includes(deal.stage))
-    .map(deal=>{
-      const hasFutureActivity = pendingActivities.some(activity=>sameId(activity.dealId,deal.id) && activity.dueDate && activity.dueDate >= currentDate);
-      const hasOverdueActivity = overdueActivities.some(activity=>sameId(activity.dealId,deal.id));
-      const hotStage = ['Proposta Enviada','Negociação','Contrato'].includes(deal.stage);
-      const closeSoon = deal.closeDate && deal.closeDate >= currentDate && deal.closeDate <= nextSevenDays;
-      const score = (hotStage ? 40 : 0) + (closeSoon ? 30 : 0) + (!hasFutureActivity ? 20 : 0) + (hasOverdueActivity ? 15 : 0) + Math.min(20,dealMrr(deal)/5000);
-      return {deal,score,hasFutureActivity,hasOverdueActivity,closeSoon};
-    })
-    .filter(item=>item.score >= 35)
-    .sort((a,b)=>b.score-a.score || dealMrr(b.deal)-dealMrr(a.deal))
-    .slice(0,8);
-  const todayAgenda = pendingActivities
-    .filter(activity=>dateOnlyFromCrmValue(activity.dueDate) === currentDate)
-    .sort((a,b)=>String(a.dueTime || '').localeCompare(String(b.dueTime || '')));
+  const cockpitOptions = [
+    {id:'recommended',icon:TrendingUp,label:'Ações recomendadas',value:recommendedDeals.length},
+    {id:'agenda',icon:CalendarDays,label:'Agenda de hoje',value:todayAgenda.length},
+    {id:'overdue',icon:AlertTriangle,label:'Atividades vencidas',value:overdueActivities.length},
+    {id:'proposals',icon:BriefcaseBusiness,label:'Propostas sem follow-up',value:proposalsWithoutFollowup.length},
+    {id:'mentions',icon:MessageSquare,label:'Menções para mim',value:userMentions.length},
+    {id:'closing',icon:CheckCircle2,label:'Fechamentos em 7 dias',value:closeThisWeek.length}
+  ];
+  const openDeal = (dealId) => setSelectedDealId?.(dealId);
+  const openActivity = (activityId) => setSelectedActivityId?.(activityId);
+  const openContract = (contractId) => setSelectedContractId?.(contractId);
+  const renderDealScoreRows = (items, emptyText='Nenhuma ação recomendada agora') => items.length ? items.map(item=><tr key={item.deal.id} onClick={()=>openDeal(item.deal.id)} style={{cursor:'pointer'}}><td><b>{item.deal.title}</b><span>{companyForDeal(item.deal,companies,contacts)?.name || '-'}</span></td><td><span className={`scorePill ${item.tone}`}>{item.score}/100 · {item.label}</span></td><td>{item.nextAction}<span>{item.reasons.slice(0,3).join(' · ')}</span></td><td>{moneyShort(dealMrr(item.deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();openDeal(item.deal.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>{emptyText}</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>;
+  const selectedPanelTitle = cockpitOptions.find(option=>option.id === selectedCockpit)?.label || 'Ações recomendadas';
+  const renderSelectedPanel = () => {
+    if(selectedCockpit === 'agenda') return <DashboardTable headers={['Atividade','Oportunidade','Horário','Responsável','Ações']}>
+      {todayAgenda.length ? todayAgenda.map(activity=>{const deal=dealForActivity(activity);return <tr key={activity.id} onClick={()=>openActivity(activity.id)} style={{cursor:'pointer'}}><td><b>{activity.title}</b><span>{activity.type}</span></td><td>{deal?.title || '-'}</td><td>{formatActivityDateTime(activity)}</td><td>{activity.owner || '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();openActivity(activity.id)}}><Edit3 size={15}/>Abrir</button></td></tr>}) : <tr><td>Nenhuma atividade pendente para hoje</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+    </DashboardTable>;
+    if(selectedCockpit === 'overdue') return <DashboardTable headers={['Atividade','Oportunidade','Vencimento','Responsável','Ações']}>
+      {overdueActivities.length ? overdueActivities.map(activity=>{const deal=dealForActivity(activity);return <tr key={activity.id} onClick={()=>openActivity(activity.id)} style={{cursor:'pointer'}}><td><b>{activity.title}</b><span>{activity.type}</span></td><td>{deal?.title || '-'}</td><td><b style={{color:'#dc2626'}}>{formatActivityDateTime(activity)}</b></td><td>{activity.owner || '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();openActivity(activity.id)}}><Edit3 size={15}/>Resolver</button></td></tr>}) : <tr><td>Nenhuma atividade vencida</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+    </DashboardTable>;
+    if(selectedCockpit === 'proposals') return <DashboardTable headers={['Oportunidade','Empresa','Responsável','Receita mensal','Ações']}>
+      {proposalsWithoutFollowup.length ? proposalsWithoutFollowup.map(deal=><tr key={deal.id} onClick={()=>openDeal(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b><span>{deal.closeDate ? `Previsão: ${formatDate(deal.closeDate)}` : 'Sem previsão'}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{deal.owner || '-'}</td><td>{moneyShort(dealMrr(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();openDeal(deal.id)}}><Edit3 size={15}/>Criar follow-up</button></td></tr>) : <tr><td>Nenhuma proposta sem follow-up</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+    </DashboardTable>;
+    if(selectedCockpit === 'mentions') return <DashboardTable headers={['Origem','Oportunidade','Trecho','Data','Ações']}>
+      {userMentions.length ? userMentions.slice(0,12).map(item=><tr key={item.id} onClick={()=>item.activityId ? openActivity(item.activityId) : openDeal(item.dealId)} style={{cursor:'pointer'}}><td><b>{item.title}</b><span>{item.type}</span></td><td>{item.deal?.title || '-'}</td><td>{item.text}</td><td>{item.date ? formatDateTime(item.date) : '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation(); item.activityId ? openActivity(item.activityId) : openDeal(item.dealId)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma menção encontrada</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+    </DashboardTable>;
+    if(selectedCockpit === 'closing') return <DashboardTable headers={['Oportunidade','Empresa','Previsão','Receita mensal','Ações']}>
+      {closeThisWeek.length ? closeThisWeek.map(deal=><tr key={deal.id} onClick={()=>openDeal(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b><span>{deal.stage || '-'}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{formatDate(deal.closeDate)}</td><td>{moneyShort(dealMrr(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();openDeal(deal.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhum fechamento previsto em 7 dias</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+    </DashboardTable>;
+    return <DashboardTable headers={['Oportunidade','Score','Ação recomendada','Receita mensal','Ações']}>{renderDealScoreRows(recommendedDeals)}</DashboardTable>;
+  };
   return <>
     <Panel title="Cockpit Diário">
       <div className="cockpitHero">
         <div>
-          <span className="uxEyebrow">Pendências + Agenda + Foco comercial</span>
+          <span className="uxEyebrow">Pendências + Agenda + Score comercial</span>
           <h2>Seu comando do dia</h2>
-          <p className="muted">Comece por aqui: reuniões, tarefas vencidas, propostas sem follow-up, menções e oportunidades com maior chance de virar ação comercial.</p>
+          <p className="muted">Clique nos cartões para abrir a lista exata de itens. Depois clique em qualquer linha para ir direto à atividade, oportunidade ou contrato correspondente.</p>
         </div>
         <div className={`cockpitStatus ${totalPendingItems ? 'attention' : 'clear'}`}>
           <b>{totalPendingItems ? `${totalPendingItems} ponto(s) de atenção` : 'Tudo em ordem'}</b>
@@ -2832,54 +2915,36 @@ function PendingPanel({currentUser,canWrite,companies=[],contacts=[],deals=[],ac
       </div>
     </Panel>
     <section className="cards">
-      <Kpi icon={CalendarDays} label="Reuniões hoje" value={meetingsToday.length}/>
-      <Kpi icon={AlertTriangle} label="Atividades vencidas" value={overdueActivities.length}/>
-      <Kpi icon={BriefcaseBusiness} label="Propostas sem follow-up" value={proposalsWithoutFollowup.length}/>
-      <Kpi icon={MessageSquare} label="Menções para mim" value={userMentions.length}/>
-      <Kpi icon={TrendingUp} label="Fechamentos em 7 dias" value={closeThisWeek.length}/>
+      {cockpitOptions.map(option=><Kpi key={option.id} icon={option.icon} label={option.label} value={option.value} active={selectedCockpit===option.id} onClick={()=>setSelectedCockpit(option.id)}/>)}
     </section>
+    <Panel title={`${selectedPanelTitle}: itens clicáveis`}>
+      {renderSelectedPanel()}
+    </Panel>
     <section className="grid2 compact">
       <Panel title={`Agenda de hoje (${todayAgenda.length})`}>
         <div className="cockpitAgenda">
-          {todayAgenda.length ? todayAgenda.map(activity=>{const deal=dealForActivity(activity);return <div className="cockpitAgendaItem" role="button" tabIndex={0} key={activity.id} onClick={()=>setSelectedActivityId?.(activity.id)} onKeyDown={event=>{if(event.key === 'Enter' || event.key === ' ') setSelectedActivityId?.(activity.id)}}>
+          {todayAgenda.length ? todayAgenda.map(activity=>{const deal=dealForActivity(activity);return <div className="cockpitAgendaItem" role="button" tabIndex={0} key={activity.id} onClick={()=>openActivity(activity.id)} onKeyDown={event=>{if(event.key === 'Enter' || event.key === ' ') openActivity(activity.id)}}>
             <strong>{activity.dueTime ? String(activity.dueTime).slice(0,5) : 'Dia'}</strong>
             <span><b>{activity.title}</b>{deal?.title || 'Sem oportunidade'}</span>
             {activity.meetingLink && <a href={activity.meetingLink} target="_blank" rel="noreferrer" onClick={event=>event.stopPropagation()}>Abrir chamada</a>}
           </div>}) : <p className="muted" style={{margin:0}}>Nenhuma atividade pendente para hoje.</p>}
         </div>
       </Panel>
-      <Panel title={`Ação imediata: vencidas (${overdueActivities.length})`}>
-        <DashboardTable headers={['Atividade','Oportunidade','Vencimento','Responsável','Ações']}>
-          {overdueActivities.length ? overdueActivities.map(activity=>{const deal=dealForActivity(activity);return <tr key={activity.id} onClick={()=>setSelectedActivityId?.(activity.id)} style={{cursor:'pointer'}}><td><b>{activity.title}</b><span>{activity.type}</span></td><td>{deal?.title || '-'}</td><td><b style={{color:'#dc2626'}}>{formatActivityDateTime(activity)}</b></td><td>{activity.owner || '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedActivityId?.(activity.id)}}><Edit3 size={15}/>Resolver</button></td></tr>}) : <tr><td>Nenhuma atividade vencida</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
-        </DashboardTable>
-      </Panel>
-      <Panel title={`Ação imediata: propostas sem follow-up (${proposalsWithoutFollowup.length})`}>
-        <DashboardTable headers={['Oportunidade','Empresa','Responsável','Receita mensal','Ações']}>
-          {proposalsWithoutFollowup.length ? proposalsWithoutFollowup.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b><span>{deal.closeDate ? `Previsão: ${formatDate(deal.closeDate)}` : 'Sem previsão'}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{deal.owner || '-'}</td><td>{moneyShort(dealMrr(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Criar follow-up</button></td></tr>) : <tr><td>Nenhuma proposta sem follow-up</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
-        </DashboardTable>
-      </Panel>
-    </section>
-    <section className="grid2 compact">
-      <Panel title={`Oportunidades em foco (${focusDeals.length})`}>
-        <DashboardTable headers={['Oportunidade','Empresa','Motivo','Receita mensal','Ações']}>
-          {focusDeals.length ? focusDeals.map(({deal,hasFutureActivity,hasOverdueActivity,closeSoon})=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b><span>{deal.stage}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{[closeSoon ? 'Fecha em até 7 dias' : '', hasOverdueActivity ? 'Atividade vencida' : '', !hasFutureActivity ? 'Sem follow-up futuro' : ''].filter(Boolean).join(' · ') || 'Etapa quente'}</td><td>{moneyShort(dealMrr(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade crítica agora</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
-        </DashboardTable>
-      </Panel>
-      <Panel title={`Menções para mim (${userMentions.length})`}>
-        <DashboardTable headers={['Origem','Oportunidade','Trecho','Data','Ações']}>
-          {userMentions.length ? userMentions.slice(0,8).map(item=><tr key={item.id} onClick={()=>item.activityId ? setSelectedActivityId?.(item.activityId) : setSelectedDealId?.(item.dealId)} style={{cursor:'pointer'}}><td><b>{item.title}</b><span>{item.type}</span></td><td>{item.deal?.title || '-'}</td><td>{item.text}</td><td>{item.date ? formatDateTime(item.date) : '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation(); item.activityId ? setSelectedActivityId?.(item.activityId) : setSelectedDealId?.(item.dealId)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma menção encontrada</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+      <Panel title={`Score automático: maiores prioridades (${scoreRows.length})`}>
+        <DashboardTable headers={['Oportunidade','Score','Ação recomendada','Receita mensal','Ações']}>
+          {renderDealScoreRows(scoreRows.slice(0,8),'Nenhuma oportunidade aberta no funil')}
         </DashboardTable>
       </Panel>
     </section>
     <section className="grid2 compact">
       <Panel title={`Contratos vencendo em 90 dias (${expiringContracts.length})`}>
         <DashboardTable headers={['Cliente','Produto','Término','Prazo','Receita mensal','Ações']}>
-          {expiringContracts.length ? expiringContracts.map(({contract,days})=>{const company=byId(companies,contract.companyId);return <tr key={contract.id} onClick={()=>setSelectedContractId?.(contract.id)} style={{cursor:'pointer'}}><td><b>{company?.name || 'Sem cliente'}</b></td><td>{contract.product || '-'}</td><td>{formatDate(contract.endDate)}</td><td>{days} dias</td><td>{moneyShort(contractMrr(contract))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedContractId?.(contract.id)}}><Edit3 size={15}/>Abrir</button></td></tr>}) : <tr><td>Nenhum contrato vencendo</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+          {expiringContracts.length ? expiringContracts.map(({contract,days})=>{const company=byId(companies,contract.companyId);return <tr key={contract.id} onClick={()=>openContract(contract.id)} style={{cursor:'pointer'}}><td><b>{company?.name || 'Sem cliente'}</b></td><td>{contract.product || '-'}</td><td>{formatDate(contract.endDate)}</td><td>{days} dias</td><td>{moneyShort(contractMrr(contract))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();openContract(contract.id)}}><Edit3 size={15}/>Abrir</button></td></tr>}) : <tr><td>Nenhum contrato vencendo</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
       <Panel title={`Oportunidades sem próximo passo (${dealsWithoutNextStep.length})`}>
         <DashboardTable headers={['Oportunidade','Empresa','Etapa','Receita mensal','Ações']}>
-          {dealsWithoutNextStep.length ? dealsWithoutNextStep.map(deal=><tr key={deal.id} onClick={()=>setSelectedDealId?.(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{deal.stage || '-'}</td><td>{moneyShort(dealMrr(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}><Edit3 size={15}/>Definir próximo passo</button></td></tr>) : <tr><td>Todas as oportunidades abertas possuem próximo passo</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+          {dealsWithoutNextStep.length ? dealsWithoutNextStep.map(deal=><tr key={deal.id} onClick={()=>openDeal(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{deal.stage || '-'}</td><td>{moneyShort(dealMrr(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();openDeal(deal.id)}}><Edit3 size={15}/>Definir próximo passo</button></td></tr>) : <tr><td>Todas as oportunidades abertas possuem próximo passo</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
         </DashboardTable>
       </Panel>
     </section>
@@ -2960,7 +3025,7 @@ function CrmQuality({companies=[],contacts=[],deals=[],selectedDeal,setSelectedD
   </>;
 }
 
-function Kpi({icon:Icon,label,value}){ return <div className="kpi"><Icon size={24}/><span>{label}</span><strong>{value}</strong></div>; }
+function Kpi({icon:Icon,label,value,onClick,active=false}){ return <div className={`kpi ${onClick ? 'clickable' : ''} ${active ? 'active' : ''}`} onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined} onKeyDown={event=>{if(onClick && (event.key === 'Enter' || event.key === ' ')) onClick();}}><Icon size={24}/><span>{label}</span><strong>{value}</strong></div>; }
 function MiniMetric({icon:Icon,label,value,onClick,active=false}){
   return <div onClick={onClick} title={onClick ? 'Clique para abrir' : undefined} style={{
     border: active ? '1px solid #00A0D1' : '1px solid #edf2f7',
@@ -3413,7 +3478,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
         <span>{selectedDeals.length} selecionada(s)</span>
         <button className="mini" onClick={removeSelectedDeals} disabled={!selectedDeals.length}><Trash2 size={15}/>Excluir selecionadas</button>
       </div>}
-      <Table headers={['Sel.','Oportunidade','Empresa','Produto','Receita mensal','Prazo','Contrato total','Etapa','Responsável','Ações']}>{list.map(d=>{ const linkedCompany = companyForDeal(d,companies,contacts); const relationship = relationshipStatusForDeal(d, interactions, activities); return <tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><input className="rowSelect" type="checkbox" checked={selectedDealIds.some(id=>sameId(id,d.id))} onChange={(e)=>{e.stopPropagation(); toggleDealSelection(d.id);}} onClick={e=>e.stopPropagation()} disabled={!canWrite}/></td><td><div className="dealHealthLine"><i className={`dealHealthDot ${relationship.tone}`} title={relationship.label}></i><b>{d.title}</b></div><span>{relationship.label}</span><span>{d.nextStep}</span></td><td>{linkedCompany?.name || '-'}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>{dealProductValues(d).map(product=><button className="mini" key={product} onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(product)}}>{product}</button>)}</div></td><td><b>{money(dealMrr(d))}</b></td><td>{dealMonths(d)} meses</td><td>{money(dealTcv(d))}</td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>})}</Table>
+      <Table headers={['Sel.','Oportunidade','Score','Empresa','Produto','Receita mensal','Prazo','Contrato total','Etapa','Responsável','Ações']}>{list.map(d=>{ const linkedCompany = companyForDeal(d,companies,contacts); const relationship = relationshipStatusForDeal(d, interactions, activities); const score = opportunityPriorityScore({deal:d,companies,contacts,activities,interactions}); return <tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><input className="rowSelect" type="checkbox" checked={selectedDealIds.some(id=>sameId(id,d.id))} onChange={(e)=>{e.stopPropagation(); toggleDealSelection(d.id);}} onClick={e=>e.stopPropagation()} disabled={!canWrite}/></td><td><div className="dealHealthLine"><i className={`dealHealthDot ${relationship.tone}`} title={relationship.label}></i><b>{d.title}</b></div><span>{relationship.label}</span><span>{d.nextStep}</span></td><td><span className={`scorePill ${score.tone}`} title={score.reasons.join(' · ')}>{score.score}/100</span><span>{score.label}</span></td><td>{linkedCompany?.name || '-'}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>{dealProductValues(d).map(product=><button className="mini" key={product} onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(product)}}>{product}</button>)}</div></td><td><b>{money(dealMrr(d))}</b></td><td>{dealMonths(d)} meses</td><td>{money(dealTcv(d))}</td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>})}</Table>
     </Panel>
   </>;
 }
@@ -3437,6 +3502,7 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,c
   const openDealActivities = dealActivities.filter(a=>String(a.status || '') !== 'Concluída');
   const dealInteractions = safeArray(interactions).filter(i=>sameId(i.dealId, deal.id));
   const relationship = relationshipStatusForDeal(deal, interactions, activities);
+  const priorityScore = opportunityPriorityScore({deal:draft,companies,contacts,activities,interactions});
   const dealFiles = safeArray(opportunityFiles).filter(file=>sameId(file.dealId,deal.id)).sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
 
   const timeline = [
@@ -3620,6 +3686,7 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,c
           </p>
         </div>
         <div style={{display:'flex',gap:'10px',flexWrap:'wrap'}}>
+          <span className={`scorePill ${priorityScore.tone}`}>{priorityScore.score}/100 · {priorityScore.label}</span>
           <span className={`relationshipPill ${relationship.tone}`}><i className={`dealHealthDot ${relationship.tone}`}></i>{relationship.label}</span>
           <span className="pill">{draft.stage}</span>
           <span className="pill">{draft.owner || 'Sem responsável'}</span>
@@ -3633,7 +3700,13 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,c
       <Kpi icon={CheckCircle2} label="Última interação" value={latest?.date ? formatDate(latest.date) : 'Sem histórico'}/>
       <Kpi icon={MessageSquare} label="Interações" value={dealInteractions.length}/>
       <Kpi icon={Clock3} label="Próxima ação" value={latestNext?.nextAction || 'Não definida'}/>
+      <Kpi icon={TrendingUp} label="Score comercial" value={`${priorityScore.score}/100`}/>
     </section>
+
+    <Panel title="Prioridade automática">
+      <p className="muted" style={{margin:'0 0 10px'}}><b>{priorityScore.label}:</b> {priorityScore.nextAction}</p>
+      <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>{priorityScore.reasons.map(reason=><span className="pill" key={reason}>{reason}</span>)}</div>
+    </Panel>
 
     <div className="tabs" style={{marginBottom:'18px',overflowX:'auto'}}>{['historico','atividades','dados','arquivos','contrato','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t === 'dados' ? 'Dados' : t === 'historico' ? `Histórico (${dealInteractions.length})` : t === 'atividades' ? `Atividades (${openDealActivities.length})` : t === 'arquivos' ? `Arquivos (${dealFiles.length})` : t === 'contrato' ? 'Contrato' : 'Matriz'}</button>)}</div>
 
