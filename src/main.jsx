@@ -952,6 +952,18 @@ async function loadContractsFromSupabase(){
   return (data || []).map(mapContractFromDb);
 }
 function money(v){ return Number(v||0).toLocaleString('pt-BR',{ style:'currency', currency:'BRL' }); }
+function parseCurrencyInput(value){
+  const raw = String(value ?? '').replace(/[^\d,.-]/g,'').trim();
+  if(!raw) return 0;
+  if(raw.includes(',')){
+    const normalized = raw.replace(/\./g,'').replace(',','.');
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  const normalized = /^\d{1,3}(\.\d{3})+$/.test(raw) ? raw.replace(/\./g,'') : raw.replace(/,/g,'');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 function moneyShort(v){
   const n = Number(v || 0);
   const abs = Math.abs(n);
@@ -3197,8 +3209,8 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,products,n
         <Select label="Empresa *" field="companyId" form={quickDeal} setForm={setQuickDeal} options={safeArray(companies).map(c=>[c.id,c.name])}/>
         <Select label="Contato" field="contactId" form={quickDeal} setForm={setQuickDeal} options={[["", quickContacts.length ? "Selecione" : "Sem contatos desta empresa"],...quickContacts.map(c=>[c.id,c.name])]}/>
         <DealProductFields form={quickDeal} setForm={setQuickDeal} products={products}/>
-        <Input label="Receita mensal" field="value" form={quickDeal} setForm={setQuickDeal} type="number"/>
-        <Input label="Implantação" field="setup" form={quickDeal} setForm={setQuickDeal} type="number"/>
+        <CurrencyInput label="Receita mensal" field="value" form={quickDeal} setForm={setQuickDeal}/>
+        <CurrencyInput label="Implantação" field="setup" form={quickDeal} setForm={setQuickDeal}/>
         <Input label="Prazo contratual (meses)" field="contractMonths" form={quickDeal} setForm={setQuickDeal} type="number"/>
         <label><span>Etapa</span><input value={creatingStage} readOnly/></label>
         <label><span>Probabilidade %</span><input value={probabilityForStage(creatingStage,quickDeal.probability)} readOnly/></label>
@@ -3380,7 +3392,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
   };
   const clearFilters = () => setFilters({ companyId:'', product:'', stage:'', owner:'', closeBeforeMonth:'' });
   return <>
-    {canWrite && <Panel title="Nova oportunidade"><div className="formGrid"><Input label="Título" field="title" form={form} setForm={setForm}/><Select label="Empresa *" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Contato" field="contactId" form={form} setForm={setForm} options={[["", availableContacts.length ? "Selecione" : "Sem contatos desta empresa"],...availableContacts.map(c=>[c.id,c.name])]}/><DealProductFields form={form} setForm={setForm} products={products}/><Input label="Receita mensal" field="value" form={form} setForm={setForm} type="number"/><Input label="Implantação" field="setup" form={form} setForm={setForm} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(form.stage,form.probability)} readOnly/></label><Select label="Etapa" field="stage" form={form} setForm={setForm} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável *" field="owner" form={form} setForm={setForm} options={USERS.map(u=>[u,u])}/><Input label="Fechamento previsto" field="closeDate" form={form} setForm={setForm} type="date"/><Input label="Próximo passo *" field="nextStep" form={form} setForm={setForm}/><label><span>Valor total do contrato</span><input value={money(dealTcv(form))} readOnly/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Criar oportunidade</button></div></Panel>}
+    {canWrite && <Panel title="Nova oportunidade"><div className="formGrid"><Input label="Título" field="title" form={form} setForm={setForm}/><Select label="Empresa *" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Contato" field="contactId" form={form} setForm={setForm} options={[["", availableContacts.length ? "Selecione" : "Sem contatos desta empresa"],...availableContacts.map(c=>[c.id,c.name])]}/><DealProductFields form={form} setForm={setForm} products={products}/><CurrencyInput label="Receita mensal" field="value" form={form} setForm={setForm}/><CurrencyInput label="Implantação" field="setup" form={form} setForm={setForm}/><Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(form.stage,form.probability)} readOnly/></label><Select label="Etapa" field="stage" form={form} setForm={setForm} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável *" field="owner" form={form} setForm={setForm} options={USERS.map(u=>[u,u])}/><Input label="Fechamento previsto" field="closeDate" form={form} setForm={setForm} type="date"/><Input label="Próximo passo *" field="nextStep" form={form} setForm={setForm}/><label><span>Valor total do contrato</span><input value={money(dealTcv(form))} readOnly/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Criar oportunidade</button></div></Panel>}
     <Panel title="Filtros de oportunidades"><div className="formGrid">
       <Select label="Empresa" field="companyId" form={filters} setForm={setFilters} options={[["","Todas"],...safeArray(companies).map(c=>[c.id,c.name])]}/>
       <Select label="Produto" field="product" form={filters} setForm={setFilters} options={[["","Todos"],...safeArray(products).map(p=>[p,p])]}/>
@@ -3625,7 +3637,7 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,c
 
     <div className="tabs" style={{marginBottom:'18px',overflowX:'auto'}}>{['historico','atividades','dados','arquivos','contrato','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t === 'dados' ? 'Dados' : t === 'historico' ? `Histórico (${dealInteractions.length})` : t === 'atividades' ? `Atividades (${openDealActivities.length})` : t === 'arquivos' ? `Arquivos (${dealFiles.length})` : t === 'contrato' ? 'Contrato' : 'Matriz'}</button>)}</div>
 
-    {tab==='dados' && <Panel title="Dados da oportunidade"><div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><DealProductFields form={draft} setForm={setDraft} products={products}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(draft.stage,draft.probability)} readOnly/></label><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/>{draft.stage==='Perdido' && <Select label="Motivo da perda" field="lossReason" form={draft} setForm={setDraft} options={[["","Selecione"],...optionsIncludingCurrent(lossReasonOptions,draft.lossReason).map(reason=>[reason,reason])]}/>}<label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div></Panel>}
+    {tab==='dados' && <Panel title="Dados da oportunidade"><div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><DealProductFields form={draft} setForm={setDraft} products={products}/><CurrencyInput label="Receita mensal" field="value" form={draft} setForm={setDraft}/><CurrencyInput label="Implantação" field="setup" form={draft} setForm={setDraft}/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(draft.stage,draft.probability)} readOnly/></label><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/>{draft.stage==='Perdido' && <Select label="Motivo da perda" field="lossReason" form={draft} setForm={setDraft} options={[["","Selecione"],...optionsIncludingCurrent(lossReasonOptions,draft.lossReason).map(reason=>[reason,reason])]}/>}<label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div></Panel>}
 
     {tab==='historico' && <>
       {canWrite && <Panel title={editingInteractionId ? 'Editar interação' : 'Nova interação'}><div className="formGrid modalGrid">
@@ -3724,7 +3736,7 @@ function DealModal({deal,onClose,companies=[],contacts=[],deals=[],setDeals,acti
   const dealNotes = notes.filter(n=>String(n.dealId)===String(deal.id));
   const dealActivities = activities.filter(a=>String(a.dealId)===String(deal.id));
   return <div className="modalBackdrop"><div className="modal"><div className="modalHead"><div><h2>{deal.title}</h2><span>{companyForDeal(deal,companies,contacts)?.name || 'Sem empresa'} · Receita mensal {money(dealMrr(deal))} · Valor total {money(dealTcv(deal))}</span></div><button className="iconBtn" onClick={onClose}><X/></button></div><div className="tabs">{['geral','timeline','atividades','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t}</button>)}</div>
-    {tab==='geral' && <div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={optionsIncludingCurrent(products,draft.product).map(p=>[p,p])}/><Input label="Receita mensal" field="value" form={draft} setForm={setDraft} type="number"/><Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(draft.stage,draft.probability)} readOnly/></label><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/><button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button></div>}
+    {tab==='geral' && <div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><Select label="Produto" field="product" form={draft} setForm={setDraft} options={optionsIncludingCurrent(products,draft.product).map(p=>[p,p])}/><CurrencyInput label="Receita mensal" field="value" form={draft} setForm={setDraft}/><CurrencyInput label="Implantação" field="setup" form={draft} setForm={setDraft}/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(draft.stage,draft.probability)} readOnly/></label><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/><label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/><button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button></div>}
     {tab==='timeline' && <div><div className="noteBox"><MentionTextInput value={note} onChange={setNote} multiline bare placeholder="Adicionar comentário, registro de reunião, ligação, WhatsApp..."/><button onClick={addNote}><MessageSquare size={16}/>Adicionar comentário</button></div><div className="timeline">{dealNotes.map(n=><div className="timelineItem" key={n.id}><b>{n.user || n.userName || n.user_name || 'Daleth'}</b><span>{formatDate(n.date || n.noteDate || n.note_date)}</span><p>{n.text || n.note || ''}</p></div>)}</div></div>}
     {tab==='atividades' && <div><div className="formGrid"><Select label="Tipo" field="type" form={activity} setForm={setActivity} options={['Follow-up','Ligação','E-mail','WhatsApp','Reunião','Proposta'].map(x=>[x,x])}/><Input label="Título" field="title" form={activity} setForm={setActivity}/><Input label="Data" field="dueDate" form={activity} setForm={setActivity} type="date"/><Input label="Hora" field="dueTime" form={activity} setForm={setActivity} type="time"/><Input label="Link chamada" field="meetingLink" form={activity} setForm={setActivity} type="url"/><Select label="Responsável" field="owner" form={activity} setForm={setActivity} options={USERS.map(u=>[u,u])}/><button className="saveBtn" onClick={addActivity}><Plus size={16}/>Criar atividade</button></div><div className="timeline">{dealActivities.map(a=><div className="timelineItem" key={a.id}><b>{a.type}: {a.title}</b><span>{formatActivityDateTime(a)} · {a.owner} · {a.status}</span>{a.meetingLink && <p><a href={a.meetingLink} target="_blank" rel="noreferrer">Abrir chamada</a></p>}<p>{a.notes}</p></div>)}</div></div>}
     {tab==='contrato' && <Panel title="Resumo Comercial"><div className="formGrid modalGrid">
@@ -5127,6 +5139,29 @@ function MentionTextInput({label='',value,onChange,type='text',multiline=false,w
 function Input({label,field,form,setForm,type='text',mentions}){
   const enabled = mentions ?? shouldEnableMentions(label,field,type);
   return <MentionTextInput label={label} type={type} value={form[field] ?? ''} onChange={value=>setForm({...form,[field]:value})} enableMentions={enabled}/>;
+}
+function CurrencyInput({label,field,form,setForm}){
+  const [focused,setFocused] = useState(false);
+  const current = Number(form[field] || 0);
+  const [draft,setDraft] = useState(current ? String(current) : '');
+  useEffect(() => {
+    if(!focused) setDraft(current ? String(current) : '');
+  }, [current, focused]);
+  const update = (value) => {
+    setDraft(value);
+    setForm({...form,[field]:parseCurrencyInput(value)});
+  };
+  return <label><span>{label}</span><input
+    type="text"
+    inputMode="decimal"
+    value={focused ? draft : money(current)}
+    onFocus={() => {
+      setFocused(true);
+      setDraft(current ? String(current) : '');
+    }}
+    onChange={event=>update(event.target.value)}
+    onBlur={() => setFocused(false)}
+  /></label>;
 }
 function Textarea({label,field,form,setForm,mentions=true}){
   return <MentionTextInput label={label} value={form[field] ?? ''} onChange={value=>setForm({...form,[field]:value})} multiline wide enableMentions={mentions}/>;
