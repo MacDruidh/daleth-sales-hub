@@ -3421,7 +3421,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
 function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,opportunityFiles=[],setOpportunityFiles,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,stageHistory=[],setStageHistory,lossReasons={},setLossReasons,lossReasonOptions=LOSS_REASONS,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName}){
   const initialContact = byId(contacts, deal.contactId);
   const inferredCompany = companyForDeal(deal, companies, contacts);
-  const [tab,setTab] = useState('dados');
+  const [tab,setTab] = useState('historico');
   const [draft,setDraft] = useState({contractMonths:12,setup:0,...deal,companyId:inferredCompany?.id || deal.companyId,probability:probabilityForStage(deal.stage,deal.probability),lossReason:lossReasons?.[deal.id] || ''});
   const [note,setNote] = useState('');
   const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),dueTime:'',meetingLink:'',owner:deal.owner || currentUser?.name || 'Sergio Paulo',status:'Pendente',notes:''});
