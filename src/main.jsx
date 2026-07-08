@@ -4069,8 +4069,7 @@ function Activities({currentUser,activities,setActivities,deals,query,setSelecte
             return <div className={`calendarDay ${date.getMonth()!==monthIndex?'outsideMonth':''} ${key===today()?'today':''} ${canWrite?'clickable':''}`} onClick={()=>openNewActivity(date)} title={canWrite ? 'Clique para criar uma atividade nesta data' : undefined} key={key}>
               <div className="calendarDayNumber"><span>{date.getDate()}</span>{key===today() && <small>Hoje</small>}</div>
               <div className="calendarEvents">
-                {dayActivities.slice(0,3).map(a=><button className={`calendarEvent ${a.status==='Concluída'?'completed':''}`} style={{borderLeftColor:activityColor(a.type)}} title={`${formatActivityDateTime(a)} · ${a.title} · ${byId(deals,a.dealId)?.title || 'Sem oportunidade'}`} onClick={(event)=>{event.stopPropagation();setSelectedActivityId(a.id)}} key={a.id}><b>{a.dueTime ? String(a.dueTime).slice(0,5) : 'Dia'} · {a.title}</b><span>{a.owner || 'Sem responsável'}</span></button>)}
-                {dayActivities.length>3 && <button className="calendarMore" onClick={(event)=>{event.stopPropagation();setSelectedActivityId(dayActivities[3].id)}}>+ {dayActivities.length-3} atividade(s)</button>}
+                {dayActivities.map(a=><button className={`calendarEvent ${a.status==='Concluída'?'completed':''}`} style={{borderLeftColor:activityColor(a.type)}} title={`${formatActivityDateTime(a)} · ${a.title} · ${byId(deals,a.dealId)?.title || 'Sem oportunidade'}`} onClick={(event)=>{event.stopPropagation();setSelectedActivityId(a.id)}} key={a.id}><b>{a.dueTime ? String(a.dueTime).slice(0,5) : 'Dia'} · {a.title}</b><span>{a.owner || 'Sem responsável'}</span></button>)}
               </div>
             </div>;
           })}
