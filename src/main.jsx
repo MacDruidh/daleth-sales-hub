@@ -4270,12 +4270,14 @@ function Companies({companies,setCompanies,query,setSelectedCompanyId,canWrite,c
         const updatedCompany = await saveCompanyToSupabase(companyWithDropbox);
         setCompanies([updatedCompany,...baseCompanies]);
         const filesText = Array.isArray(dropbox.artifacts) && dropbox.artifacts.length ? `\nArquivos criados: ${dropbox.artifacts.map(file=>file.name).join(', ')}` : '';
-        window.alert(`Pasta Dropbox criada: ${dropbox.path}${filesText}`);
+        const warningText = dropbox.artifactWarning ? `\nAtenção: ${dropbox.artifactWarning}` : '';
+        window.alert(`Pasta Dropbox criada: ${dropbox.path}${filesText}${warningText}`);
       } catch (error) {
         console.warn('Pasta criada, mas falha ao atualizar observações da empresa:', error);
         setCompanies([companyWithDropbox,...baseCompanies]);
         const filesText = Array.isArray(dropbox.artifacts) && dropbox.artifacts.length ? `\nArquivos criados: ${dropbox.artifacts.map(file=>file.name).join(', ')}` : '';
-        window.alert(`Pasta Dropbox criada: ${dropbox.path}${filesText}\nO caminho ficou salvo localmente, mas o Supabase não aceitou atualizar as observações agora.`);
+        const warningText = dropbox.artifactWarning ? `\nAtenção: ${dropbox.artifactWarning}` : '';
+        window.alert(`Pasta Dropbox criada: ${dropbox.path}${filesText}${warningText}\nO caminho ficou salvo localmente, mas o Supabase não aceitou atualizar as observações agora.`);
       }
     } catch (error) {
       console.warn('Falha ao criar pasta Dropbox:', error);

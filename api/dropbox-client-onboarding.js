@@ -72,6 +72,16 @@ async function createSharedLink(token,path){
   }
 }
 
+function friendlyDropboxUploadError(error){
+  if(error?.status === 401){
+    return 'Dropbox recusou o envio dos arquivos (401). Revise o token do Dropbox no Vercel: ele pode ter expirado ou não ter permissão de upload.';
+  }
+  if(error?.status === 403){
+    return 'Dropbox recusou o envio dos arquivos (403). Revise as permissões do app Dropbox, especialmente files.content.write.';
+  }
+  return error?.message || 'Não foi possível enviar os arquivos iniciais ao Dropbox.';
+}
+
 async function uploadDropboxFile(token,path,buffer){
   const response = await fetch(`${DROPBOX_CONTENT_API}/files/upload`,{
     method:'POST',
@@ -319,7 +329,14 @@ export default async function handler(request,response){
   try {
     const folder = await createFolder(token,path);
     const folderPath = folder?.metadata?.path_display || path;
-    const artifacts = await createOnboardingFiles(token,folderPath,company);
+    let artifacts = [];
+    let artifactWarning = '';
+    try {
+      artifacts = await createOnboardingFiles(token,folderPath,company);
+    } catch (artifactError) {
+      console.error('Pasta criada, mas falha ao enviar arquivos iniciais:', artifactError);
+      artifactWarning = friendlyDropboxUploadError(artifactError);
+    }
     const sharedUrl = await createSharedLink(token,path);
     json(response,200,{
       ok:true,
@@ -327,6 +344,7 @@ export default async function handler(request,response){
       path:folderPath,
       sharedUrl,
       artifacts,
+      artifactWarning,
       alreadyExists:folder?.alreadyExists === true
     });
   } catch (error) {
