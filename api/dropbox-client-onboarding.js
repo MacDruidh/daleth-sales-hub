@@ -1,5 +1,5 @@
 const DROPBOX_API = 'https://api.dropboxapi.com/2';
-const DEFAULT_ROOT_PATH = '/Daleth/1NovosClientes';
+const DEFAULT_ROOT_PATH = '/Daleth/1Novos Clientes';
 
 function text(value){
   return String(value ?? '').trim();

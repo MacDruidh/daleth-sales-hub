@@ -4251,7 +4251,7 @@ function Companies({companies,setCompanies,query,setSelectedCompanyId,canWrite,c
   const [form,setForm] = useState(empty);
   const list = companies.filter(c => (c.name+c.segment+c.site+c.status).toLowerCase().includes(query.toLowerCase())).sort((a,b)=>String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'));;
   const finishCompanyCreation = async (savedCompany,baseCompanies) => {
-    if(!window.confirm(`Empresa "${savedCompany.name}" criada. Deseja criar a pasta no Dropbox em Daleth/1NovosClientes?`)){
+    if(!window.confirm(`Empresa "${savedCompany.name}" criada. Deseja criar a pasta no Dropbox em Daleth/1Novos Clientes?`)){
       setCompanies([savedCompany,...baseCompanies]);
       return;
     }
