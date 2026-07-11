@@ -117,49 +117,97 @@ async function uploadDropboxFile(token,path,buffer){
   return data;
 }
 
-function solutionRows(segment){
-  const seg = text(segment).toLowerCase();
+function companyContext(company){
+  return [
+    company?.companyName,
+    company?.segment,
+    company?.site,
+    company?.notes
+  ].map(value=>text(value).toLowerCase()).join(' ');
+}
+
+function isAgencyOrCampaignCompany(company){
+  const ctx = companyContext(company);
+  return ['agencia','agência','marketing','campanha','campanhas','publicidade','promocional','promocao','promoção','branding','comunicacao','comunicação','midia','mídia','consumer','influenciador','sampling'].some(term=>ctx.includes(term));
+}
+
+function solutionRows(company){
+  const seg = text(company?.segment).toLowerCase();
+  if(isAgencyOrCampaignCompany(company)){
+    return [
+      ['Atendimento ao consumidor das marcas atendidas', 'SAC Omnichannel', 'Telefone, WhatsApp, chat, e-mail e redes sociais operados como extensão da campanha.', 'Amplia a entrega da agência aos clientes e transforma comunicação em relacionamento.'],
+      ['Atendimento durante campanhas promocionais', 'Central de Atendimento Temporária', 'Estrutura sob demanda para picos de volume em ações promocionais.', 'Escala sem aumentar estrutura fixa da agência.'],
+      ['SAC para lançamentos de produtos', 'Operação Dedicada por Campanha', 'Equipe treinada no produto, regulamento, tom de marca e perguntas frequentes.', 'Melhora a experiência do consumidor no momento mais sensível do lançamento.'],
+      ['Gestão de Reclame Aqui e PROCON', 'Central de Reputação Digital', 'Triagem, resposta, registro e acompanhamento de casos críticos.', 'Protege imagem das marcas e reduz impacto reputacional.'],
+      ['Atendimento em ações de sampling e eventos', 'Central de Informações', 'Suporte para dúvidas de participantes, localização, brindes e regras da ação.', 'Aumenta engajamento e reduz ruído operacional durante a campanha.'],
+      ['Monitoramento das redes sociais', 'Social Care', 'Resposta rápida a comentários, dúvidas e reclamações em canais sociais.', 'Fortalece a marca e reduz exposição negativa.'],
+      ['Atendimento de influenciadores e promotores', 'Back Office de Campanhas', 'Acompanhamento de cadastros, orientações, pendências e status operacional.', 'Melhora coordenação entre agência, campo e cliente final.'],
+      ['Pesquisas pós-campanha', 'NPS / CSAT', 'Coleta estruturada de percepção dos participantes e consumidores.', 'Mede experiência e comprova resultado além da mídia.'],
+      ['Coleta de insights dos consumidores', 'Voice of Consumer (VOC)', 'Classificação de dúvidas, reclamações, elogios, sugestões e intenção de compra.', 'Gera inteligência para campanhas futuras e novos produtos.'],
+      ['Atendimento de distribuidores e parceiros', 'Central B2B', 'Canal dedicado para parceiros comerciais, pontos de venda e distribuidores.', 'Estrutura relacionamento e reduz perda de informação.'],
+      ['Gestão de leads gerados em campanhas', 'Inside Sales / Lead Qualification', 'Qualificação e priorização de leads capturados em landing pages, eventos e ativações.', 'Aumenta conversão comercial dos investimentos de campanha.'],
+      ['Atendimento a e-commerce', 'SAC Digital', 'Suporte para dúvidas, entrega, pagamento, troca e pós-venda.', 'Reduz abandono, melhora recompra e protege a experiência digital.'],
+      ['Relatórios executivos por campanha', 'Dashboards e Analytics', 'Painéis por campanha, canal, motivo de contato, SLA e satisfação.', 'Demonstra resultados objetivos para os clientes da agência.'],
+      ['Atendimento em crises de comunicação', 'Central de Contingência', 'Operação rápida para absorver volume e padronizar respostas em momentos críticos.', 'Reduz impacto reputacional e dá controle à marca.'],
+      ['Operações sazonais', 'Equipes sob demanda', 'Times temporários para Páscoa, Natal, Black Friday, férias e datas promocionais.', 'Flexibilidade operacional sem custo permanente.'],
+      ['Suporte ao consumidor final', 'Customer Care', 'Atendimento humano e estruturado para dúvidas, reclamações e acompanhamento.', 'Aumenta fidelização e percepção positiva das marcas atendidas.']
+    ];
+  }
   if(seg.includes('avia')){
     return [
-      ['Atendimento 24/7', 'SAC 24/7 ANAC', 'Cobertura contínua para passageiros, contingências e tratativas críticas.', 'Mapear volume por canal e SLA atual.'],
-      ['Experiência do passageiro', 'Atendimento bilíngue e multicanal', 'Reduz atrito em jornadas de informação, cancelamento e bagagem.', 'Priorizar canais com maior demanda.'],
-      ['Gestão operacional', 'Relatórios de SLA e motivos de contato', 'Ajuda a enxergar picos, reincidências e oportunidades de automação.', 'Definir indicadores de operação e qualidade.'],
-      ['Qualidade', 'QA e monitoria de atendimento', 'Eleva padrão de resposta e reduz risco regulatório.', 'Criar amostra de monitoria semanal.']
+      ['Atendimento 24/7', 'SAC 24/7 ANAC', 'Cobertura contínua para passageiros, contingências e tratativas críticas.', 'Reduz atrito, protege SLA e organiza demandas regulatórias.'],
+      ['Experiência do passageiro', 'Atendimento bilíngue e multicanal', 'Suporte em voz, WhatsApp, e-mail e formulários.', 'Melhora jornada em informação, cancelamento, bagagem e reacomodação.'],
+      ['Gestão operacional', 'Relatórios de SLA e motivos de contato', 'Leitura por canal, motivo, pico, reincidência e tempo de resposta.', 'Ajuda a enxergar gargalos e oportunidades de automação.'],
+      ['Qualidade', 'QA e monitoria de atendimento', 'Amostras semanais, critérios de qualidade e plano de melhoria.', 'Eleva padrão de resposta e reduz risco regulatório.']
     ];
   }
   if(seg.includes('turismo')){
     return [
-      ['Atendimento ao viajante', 'SAC multicanal', 'Centraliza dúvidas, alterações e suporte em canais digitais e voz.', 'Levantar sazonalidade e canais críticos.'],
-      ['Relacionamento', 'WhatsApp corporativo e e-mail estruturado', 'Aumenta velocidade de resposta e registro do histórico.', 'Definir templates de atendimento.'],
-      ['Gestão', 'Relatórios gerenciais', 'Mostra principais demandas, tempos e oportunidades comerciais.', 'Definir visão semanal e mensal.']
+      ['Atendimento ao viajante', 'SAC multicanal', 'Centraliza dúvidas, alterações e suporte em canais digitais e voz.', 'Reduz atrito em jornadas de compra e pós-venda.'],
+      ['Relacionamento', 'WhatsApp corporativo e e-mail estruturado', 'Aumenta velocidade de resposta e registro do histórico.', 'Garante rastreabilidade e melhora experiência.'],
+      ['Gestão', 'Relatórios gerenciais', 'Mostra principais demandas, tempos e oportunidades comerciais.', 'Apoia leitura semanal e mensal da operação.']
     ];
   }
   if(seg.includes('varejo') || seg.includes('franqu')){
     return [
-      ['Atendimento por unidade', 'SAC+ por loja/unidade', 'Organiza demandas por origem e melhora a leitura de performance.', 'Mapear unidades e responsáveis.'],
-      ['Reputação', 'Reclame Aqui, PROCON e redes sociais', 'Reduz risco de imagem e melhora gestão de casos sensíveis.', 'Definir régua de prioridade.'],
-      ['Padronização', 'Base de conhecimento e scripts', 'Garante consistência no atendimento em escala.', 'Criar base inicial de respostas.']
+      ['Atendimento por unidade', 'SAC+ por loja/unidade', 'Organiza demandas por origem e melhora a leitura de performance.', 'Mostra problemas recorrentes por loja, região ou franquia.'],
+      ['Reputação', 'Reclame Aqui, PROCON e redes sociais', 'Tratativa estruturada de casos sensíveis.', 'Reduz risco de imagem e melhora gestão de reclamações.'],
+      ['Padronização', 'Base de conhecimento e scripts', 'Garante consistência no atendimento em escala.', 'Aumenta controle sem perder capilaridade.']
     ];
   }
   if(seg.includes('finance')){
     return [
-      ['Atendimento sensível', 'SAC especializado', 'Melhora registro, rastreabilidade e segurança na tratativa.', 'Mapear fluxos críticos e LGPD.'],
-      ['Compliance', 'QA e trilha de auditoria', 'Aumenta controle sobre qualidade e aderência operacional.', 'Definir critérios de monitoria.'],
-      ['Gestão', 'Dashboards e relatórios executivos', 'Apoia leitura mensal de demanda, SLA e performance.', 'Definir indicadores prioritários.']
+      ['Atendimento sensível', 'SAC especializado', 'Registro, rastreabilidade e segurança na tratativa.', 'Reduz risco operacional e melhora confiança do cliente.'],
+      ['Compliance', 'QA e trilha de auditoria', 'Critérios de qualidade, amostras e histórico auditável.', 'Aumenta controle sobre aderência operacional.'],
+      ['Gestão', 'Dashboards e relatórios executivos', 'Visão mensal de demanda, SLA e performance.', 'Apoia decisão com dados.']
     ];
   }
   if(seg.includes('tecnologia')){
     return [
-      ['Suporte ao cliente', 'Service desk e SAC multicanal', 'Organiza demandas técnicas e comerciais em uma operação única.', 'Separar tipos de demanda e níveis de atendimento.'],
-      ['Escala', 'Automação e base de conhecimento', 'Reduz repetição e acelera respostas de primeiro nível.', 'Listar perguntas frequentes.'],
-      ['Gestão', 'Relatórios de SLA e backlog', 'Mostra gargalos e oportunidades de melhoria operacional.', 'Definir SLA por tipo de chamado.']
+      ['Suporte ao cliente', 'Service desk e SAC multicanal', 'Organiza demandas técnicas e comerciais em uma operação única.', 'Reduz dispersão e melhora tempo de resposta.'],
+      ['Escala', 'Automação e base de conhecimento', 'Respostas padronizadas para dúvidas frequentes.', 'Reduz repetição e libera especialistas.'],
+      ['Gestão', 'Relatórios de SLA e backlog', 'Mostra gargalos e oportunidades de melhoria operacional.', 'Dá visibilidade para priorização.']
     ];
   }
   return [
-    ['Atendimento', 'SAC multicanal', 'Centraliza demandas e melhora a experiência do cliente.', 'Mapear canais atuais e volume estimado.'],
-    ['Gestão', 'Relatórios gerenciais', 'Dá visão mensal de demanda, SLA, qualidade e oportunidades.', 'Definir indicadores executivos.'],
-    ['Qualidade', 'QA e monitoria', 'Aumenta consistência e reduz falhas de atendimento.', 'Criar rotina de avaliação.'],
-    ['Relacionamento', 'NPS/CSAT', 'Mede satisfação e identifica oportunidades de evolução.', 'Definir momento de disparo da pesquisa.']
+    ['Atendimento', 'SAC multicanal', 'Centraliza demandas e melhora a experiência do cliente.', 'Reduz perda de informação e melhora velocidade de resposta.'],
+    ['Gestão', 'Relatórios gerenciais', 'Visão mensal de demanda, SLA, qualidade e oportunidades.', 'Ajuda a gestão a decidir com dados.'],
+    ['Qualidade', 'QA e monitoria', 'Avaliação de atendimentos e plano de melhoria.', 'Aumenta consistência e reduz falhas.'],
+    ['Relacionamento', 'NPS/CSAT', 'Mede satisfação e identifica oportunidades de evolução.', 'Transforma atendimento em inteligência comercial.']
+  ];
+}
+
+function strategicIdeas(company){
+  if(isAgencyOrCampaignCompany(company)){
+    return [
+      ['Campaign Experience Center (CEC)', 'A Fri.to vende criatividade; a Daleth entrega a experiência completa da campanha.', 'Operar SAC da campanha, WhatsApp oficial, dúvidas sobre promoções, cadastro de participantes, suporte a consumidores, acompanhamento de brindes e pesquisa de satisfação.'],
+      ['Consumer Intelligence Lab', 'Cada atendimento vira inteligência para próximas campanhas.', 'Entregar relatório executivo com dúvidas, reclamações, elogios, sugestões, objeções, intenção de compra, percepção da campanha e oportunidades para novos produtos.'],
+      ['Proposta de valor', 'Transformar campanhas publicitárias em experiências completas de relacionamento.', 'Posicionar a Daleth como parceira que gera dados estratégicos para a agência e seus clientes tomarem decisões mais inteligentes.']
+    ];
+  }
+  return [
+    ['Diagnóstico de experiência', 'Transformar atendimento em leitura executiva do cliente.', 'Mapear canais, motivos de contato, SLA, recorrências e oportunidades de ganho operacional.'],
+    ['Central inteligente', 'Unir operação, qualidade e dados em um único modelo.', 'Gerar atendimento melhor e relatórios que ajudem a empresa a decidir.']
   ];
 }
 
@@ -167,7 +215,8 @@ function briefLines(company){
   const name = text(company.companyName);
   const segment = text(company.segment) || 'Não informado';
   const site = text(company.site) || 'Não informado';
-  const rows = solutionRows(segment);
+  const rows = solutionRows(company);
+  const ideas = strategicIdeas(company);
   return [
     `Cliente: ${name}`,
     `Segmento: ${segment}`,
@@ -183,6 +232,9 @@ function briefLines(company){
     '',
     'Soluções sugeridas',
     ...rows.map(row=>`- ${row[1]}: ${row[2]}`),
+    '',
+    'Ideias estratégicas',
+    ...ideas.map(row=>`- ${row[0]}: ${row[1]} ${row[2]}`),
     '',
     'Perguntas para a primeira conversa',
     '- Quais canais concentram hoje o maior volume de atendimento?',
@@ -238,7 +290,7 @@ async function generateBriefingPdf(company){
       y -= 8;
       return;
     }
-    const isTitle = !line.startsWith('-') && ['Objetivo do briefing','Hipóteses comerciais iniciais','Soluções sugeridas','Perguntas para a primeira conversa','Próximo passo recomendado'].includes(line);
+    const isTitle = !line.startsWith('-') && ['Objetivo do briefing','Hipóteses comerciais iniciais','Soluções sugeridas','Ideias estratégicas','Perguntas para a primeira conversa','Próximo passo recomendado'].includes(line);
     const font = isTitle ? bold : regular;
     const size = isTitle ? 13 : 11;
     const gap = isTitle ? 20 : 15;
@@ -255,22 +307,22 @@ async function generateSolutionMatrix(company){
   worksheet.columns = [
     {header:'Empresa',key:'company',width:28},
     {header:'Segmento',key:'segment',width:20},
-    {header:'Dor / Oportunidade',key:'pain',width:26},
+    {header:'Necessidade do cliente',key:'pain',width:34},
     {header:'Solução Daleth',key:'solution',width:30},
-    {header:'Valor para o cliente',key:'value',width:48},
-    {header:'Próximo passo',key:'nextStep',width:34}
+    {header:'Como a Daleth entrega',key:'delivery',width:54},
+    {header:'Benefício estratégico',key:'value',width:48}
   ];
   worksheet.getRow(1).font = {bold:true,color:{argb:'FFFFFFFF'}};
   worksheet.getRow(1).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF061B35'}};
   worksheet.getRow(1).alignment = {vertical:'middle',wrapText:true};
-  solutionRows(company.segment).forEach(row=>{
+  solutionRows(company).forEach(row=>{
     worksheet.addRow({
       company:text(company.companyName),
       segment:text(company.segment) || 'Não informado',
       pain:row[0],
       solution:row[1],
-      value:row[2],
-      nextStep:row[3]
+      delivery:row[2],
+      value:row[3]
     });
   });
   worksheet.eachRow(row=>{
@@ -285,6 +337,28 @@ async function generateSolutionMatrix(company){
     });
   });
   worksheet.views = [{state:'frozen',ySplit:1}];
+
+  const ideas = workbook.addWorksheet('Ideias Estratégicas');
+  ideas.columns = [
+    {header:'Ideia',key:'idea',width:34},
+    {header:'Conceito',key:'concept',width:52},
+    {header:'Aplicação Comercial',key:'application',width:70}
+  ];
+  ideas.getRow(1).font = {bold:true,color:{argb:'FFFFFFFF'}};
+  ideas.getRow(1).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF00A0D1'}};
+  strategicIdeas(company).forEach(row=>ideas.addRow({idea:row[0],concept:row[1],application:row[2]}));
+  ideas.eachRow(row=>{
+    row.alignment = {vertical:'top',wrapText:true};
+    row.eachCell(cell=>{
+      cell.border = {
+        top:{style:'thin',color:{argb:'FFDCE7F1'}},
+        left:{style:'thin',color:{argb:'FFDCE7F1'}},
+        bottom:{style:'thin',color:{argb:'FFDCE7F1'}},
+        right:{style:'thin',color:{argb:'FFDCE7F1'}}
+      };
+    });
+  });
+  ideas.views = [{state:'frozen',ySplit:1}];
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
