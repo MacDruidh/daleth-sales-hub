@@ -44,7 +44,8 @@ Configuração esperada no Vercel:
 
 - Build Command: `npm run build`
 - Output Directory: `dist`
-- Variaveis: `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`
+- Variaveis: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` e `DROPBOX_ACCESS_TOKEN`
+- Opcional: `DROPBOX_CLIENT_ROOT_PATH=/Daleth/1NovosClientes`
 - Dominio: `crm.daleth.com.br`
 
 O arquivo `vercel.json` garante que recarregar qualquer rota do app continue abrindo o CRM.
