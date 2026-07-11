@@ -25,6 +25,15 @@ function fileNameForCompany(companyName){
   return folderNameForCompany(companyName).replace(/[. ]+$/,'') || 'Cliente';
 }
 
+function asciiFileName(value){
+  return fileNameForCompany(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^\w\s.-]/g,' ')
+    .replace(/\s+/g,' ')
+    .trim() || 'Cliente';
+}
+
 function dropboxPath(rootPath,folderName){
   const root = `/${text(rootPath || DEFAULT_ROOT_PATH).replace(/^\/+|\/+$/g,'')}`;
   const safeFolder = text(folderName).replace(/[\\/:?*"<>|]/g,' ').replace(/\s+/g,' ').trim() || 'Cliente';
@@ -280,17 +289,36 @@ async function generateSolutionMatrix(company){
 }
 
 async function createOnboardingFiles(token,folderPath,company){
-  const fileName = fileNameForCompany(company.companyName);
-  const briefingPath = `${folderPath}/Briefing - ${fileName}.pdf`;
-  const matrixPath = `${folderPath}/Matriz de Soluções - ${fileName}.xlsx`;
-  const briefing = await generateBriefingPdf(company);
-  const matrix = await generateSolutionMatrix(company);
-  const uploadedBriefing = await uploadDropboxFile(token,briefingPath,briefing);
-  const uploadedMatrix = await uploadDropboxFile(token,matrixPath,matrix);
-  return [
-    {type:'briefing',name:`Briefing - ${fileName}.pdf`,path:uploadedBriefing?.path_display || briefingPath},
-    {type:'matrix',name:`Matriz de Soluções - ${fileName}.xlsx`,path:uploadedMatrix?.path_display || matrixPath}
+  const fileName = asciiFileName(company.companyName);
+  const artifacts = [];
+  const warnings = [];
+  const files = [
+    {
+      type:'briefing',
+      name:`Briefing - ${fileName}.pdf`,
+      path:`${folderPath}/Briefing - ${fileName}.pdf`,
+      create:()=>generateBriefingPdf(company)
+    },
+    {
+      type:'matrix',
+      name:`Matriz de Solucoes - ${fileName}.xlsx`,
+      path:`${folderPath}/Matriz de Solucoes - ${fileName}.xlsx`,
+      create:()=>generateSolutionMatrix(company)
+    }
   ];
+
+  for(const file of files){
+    try {
+      const buffer = await file.create();
+      const uploaded = await uploadDropboxFile(token,file.path,buffer);
+      artifacts.push({type:file.type,name:file.name,path:uploaded?.path_display || file.path});
+    } catch (error) {
+      console.error(`Falha ao enviar ${file.name} ao Dropbox:`, error);
+      warnings.push(`${file.name}: ${friendlyDropboxUploadError(error)}`);
+    }
+  }
+
+  return {artifacts,warnings};
 }
 
 export default async function handler(request,response){
@@ -329,14 +357,7 @@ export default async function handler(request,response){
   try {
     const folder = await createFolder(token,path);
     const folderPath = folder?.metadata?.path_display || path;
-    let artifacts = [];
-    let artifactWarning = '';
-    try {
-      artifacts = await createOnboardingFiles(token,folderPath,company);
-    } catch (artifactError) {
-      console.error('Pasta criada, mas falha ao enviar arquivos iniciais:', artifactError);
-      artifactWarning = friendlyDropboxUploadError(artifactError);
-    }
+    const {artifacts,warnings} = await createOnboardingFiles(token,folderPath,company);
     const sharedUrl = await createSharedLink(token,path);
     json(response,200,{
       ok:true,
@@ -344,7 +365,7 @@ export default async function handler(request,response){
       path:folderPath,
       sharedUrl,
       artifacts,
-      artifactWarning,
+      artifactWarning:warnings.join(' | '),
       alreadyExists:folder?.alreadyExists === true
     });
   } catch (error) {
