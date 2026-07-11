@@ -9,20 +9,12 @@ function json(response,status,payload){
   response.status(status).setHeader('Content-Type','application/json; charset=utf-8').send(JSON.stringify(payload));
 }
 
-function firstMeaningfulNamePart(name){
-  const clean = text(name)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g,'')
-    .replace(/[^\w\s.-]/g,' ')
-    .replace(/\s+/g,' ')
-    .trim();
-  const ignored = new Set(['a','as','o','os','de','da','das','do','dos','e','em','ltda','sa','s.a','me','epp','industria','comercio','comercial','servicos']);
-  const first = clean.split(' ').find(part=>part && !ignored.has(part.toLowerCase()));
-  return first || clean.split(' ')[0] || 'Cliente';
-}
-
 function folderNameForCompany(companyName){
-  return firstMeaningfulNamePart(companyName).slice(0,48);
+  return text(companyName)
+    .replace(/[\\/:?*"<>|]/g,' ')
+    .replace(/\s+/g,' ')
+    .trim()
+    .slice(0,80) || 'Cliente';
 }
 
 function dropboxPath(rootPath,folderName){
