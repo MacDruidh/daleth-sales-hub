@@ -3,6 +3,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 const DROPBOX_API = 'https://api.dropboxapi.com/2';
 const DROPBOX_CONTENT_API = 'https://content.dropboxapi.com/2';
+const DROPBOX_OAUTH_API = 'https://api.dropboxapi.com/oauth2/token';
 const DEFAULT_ROOT_PATH = '/Daleth/1Novos Clientes';
 
 function text(value){
@@ -83,12 +84,55 @@ async function createSharedLink(token,path){
 
 function friendlyDropboxUploadError(error){
   if(error?.status === 401){
-    return 'Dropbox recusou o envio dos arquivos (401). Revise o token do Dropbox no Vercel: ele pode ter expirado ou não ter permissão de upload.';
+    return 'Dropbox recusou a operação (401). Revise o token do Dropbox no Vercel: ele pode ter expirado. Para produção, configure refresh token.';
   }
   if(error?.status === 403){
     return 'Dropbox recusou o envio dos arquivos (403). Revise as permissões do app Dropbox, especialmente files.content.write.';
   }
   return error?.message || 'Não foi possível enviar os arquivos iniciais ao Dropbox.';
+}
+
+function friendlyDropboxError(error){
+  if(error?.status === 401){
+    return 'Dropbox recusou a operação porque o token expirou ou foi revogado. Atualize o DROPBOX_ACCESS_TOKEN no Vercel ou configure DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.';
+  }
+  if(error?.status === 403){
+    return 'Dropbox recusou a operação por falta de permissão. Revise as permissões do app Dropbox.';
+  }
+  return error?.message || 'Falha ao criar pasta no Dropbox.';
+}
+
+async function refreshDropboxAccessToken(){
+  const refreshToken = process.env.DROPBOX_REFRESH_TOKEN;
+  const appKey = process.env.DROPBOX_APP_KEY;
+  const appSecret = process.env.DROPBOX_APP_SECRET;
+  if(!refreshToken || !appKey || !appSecret) return '';
+
+  const credentials = Buffer.from(`${appKey}:${appSecret}`).toString('base64');
+  const response = await fetch(DROPBOX_OAUTH_API,{
+    method:'POST',
+    headers:{
+      Authorization:`Basic ${credentials}`,
+      'Content-Type':'application/x-www-form-urlencoded'
+    },
+    body:new URLSearchParams({
+      grant_type:'refresh_token',
+      refresh_token:refreshToken
+    })
+  });
+  const data = await response.json().catch(()=>({}));
+  if(!response.ok){
+    const error = new Error(data?.error_description || data?.error || `Dropbox OAuth respondeu ${response.status}`);
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+  return text(data?.access_token);
+}
+
+async function dropboxAccessToken(){
+  const refreshed = await refreshDropboxAccessToken();
+  return refreshed || process.env.DROPBOX_ACCESS_TOKEN || '';
 }
 
 async function uploadDropboxFile(token,path,buffer){
@@ -402,9 +446,9 @@ export default async function handler(request,response){
     return;
   }
 
-  const token = process.env.DROPBOX_ACCESS_TOKEN;
+  const token = await dropboxAccessToken();
   if(!token){
-    json(response,500,{ok:false,error:'DROPBOX_ACCESS_TOKEN não configurado no Vercel.'});
+    json(response,500,{ok:false,error:'Configure DROPBOX_ACCESS_TOKEN no Vercel ou, para produção, DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'});
     return;
   }
 
@@ -446,7 +490,7 @@ export default async function handler(request,response){
     console.error('Falha ao criar pasta no Dropbox:', error);
     json(response,error.status || 500,{
       ok:false,
-      error:error.message || 'Falha ao criar pasta no Dropbox.'
+      error:friendlyDropboxError(error)
     });
   }
 }
