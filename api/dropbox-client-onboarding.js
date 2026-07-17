@@ -179,65 +179,104 @@ function solutionRows(company){
   const seg = text(company?.segment).toLowerCase();
   if(isAgencyOrCampaignCompany(company)){
     return [
-      ['Atendimento ao consumidor das marcas atendidas', 'SAC Omnichannel', 'Telefone, WhatsApp, chat, e-mail e redes sociais operados como extensão da campanha.', 'Amplia a entrega da agência aos clientes e transforma comunicação em relacionamento.'],
-      ['Atendimento durante campanhas promocionais', 'Central de Atendimento Temporária', 'Estrutura sob demanda para picos de volume em ações promocionais.', 'Escala sem aumentar estrutura fixa da agência.'],
-      ['SAC para lançamentos de produtos', 'Operação Dedicada por Campanha', 'Equipe treinada no produto, regulamento, tom de marca e perguntas frequentes.', 'Melhora a experiência do consumidor no momento mais sensível do lançamento.'],
-      ['Gestão de Reclame Aqui e PROCON', 'Central de Reputação Digital', 'Triagem, resposta, registro e acompanhamento de casos críticos.', 'Protege imagem das marcas e reduz impacto reputacional.'],
-      ['Atendimento em ações de sampling e eventos', 'Central de Informações', 'Suporte para dúvidas de participantes, localização, brindes e regras da ação.', 'Aumenta engajamento e reduz ruído operacional durante a campanha.'],
-      ['Monitoramento das redes sociais', 'Social Care', 'Resposta rápida a comentários, dúvidas e reclamações em canais sociais.', 'Fortalece a marca e reduz exposição negativa.'],
-      ['Atendimento de influenciadores e promotores', 'Back Office de Campanhas', 'Acompanhamento de cadastros, orientações, pendências e status operacional.', 'Melhora coordenação entre agência, campo e cliente final.'],
-      ['Pesquisas pós-campanha', 'NPS / CSAT', 'Coleta estruturada de percepção dos participantes e consumidores.', 'Mede experiência e comprova resultado além da mídia.'],
-      ['Coleta de insights dos consumidores', 'Voice of Consumer (VOC)', 'Classificação de dúvidas, reclamações, elogios, sugestões e intenção de compra.', 'Gera inteligência para campanhas futuras e novos produtos.'],
-      ['Atendimento de distribuidores e parceiros', 'Central B2B', 'Canal dedicado para parceiros comerciais, pontos de venda e distribuidores.', 'Estrutura relacionamento e reduz perda de informação.'],
-      ['Gestão de leads gerados em campanhas', 'Inside Sales / Lead Qualification', 'Qualificação e priorização de leads capturados em landing pages, eventos e ativações.', 'Aumenta conversão comercial dos investimentos de campanha.'],
-      ['Atendimento a e-commerce', 'SAC Digital', 'Suporte para dúvidas, entrega, pagamento, troca e pós-venda.', 'Reduz abandono, melhora recompra e protege a experiência digital.'],
-      ['Relatórios executivos por campanha', 'Dashboards e Analytics', 'Painéis por campanha, canal, motivo de contato, SLA e satisfação.', 'Demonstra resultados objetivos para os clientes da agência.'],
-      ['Atendimento em crises de comunicação', 'Central de Contingência', 'Operação rápida para absorver volume e padronizar respostas em momentos críticos.', 'Reduz impacto reputacional e dá controle à marca.'],
-      ['Operações sazonais', 'Equipes sob demanda', 'Times temporários para Páscoa, Natal, Black Friday, férias e datas promocionais.', 'Flexibilidade operacional sem custo permanente.'],
-      ['Suporte ao consumidor final', 'Customer Care', 'Atendimento humano e estruturado para dúvidas, reclamações e acompanhamento.', 'Aumenta fidelização e percepção positiva das marcas atendidas.']
+      ['Consumidores sem canal centralizado para dúvidas de campanhas e marcas atendidas', 'SAC Omnichannel', 'Operar telefone, WhatsApp, chat, e-mail e redes sociais com scripts por campanha, registro dos motivos e escalação para a agência quando necessário.', 'Ampliar a entrega da agência aos clientes e transformar mídia em relacionamento mensurável.', 'Volume por canal, TMA, SLA de primeira resposta, taxa de resolução, CSAT.'],
+      ['Picos de demanda em campanhas promocionais com prazo curto', 'Central de Atendimento Temporária', 'Montar operação sob demanda para regulamento, participação, dúvidas, problemas de cadastro e acompanhamento de solicitações.', 'Escalar campanhas sem aumentar estrutura fixa e reduzir risco operacional no período promocional.', 'Volume diário, SLA, backlog, custo por contato, taxa de resolução.'],
+      ['Lançamentos de produtos exigindo discurso padronizado e resposta rápida', 'Operação Dedicada por Campanha', 'Treinar equipe com FAQ do produto, tom da marca, objeções esperadas e fluxos de escalonamento para casos críticos.', 'Melhorar a experiência do consumidor no momento mais sensível do lançamento.', 'Tempo de resposta, motivos de contato, reincidência, satisfação, ocorrências críticas.'],
+      ['Reclamações públicas ameaçando reputação das marcas clientes', 'Central de Reputação Digital', 'Tratar Reclame Aqui, PROCON e redes sociais com triagem, resposta, acompanhamento, classificação de causa raiz e relatório de casos sensíveis.', 'Proteger imagem das marcas e reduzir impacto reputacional.', 'Tempo de resposta pública, taxa de solução, nota Reclame Aqui, casos escalados, reincidência.'],
+      ['Participantes de sampling e eventos com dúvidas sobre retirada, brindes e regras', 'Central de Informações', 'Operar canais digitais e voz para orientar consumidores, promotores e parceiros durante ativações presenciais ou híbridas.', 'Aumentar engajamento e reduzir ruído operacional durante a campanha.', 'Contatos por evento, SLA, dúvidas recorrentes, taxa de abandono, satisfação.'],
+      ['Comentários e dúvidas em redes sociais sem tratamento estruturado', 'Social Care', 'Monitorar menções, classificar interações, responder dúvidas simples, escalar reclamações e consolidar aprendizados por marca/campanha.', 'Fortalecer a marca e reduzir exposição negativa em canais sociais.', 'Tempo de resposta social, sentimento, volume por motivo, interações resolvidas, escalonamentos.'],
+      ['Influenciadores, promotores e parceiros precisando de acompanhamento operacional', 'Back Office de Campanhas', 'Controlar cadastros, pendências, envio de materiais, orientações, status de ação e comunicação com envolvidos.', 'Melhorar coordenação entre agência, campo, influenciadores e cliente final.', 'Pendências abertas, tempo de regularização, cumprimento de prazos, retrabalho, produtividade.'],
+      ['Campanhas encerradas sem medição estruturada da experiência do consumidor', 'NPS / CSAT', 'Aplicar pesquisas pós-interação ou pós-campanha, segmentar respostas por canal e consolidar aprendizados executivos.', 'Comprovar resultado além da mídia e orientar evolução das próximas campanhas.', 'NPS, CSAT, taxa de resposta, temas positivos/negativos, variação por campanha.'],
+      ['Feedback dos consumidores disperso e pouco aproveitado pela criação', 'Voice of Consumer (VOC)', 'Classificar dúvidas, reclamações, elogios, sugestões, objeções e intenção de compra geradas nos contatos da campanha.', 'Transformar atendimento em inteligência para campanhas futuras e novos produtos.', 'Top motivos, intenção de compra, objeções, elogios, oportunidades identificadas.'],
+      ['Distribuidores, PDVs e parceiros sem canal B2B organizado durante ações', 'Central B2B', 'Atender parceiros comerciais, pontos de venda e distribuidores com fluxo específico para dúvidas, materiais, prazos e status.', 'Reduzir perda de informação e melhorar relacionamento operacional com a cadeia.', 'SLA B2B, chamados por parceiro, pendências, tempo de resolução, recorrência.'],
+      ['Leads gerados em campanhas sem qualificação comercial imediata', 'Inside Sales / Lead Qualification', 'Qualificar leads capturados em landing pages, eventos e ativações, priorizando intenção, perfil, urgência e próximo passo.', 'Aumentar conversão comercial dos investimentos de campanha.', 'Taxa de contato, taxa de qualificação, conversão para reunião, tempo até primeiro contato, receita potencial.'],
+      ['Consumidores de e-commerce abandonando compra por dúvidas ou insegurança', 'SAC Digital', 'Responder dúvidas sobre produto, entrega, pagamento, troca e pós-venda em canais digitais integrados à jornada de compra.', 'Reduzir abandono e proteger a experiência digital das marcas.', 'Abandono recuperado, conversão assistida, tempo de resposta, motivos de dúvida, CSAT.'],
+      ['Clientes da agência pedindo comprovação objetiva de resultado operacional', 'Dashboards e Analytics', 'Entregar painéis por campanha, canal, motivo, SLA, satisfação, volume, riscos e recomendações executivas.', 'Demonstrar valor concreto e apoiar renovação/expansão de contratos da agência.', 'SLA, volume, CSAT, NPS, custo por contato, insights acionáveis.'],
+      ['Crises de comunicação exigindo resposta rápida e padronizada', 'Central de Contingência', 'Ativar operação emergencial com FAQ aprovado, roteiros de resposta, fila prioritária, monitoramento e relatório de crise.', 'Reduzir impacto reputacional e dar controle à marca em momentos críticos.', 'Tempo de ativação, volume crítico, SLA, casos resolvidos, sentimento.'],
+      ['Datas sazonais com demanda acima da capacidade normal', 'Equipes sob demanda', 'Dimensionar agentes temporários para Páscoa, Natal, Black Friday, férias e datas promocionais, com supervisão e relatório por período.', 'Ganhar flexibilidade operacional sem custo permanente.', 'Acurácia de dimensionamento, ocupação, SLA, custo por contato, backlog.']
     ];
   }
   if(seg.includes('avia')){
     return [
-      ['Atendimento 24/7', 'SAC 24/7 ANAC', 'Cobertura contínua para passageiros, contingências e tratativas críticas.', 'Reduz atrito, protege SLA e organiza demandas regulatórias.'],
-      ['Experiência do passageiro', 'Atendimento bilíngue e multicanal', 'Suporte em voz, WhatsApp, e-mail e formulários.', 'Melhora jornada em informação, cancelamento, bagagem e reacomodação.'],
-      ['Gestão operacional', 'Relatórios de SLA e motivos de contato', 'Leitura por canal, motivo, pico, reincidência e tempo de resposta.', 'Ajuda a enxergar gargalos e oportunidades de automação.'],
-      ['Qualidade', 'QA e monitoria de atendimento', 'Amostras semanais, critérios de qualidade e plano de melhoria.', 'Eleva padrão de resposta e reduz risco regulatório.']
+      ['Passageiros sem resposta contínua em ocorrências fora do horário comercial', 'SAC 24/7 ANAC', 'Operar atendimento contínuo por voz, WhatsApp, e-mail e formulários para informação, cancelamento, alteração e contingência.', 'Reduzir atrito, proteger SLA e organizar demandas regulatórias.', 'SLA, tempo de primeira resposta, abandono, resolução no primeiro contato, reclamações ANAC.'],
+      ['Demandas de bagagem extraviada exigindo acompanhamento até solução', 'Back Office Operacional', 'Registrar ocorrência, acompanhar status, atualizar passageiro e escalar pendências para áreas responsáveis.', 'Reduzir reincidência de contato e aumentar previsibilidade para o passageiro.', 'Tempo de atualização, contatos por caso, prazo de solução, satisfação.'],
+      ['Reacomodações e cancelamentos gerando alto volume em contingências', 'Central de Contingência', 'Ativar equipe dedicada com roteiro aprovado, priorização por criticidade e comunicação padronizada.', 'Diminuir caos operacional e proteger percepção da companhia.', 'Tempo de ativação, volume tratado, SLA crítico, casos escalados.'],
+      ['Passageiros internacionais precisando de suporte em outro idioma', 'Atendimento bilíngue', 'Disponibilizar agentes treinados para demandas em inglês/espanhol nos canais definidos.', 'Melhorar experiência e reduzir barreiras em rotas internacionais.', 'Volume bilíngue, SLA, resolução, CSAT por idioma.'],
+      ['Motivos de contato pouco claros para decisão operacional', 'Dashboards de SLA e Motivos', 'Classificar contatos por motivo, canal, rota, horário e criticidade com leitura executiva semanal/mensal.', 'Identificar gargalos e oportunidades de automação ou melhoria operacional.', 'Top motivos, variação semanal, SLA por canal, reincidência.'],
+      ['Risco de respostas inconsistentes em temas regulatórios', 'QA e Monitoria ANAC', 'Monitorar amostras, avaliar aderência a scripts e gerar plano de melhoria com supervisão.', 'Elevar padrão de resposta e reduzir risco regulatório.', 'Nota de qualidade, aderência, falhas críticas, evolução por agente.'],
+      ['Consultas repetitivas sobre documentos, horários e regras', 'Base de Conhecimento e Scripts', 'Criar FAQ operacional e roteiros por tipo de demanda para uso da equipe.', 'Acelerar respostas e reduzir retrabalho.', 'Tempo médio, reincidência, uso de artigos, taxa de resolução.'],
+      ['Picos em feriados e alta temporada acima da capacidade interna', 'Equipes sob demanda', 'Dimensionar reforço temporário por previsão de volume e horários críticos.', 'Manter SLA em períodos de alta sem estrutura fixa permanente.', 'Ocupação, SLA, backlog, custo por contato.'],
+      ['Casos sensíveis sem registro executivo consolidado', 'Relatório Executivo de Ocorrências', 'Consolidar casos críticos, status, causa, impacto e recomendação de ação.', 'Dar controle à gestão e reduzir exposição reputacional.', 'Casos críticos, tempo de fechamento, causas raiz, reincidência.'],
+      ['Passageiros sem medição estruturada de satisfação pós-atendimento', 'NPS / CSAT', 'Coletar satisfação após atendimento e cruzar por canal, motivo e rota.', 'Identificar pontos de melhoria na jornada e priorizar correções.', 'NPS, CSAT, taxa de resposta, detratores por motivo.']
     ];
   }
   if(seg.includes('turismo')){
     return [
-      ['Atendimento ao viajante', 'SAC multicanal', 'Centraliza dúvidas, alterações e suporte em canais digitais e voz.', 'Reduz atrito em jornadas de compra e pós-venda.'],
-      ['Relacionamento', 'WhatsApp corporativo e e-mail estruturado', 'Aumenta velocidade de resposta e registro do histórico.', 'Garante rastreabilidade e melhora experiência.'],
-      ['Gestão', 'Relatórios gerenciais', 'Mostra principais demandas, tempos e oportunidades comerciais.', 'Apoia leitura semanal e mensal da operação.']
+      ['Viajantes com dúvidas antes da compra e baixa velocidade de resposta', 'SAC multicanal', 'Operar voz, WhatsApp e e-mail para dúvidas de pacote, reserva, documentação e condições comerciais.', 'Aumentar confiança e reduzir perda de venda por demora.', 'Tempo de resposta, conversão assistida, abandono, CSAT.'],
+      ['Cotações sem acompanhamento até decisão do cliente', 'Inside Sales / Follow-up Comercial', 'Realizar follow-up estruturado, registrar objeções e acionar vendedor com leads quentes.', 'Aumentar conversão de cotações em vendas.', 'Taxa de contato, conversão, tempo até follow-up, motivos de perda.'],
+      ['Alterações de viagem gerando retrabalho e contatos dispersos', 'Back Office de Reservas', 'Acompanhar solicitações de alteração, documentos, pagamento, voucher e pendências operacionais.', 'Reduzir retrabalho e dar rastreabilidade ao atendimento.', 'Pendências abertas, prazo de solução, contatos por reserva.'],
+      ['Clientes sem suporte claro durante a viagem', 'Central de Suporte ao Viajante', 'Disponibilizar canal para emergências, dúvidas, remarcações e orientação em destino.', 'Melhorar experiência e reduzir risco de insatisfação.', 'SLA emergencial, casos resolvidos, NPS viagem, reincidência.'],
+      ['Reclamações pós-viagem sem tratamento padronizado', 'Central de Reputação Digital', 'Tratar reclamações, classificar causa raiz e acompanhar retorno até encerramento.', 'Proteger marca e recuperar clientes insatisfeitos.', 'Tempo de resposta, taxa de solução, reclamações recorrentes, recuperação.'],
+      ['Base de clientes sem ações estruturadas de recompra', 'Retenção e Reativação', 'Acionar clientes por perfil, destino, histórico e sazonalidade com abordagem consultiva.', 'Aumentar recompra e receita da base.', 'Taxa de reativação, receita recuperada, conversão por campanha.'],
+      ['Demandas sazonais acima da capacidade comercial', 'Equipes sob demanda', 'Reforçar atendimento e back office em férias, feriados e campanhas promocionais.', 'Manter SLA sem elevar estrutura fixa.', 'SLA, ocupação, backlog, custo por contato.'],
+      ['Baixa visibilidade sobre motivos de contato e perda comercial', 'Dashboards de Jornada do Viajante', 'Consolidar motivos, canais, objeções, prazos, conversão e satisfação por período.', 'Orientar decisões comerciais e operacionais.', 'Top motivos, conversão, SLA, NPS, motivos de perda.'],
+      ['Atendimento inconsistente em destinos e regras complexas', 'Base de Conhecimento e Scripts', 'Criar roteiros por destino, documentação, política de alteração e perguntas frequentes.', 'Padronizar resposta e reduzir erros.', 'Aderência, TMA, retrabalho, erros críticos.'],
+      ['Experiência do viajante sem medição após retorno', 'NPS / CSAT', 'Aplicar pesquisa pós-viagem e consolidar aprendizados por destino, fornecedor e canal.', 'Melhorar produto e priorizar fornecedores/procedimentos.', 'NPS, CSAT, taxa de resposta, detratores por destino.']
     ];
   }
   if(seg.includes('varejo') || seg.includes('franqu')){
     return [
-      ['Atendimento por unidade', 'SAC+ por loja/unidade', 'Organiza demandas por origem e melhora a leitura de performance.', 'Mostra problemas recorrentes por loja, região ou franquia.'],
-      ['Reputação', 'Reclame Aqui, PROCON e redes sociais', 'Tratativa estruturada de casos sensíveis.', 'Reduz risco de imagem e melhora gestão de reclamações.'],
-      ['Padronização', 'Base de conhecimento e scripts', 'Garante consistência no atendimento em escala.', 'Aumenta controle sem perder capilaridade.']
+      ['Clientes sem canal único para dúvidas de compra, troca e entrega', 'SAC Omnichannel', 'Operar telefone, WhatsApp, e-mail, chat e redes sociais com registro por loja, pedido e motivo.', 'Reduzir perda de informação e aumentar resolução no primeiro contato.', 'FCR, SLA, abandono, CSAT, contatos por pedido.'],
+      ['Reclamações por unidade sem leitura comparativa', 'SAC+ por loja/unidade', 'Classificar demandas por loja, região, franquia e motivo, com relatório de reincidência.', 'Identificar problemas locais e reduzir recorrência.', 'Top lojas, reincidência, SLA por unidade, casos críticos.'],
+      ['Reclame Aqui e PROCON impactando reputação da marca', 'Central de Reputação Digital', 'Responder, acompanhar e encerrar casos públicos com trilha de causa raiz.', 'Proteger imagem e recuperar clientes insatisfeitos.', 'Nota Reclame Aqui, tempo de resposta, taxa de solução, reabertura.'],
+      ['Picos sazonais em datas comerciais acima da capacidade interna', 'Equipes sob demanda', 'Dimensionar reforço para Black Friday, Natal, Dia das Mães e campanhas.', 'Manter SLA e conversão sem estrutura fixa permanente.', 'SLA, backlog, custo por contato, ocupação.'],
+      ['Dúvidas de produto impedindo decisão de compra', 'SAC Digital Pré-venda', 'Atender dúvidas sobre produto, estoque, prazo, pagamento e política comercial.', 'Aumentar conversão assistida e reduzir abandono.', 'Conversão assistida, tempo de resposta, motivos de dúvida, receita recuperada.'],
+      ['Trocas e devoluções gerando retrabalho operacional', 'Back Office de Pós-venda', 'Acompanhar solicitações, documentos, status logístico e comunicação com o cliente.', 'Reduzir contatos repetidos e custo operacional.', 'Prazo de solução, contatos por caso, retrabalho, CSAT.'],
+      ['Campanhas promocionais sem suporte operacional dedicado', 'Central de Campanhas', 'Operar dúvidas de regulamento, cupom, participação e status de benefício.', 'Reduzir fricção e proteger resultado da campanha.', 'Volume campanha, SLA, taxa de resolução, reclamações.'],
+      ['Clientes inativos sem abordagem estruturada de retorno', 'Retenção e Reativação', 'Acionar clientes por histórico, perfil e oferta, registrando objeções e próximos passos.', 'Recuperar receita da base e aumentar recompra.', 'Taxa de reativação, conversão, receita recuperada, opt-out.'],
+      ['Atendimento inconsistente entre canais e lojas', 'Base de Conhecimento e Scripts', 'Criar scripts por política, produto, loja e exceções com atualização controlada.', 'Padronizar experiência e reduzir erro operacional.', 'Aderência, erros críticos, TMA, retrabalho.'],
+      ['Gestão sem visão diária de motivos e gargalos', 'Dashboards e Analytics', 'Entregar painéis de demanda, SLA, motivos, loja, canal, satisfação e risco.', 'Apoiar decisão comercial e operacional com dados.', 'SLA, volume, CSAT, top motivos, lojas críticas.']
     ];
   }
   if(seg.includes('finance')){
     return [
-      ['Atendimento sensível', 'SAC especializado', 'Registro, rastreabilidade e segurança na tratativa.', 'Reduz risco operacional e melhora confiança do cliente.'],
-      ['Compliance', 'QA e trilha de auditoria', 'Critérios de qualidade, amostras e histórico auditável.', 'Aumenta controle sobre aderência operacional.'],
-      ['Gestão', 'Dashboards e relatórios executivos', 'Visão mensal de demanda, SLA e performance.', 'Apoia decisão com dados.']
+      ['Clientes com dúvidas sensíveis exigindo rastreabilidade e segurança', 'SAC Especializado', 'Operar atendimento com registro completo, autenticação operacional, scripts aprovados e escalonamento por criticidade.', 'Reduzir risco operacional e aumentar confiança do cliente.', 'SLA, aderência, casos críticos, FCR, CSAT.'],
+      ['Solicitações documentais sem acompanhamento padronizado', 'Back Office Financeiro', 'Controlar pendências, documentos, status, retorno ao cliente e passagem para áreas internas.', 'Reduzir atrasos, retrabalho e perda de informação.', 'Pendências abertas, prazo médio, retrabalho, backlog.'],
+      ['Risco de respostas fora de política ou compliance', 'QA e Auditoria de Atendimento', 'Monitorar amostras, registrar falhas críticas e orientar correções por equipe/processo.', 'Aumentar aderência operacional e reduzir exposição.', 'Nota QA, falhas críticas, aderência, evolução mensal.'],
+      ['Reclamações regulatórias e públicas exigindo controle executivo', 'Central de Reputação e Ouvidoria', 'Triar, tratar e acompanhar Reclame Aqui, PROCON e casos sensíveis com relatório executivo.', 'Reduzir risco reputacional e acelerar solução.', 'Tempo de resposta, taxa de solução, reabertura, causas raiz.'],
+      ['Leads financeiros sem qualificação antes da equipe comercial', 'Lead Qualification', 'Qualificar interesse, perfil, urgência, documentação inicial e próximo passo.', 'Aumentar produtividade comercial e conversão.', 'Taxa de qualificação, conversão, tempo de contato, motivos de descarte.'],
+      ['Base de clientes sem régua ativa de retenção', 'Retenção e Reativação', 'Acionar clientes por risco, vencimento, oportunidade e perfil com registro de objeções.', 'Reduzir churn e recuperar receita.', 'Churn evitado, receita recuperada, taxa de contato, conversão.'],
+      ['Dúvidas repetitivas consumindo equipe especializada', 'Base de Conhecimento e Scripts', 'Criar roteiros aprovados para dúvidas frequentes, documentos, prazos e políticas.', 'Reduzir TMA e liberar especialistas para casos complexos.', 'TMA, uso da base, FCR, reincidência.'],
+      ['Gestão sem leitura mensal de demanda e risco', 'Dashboards Executivos', 'Consolidar volume, SLA, motivos, qualidade, casos críticos e oportunidades comerciais.', 'Apoiar decisão com controle e previsibilidade.', 'SLA, volume, risco, QA, receita recuperada.'],
+      ['Clientes sem medição de satisfação após tratativas sensíveis', 'NPS / CSAT', 'Aplicar pesquisas pós-atendimento por canal e tipo de solicitação.', 'Identificar pontos de atrito e priorizar melhorias.', 'NPS, CSAT, taxa de resposta, detratores por motivo.'],
+      ['Picos de demanda em campanhas, vencimentos ou mudanças regulatórias', 'Equipes sob demanda', 'Dimensionar agentes treinados para absorver volumes temporários com supervisão.', 'Manter SLA sem aumentar estrutura permanente.', 'Ocupação, SLA, backlog, custo por contato.']
     ];
   }
   if(seg.includes('tecnologia')){
     return [
-      ['Suporte ao cliente', 'Service desk e SAC multicanal', 'Organiza demandas técnicas e comerciais em uma operação única.', 'Reduz dispersão e melhora tempo de resposta.'],
-      ['Escala', 'Automação e base de conhecimento', 'Respostas padronizadas para dúvidas frequentes.', 'Reduz repetição e libera especialistas.'],
-      ['Gestão', 'Relatórios de SLA e backlog', 'Mostra gargalos e oportunidades de melhoria operacional.', 'Dá visibilidade para priorização.']
+      ['Usuários abrindo demandas técnicas e comerciais em canais dispersos', 'Service Desk e SAC Multicanal', 'Centralizar chamados por voz, WhatsApp, e-mail e formulário, categorizando tipo, urgência e responsável.', 'Reduzir dispersão e melhorar tempo de resposta.', 'SLA, backlog, FCR, tempo de triagem, CSAT.'],
+      ['Perguntas frequentes consumindo time técnico', 'Base de Conhecimento e Scripts', 'Criar respostas e fluxos para dúvidas recorrentes, implantação, acesso, cobrança e uso.', 'Reduzir repetição e liberar especialistas.', 'Deflexão, TMA, uso da base, reincidência.'],
+      ['Leads inbound sem qualificação antes de vendas', 'SDR / Lead Qualification', 'Qualificar perfil, necessidade, urgência, stack, budget e próximo passo.', 'Aumentar produtividade comercial e conversão.', 'MQL, SQL, conversão, tempo até contato, motivos de descarte.'],
+      ['Clientes novos sem acompanhamento na adoção inicial', 'Onboarding Assistido', 'Acompanhar primeiros acessos, dúvidas, pendências e checklist de implantação.', 'Acelerar ativação e reduzir churn inicial.', 'Tempo de ativação, tickets iniciais, adoção, CSAT onboarding.'],
+      ['Renovações em risco sem sinalização operacional', 'Customer Care / Retenção', 'Monitorar sinais de risco, abrir contato ativo e registrar objeções, pendências e próximos passos.', 'Reduzir churn e proteger receita recorrente.', 'Churn evitado, renovações, health score, receita retida.'],
+      ['Backlog sem leitura executiva para priorização', 'Dashboards de SLA e Backlog', 'Consolidar chamados por tipo, cliente, criticidade, SLA, idade e recorrência.', 'Dar visibilidade para priorizar produto, suporte e sucesso do cliente.', 'Backlog, aging, SLA, recorrência, top clientes.'],
+      ['Clientes sem suporte em picos de implantação ou incidentes', 'Central de Contingência', 'Ativar fila dedicada para incidentes, comunicação padronizada e atualização por status.', 'Reduzir impacto percebido e controlar crise.', 'Tempo de ativação, volume crítico, SLA, status updates.'],
+      ['Atendimento inconsistente entre agentes e canais', 'QA e Monitoria', 'Avaliar amostras, aderência técnica, clareza e resolução, com plano de melhoria.', 'Elevar consistência e reduzir retrabalho.', 'Nota QA, falhas críticas, retrabalho, FCR.'],
+      ['Clientes usando pouco a solução por dúvidas operacionais', 'Campanhas de Adoção', 'Contato ativo com base segmentada para orientar uso, recursos e boas práticas.', 'Aumentar engajamento e expansão da base.', 'Adoção, contatos efetivos, expansão, uso de funcionalidades.'],
+      ['Gestão sem feedback consolidado para roadmap', 'Voice of Customer (VOC)', 'Classificar sugestões, reclamações, dúvidas e objeções dos clientes em relatório para produto.', 'Transformar suporte em inteligência de evolução.', 'Top sugestões, bugs recorrentes, objeções, impacto por cliente.']
     ];
   }
   return [
-    ['Atendimento', 'SAC multicanal', 'Centraliza demandas e melhora a experiência do cliente.', 'Reduz perda de informação e melhora velocidade de resposta.'],
-    ['Gestão', 'Relatórios gerenciais', 'Visão mensal de demanda, SLA, qualidade e oportunidades.', 'Ajuda a gestão a decidir com dados.'],
-    ['Qualidade', 'QA e monitoria', 'Avaliação de atendimentos e plano de melhoria.', 'Aumenta consistência e reduz falhas.'],
-    ['Relacionamento', 'NPS/CSAT', 'Mede satisfação e identifica oportunidades de evolução.', 'Transforma atendimento em inteligência comercial.']
+    ['Leads entrando por canais dispersos sem triagem estruturada', 'Lead Qualification', 'Receber, classificar, priorizar e direcionar leads por perfil, necessidade e urgência.', 'Aumentar conversão e produtividade comercial.', 'Taxa de contato, MQL, SQL, tempo até contato, conversão.'],
+    ['Clientes com dúvidas antes da compra sem resposta rápida', 'SAC Pré-venda Multicanal', 'Atender dúvidas por WhatsApp, e-mail, telefone e chat com scripts comerciais e registro dos motivos.', 'Reduzir perda de oportunidades e acelerar decisão.', 'SLA, conversão assistida, abandono, motivos de dúvida.'],
+    ['Propostas enviadas sem acompanhamento sistemático', 'Follow-up Comercial', 'Executar cadência de contato, registrar objeções e acionar vendedor em oportunidades quentes.', 'Aumentar taxa de fechamento e reduzir oportunidades paradas.', 'Taxa de follow-up, conversão, aging de proposta, motivos de perda.'],
+    ['Pedidos ou solicitações sem acompanhamento operacional claro', 'Back Office Operacional', 'Controlar pendências, documentos, status, retorno ao cliente e passagem entre áreas.', 'Reduzir retrabalho e aumentar previsibilidade.', 'Pendências, prazo médio, retrabalho, backlog.'],
+    ['Ocorrências de clientes sem tratativa padronizada', 'SAC Omnichannel', 'Registrar, classificar, responder e escalar demandas por canal, motivo e criticidade.', 'Melhorar satisfação e reduzir reincidência.', 'FCR, SLA, reincidência, CSAT, reclamações.'],
+    ['Clientes inativos sem ação de recuperação', 'Retenção e Reativação', 'Acionar base por histórico, perfil e oportunidade com abordagem consultiva.', 'Recuperar receita e ampliar recompra.', 'Taxa de reativação, receita recuperada, conversão, opt-out.'],
+    ['Base sem medição de satisfação após interações importantes', 'NPS / CSAT', 'Aplicar pesquisas pós-atendimento, pós-venda ou pós-entrega e consolidar aprendizados.', 'Identificar atritos e priorizar melhorias.', 'NPS, CSAT, taxa de resposta, detratores por motivo.'],
+    ['Demandas repetitivas consumindo equipe interna', 'Base de Conhecimento e Scripts', 'Criar roteiros, respostas e fluxos para dúvidas e processos recorrentes.', 'Reduzir tempo de atendimento e retrabalho.', 'TMA, FCR, reincidência, uso da base.'],
+    ['Gestão sem visão mensal de volume, SLA e gargalos', 'Dashboards e Analytics', 'Entregar painéis de volume, canal, motivo, SLA, satisfação, risco e oportunidade.', 'Dar controle operacional e apoiar decisão executiva.', 'SLA, volume, top motivos, CSAT, backlog.'],
+    ['Atendimentos sem avaliação de aderência e padrão', 'QA e Monitoria', 'Avaliar amostras, registrar falhas críticas, orientar equipe e acompanhar evolução.', 'Aumentar consistência e reduzir falhas operacionais.', 'Nota QA, falhas críticas, aderência, evolução por período.']
   ];
 }
 
@@ -275,7 +314,7 @@ function briefLines(company){
     '- A próxima abordagem deve validar volume de demanda, canais utilizados, dores atuais e impacto financeiro de falhas no atendimento.',
     '',
     'Soluções sugeridas',
-    ...rows.map(row=>`- ${row[1]}: ${row[2]}`),
+    ...rows.map(row=>`- ${row[2]} Resultado esperado: ${row[4]}`),
     '',
     'Ideias estratégicas',
     ...ideas.map(row=>`- ${row[0]}: ${row[1]} ${row[2]}`),
@@ -351,10 +390,11 @@ async function generateSolutionMatrix(company){
   worksheet.columns = [
     {header:'Empresa',key:'company',width:28},
     {header:'Segmento',key:'segment',width:20},
-    {header:'Necessidade do cliente',key:'pain',width:34},
-    {header:'Solução Daleth',key:'solution',width:30},
-    {header:'Como a Daleth entrega',key:'delivery',width:54},
-    {header:'Benefício estratégico',key:'value',width:48}
+    {header:'Necessidade específica do cliente',key:'pain',width:42},
+    {header:'Solução Daleth AC',key:'solution',width:30},
+    {header:'Aplicação operacional proposta',key:'delivery',width:58},
+    {header:'Resultado esperado',key:'value',width:42},
+    {header:'Indicadores recomendados',key:'indicators',width:42}
   ];
   worksheet.getRow(1).font = {bold:true,color:{argb:'FFFFFFFF'}};
   worksheet.getRow(1).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF061B35'}};
@@ -366,7 +406,8 @@ async function generateSolutionMatrix(company){
       pain:row[0],
       solution:row[1],
       delivery:row[2],
-      value:row[3]
+      value:row[3],
+      indicators:row[4]
     });
   });
   worksheet.eachRow(row=>{
