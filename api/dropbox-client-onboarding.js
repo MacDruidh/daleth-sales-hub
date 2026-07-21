@@ -504,7 +504,20 @@ export default async function handler(request,response){
     return;
   }
 
-  const {token,source:tokenSource} = await dropboxAccessToken();
+  let token = '';
+  let tokenSource = '';
+  try {
+    const tokenInfo = await dropboxAccessToken();
+    token = tokenInfo.token;
+    tokenSource = tokenInfo.source;
+  } catch (error) {
+    console.error('Falha ao obter token do Dropbox:', error);
+    json(response,error.status || 500,{
+      ok:false,
+      error:friendlyDropboxError(error)
+    });
+    return;
+  }
   if(!token){
     json(response,500,{ok:false,error:'Configure DROPBOX_ACCESS_TOKEN no Vercel ou, para produção, DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'});
     return;

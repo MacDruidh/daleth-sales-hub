@@ -1288,8 +1288,15 @@ async function createDropboxFolderForCompany(company){
       notes:company?.notes || ''
     })
   });
-  const data = await response.json().catch(()=>({}));
-  if(!response.ok || data?.ok === false) throw new Error(data?.error || 'Não foi possível criar a pasta no Dropbox.');
+  const raw = await response.text().catch(()=>'');
+  let data = {};
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    data = {};
+  }
+  const fallback = raw && raw.length < 500 ? raw : 'Não foi possível criar a pasta no Dropbox.';
+  if(!response.ok || data?.ok === false) throw new Error(data?.error || fallback);
   return data;
 }
 function calendarFeedToken(){
