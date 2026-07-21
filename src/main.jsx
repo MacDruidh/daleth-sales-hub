@@ -1254,51 +1254,6 @@ function isDropboxLink(value){
 function normalizedDropboxLink(value){
   return dropboxHref(value).toLowerCase().replace(/([?&])dl=[01](&|$)/,'$1').replace(/[?&]$/,'').replace(/\/$/,'');
 }
-function companyDropboxNote(dropbox={}){
-  const {path,sharedUrl,artifacts=[]} = dropbox;
-  return [
-    path ? `Pasta Dropbox: ${path}` : '',
-    sharedUrl ? `Link Dropbox: ${sharedUrl}` : '',
-    Array.isArray(artifacts) && artifacts.length
-      ? `Arquivos iniciais Dropbox: ${artifacts.map(file=>file.name).join(', ')}`
-      : ''
-  ].filter(Boolean).join('\n');
-}
-function appendDropboxNoteToCompany(company,dropbox){
-  const note = companyDropboxNote(dropbox);
-  if(!note) return company;
-  const cleanNotes = String(company.notes || '')
-    .split('\n')
-    .filter(line=>!line.startsWith('Pasta Dropbox:') && !line.startsWith('Link Dropbox:') && !line.startsWith('Arquivos iniciais Dropbox:'))
-    .join('\n')
-    .trim();
-  return {...company,notes:[cleanNotes,note].filter(Boolean).join('\n')};
-}
-async function createDropboxFolderForCompany(company){
-  const response = await fetch('/api/dropbox-client-onboarding',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      companyName:company?.name || '',
-      site:company?.site || '',
-      segment:company?.segment || '',
-      cnpj:company?.cnpj || '',
-      phone:company?.phone || '',
-      email:company?.email || '',
-      notes:company?.notes || ''
-    })
-  });
-  const raw = await response.text().catch(()=>'');
-  let data = {};
-  try {
-    data = raw ? JSON.parse(raw) : {};
-  } catch {
-    data = {};
-  }
-  const fallback = raw && raw.length < 500 ? raw : 'Não foi possível criar a pasta no Dropbox.';
-  if(!response.ok || data?.ok === false) throw new Error(data?.error || fallback);
-  return data;
-}
 function calendarFeedToken(){
   return import.meta.env.VITE_CALENDAR_FEED_TOKEN || '';
 }
@@ -4265,33 +4220,6 @@ function Companies({companies,setCompanies,query,setSelectedCompanyId,canWrite,c
   const empty = { name:'', segment:'', cnpj:'', site:'', status:'Prospect', phone:'', email:'', notes:'' };
   const [form,setForm] = useState(empty);
   const list = companies.filter(c => (c.name+c.segment+c.site+c.status).toLowerCase().includes(query.toLowerCase())).sort((a,b)=>String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'));;
-  const finishCompanyCreation = async (savedCompany,baseCompanies) => {
-    if(!window.confirm(`Empresa "${savedCompany.name}" criada. Deseja criar a pasta no Dropbox em Daleth/1Novos Clientes com briefing em PDF e matriz em Excel?`)){
-      setCompanies([savedCompany,...baseCompanies]);
-      return;
-    }
-    try {
-      const dropbox = await createDropboxFolderForCompany(savedCompany);
-      const companyWithDropbox = appendDropboxNoteToCompany(savedCompany,dropbox);
-      try {
-        const updatedCompany = await saveCompanyToSupabase(companyWithDropbox);
-        setCompanies([updatedCompany,...baseCompanies]);
-        const filesText = Array.isArray(dropbox.artifacts) && dropbox.artifacts.length ? `\nArquivos criados: ${dropbox.artifacts.map(file=>file.name).join(', ')}` : '';
-        const warningText = dropbox.artifactWarning ? `\nAtenção: ${dropbox.artifactWarning}` : '';
-        window.alert(`Pasta Dropbox criada: ${dropbox.path}${filesText}${warningText}`);
-      } catch (error) {
-        console.warn('Pasta criada, mas falha ao atualizar observações da empresa:', error);
-        setCompanies([companyWithDropbox,...baseCompanies]);
-        const filesText = Array.isArray(dropbox.artifacts) && dropbox.artifacts.length ? `\nArquivos criados: ${dropbox.artifacts.map(file=>file.name).join(', ')}` : '';
-        const warningText = dropbox.artifactWarning ? `\nAtenção: ${dropbox.artifactWarning}` : '';
-        window.alert(`Pasta Dropbox criada: ${dropbox.path}${filesText}${warningText}\nO caminho ficou salvo localmente, mas o Supabase não aceitou atualizar as observações agora.`);
-      }
-    } catch (error) {
-      console.warn('Falha ao criar pasta Dropbox:', error);
-      setCompanies([savedCompany,...baseCompanies]);
-      window.alert(`Empresa salva, mas não consegui criar a pasta no Dropbox agora: ${error.message}`);
-    }
-  };
   const add = async () => {
     if(!canWrite) return;
     if(!form.name.trim()) return;
@@ -4308,14 +4236,14 @@ function Companies({companies,setCompanies,query,setSelectedCompanyId,canWrite,c
     }
     try {
       const saved = await saveCompanyToSupabase(form);
-      await finishCompanyCreation(saved,companies);
+      setCompanies([saved,...companies]);
       setForm(empty);
     } catch (error) {
       console.warn('Falha ao salvar empresa no Supabase:', error);
       const fallback = {...form,id:Date.now()};
       setCompanies([fallback,...companies]);
       setForm(empty);
-      window.alert('Empresa salva localmente. O Supabase não aceitou a gravação agora. A pasta Dropbox poderá ser criada quando o cadastro estiver salvo no Supabase.');
+      window.alert('Empresa salva localmente. O Supabase não aceitou a gravação agora.');
     }
   };
   const removeCompany = async (company) => {
