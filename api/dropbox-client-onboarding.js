@@ -94,7 +94,7 @@ function friendlyDropboxUploadError(error){
 
 function friendlyDropboxError(error){
   if(error?.status === 401){
-    return 'Dropbox recusou a operação porque o token expirou ou foi revogado. Atualize o DROPBOX_ACCESS_TOKEN no Vercel ou configure DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.';
+    return error.message || 'Dropbox recusou a operação porque o token expirou ou foi revogado.';
   }
   if(error?.status === 403){
     return 'Dropbox recusou a operação por falta de permissão. Revise as permissões do app Dropbox.';
@@ -102,11 +102,26 @@ function friendlyDropboxError(error){
   return error?.message || 'Falha ao criar pasta no Dropbox.';
 }
 
+function dropboxRefreshConfig(){
+  const refreshToken = text(process.env.DROPBOX_REFRESH_TOKEN);
+  const appKey = text(process.env.DROPBOX_APP_KEY);
+  const appSecret = text(process.env.DROPBOX_APP_SECRET);
+  const missing = [
+    refreshToken ? '' : 'DROPBOX_REFRESH_TOKEN',
+    appKey ? '' : 'DROPBOX_APP_KEY',
+    appSecret ? '' : 'DROPBOX_APP_SECRET'
+  ].filter(Boolean);
+  return {refreshToken,appKey,appSecret,missing,hasAny:!!(refreshToken || appKey || appSecret),hasAll:missing.length === 0};
+}
+
 async function refreshDropboxAccessToken(){
-  const refreshToken = process.env.DROPBOX_REFRESH_TOKEN;
-  const appKey = process.env.DROPBOX_APP_KEY;
-  const appSecret = process.env.DROPBOX_APP_SECRET;
-  if(!refreshToken || !appKey || !appSecret) return '';
+  const {refreshToken,appKey,appSecret,missing,hasAny,hasAll} = dropboxRefreshConfig();
+  if(!hasAny) return '';
+  if(!hasAll){
+    const error = new Error(`Refresh token do Dropbox incompleto no Vercel. Faltando: ${missing.join(', ')}.`);
+    error.status = 500;
+    throw error;
+  }
 
   const credentials = Buffer.from(`${appKey}:${appSecret}`).toString('base64');
   const response = await fetch(DROPBOX_OAUTH_API,{
@@ -122,7 +137,7 @@ async function refreshDropboxAccessToken(){
   });
   const data = await response.json().catch(()=>({}));
   if(!response.ok){
-    const error = new Error(data?.error_description || data?.error || `Dropbox OAuth respondeu ${response.status}`);
+    const error = new Error(`Dropbox não aceitou a renovação do token (${response.status}). Revise DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET no Vercel. Detalhe: ${data?.error_description || data?.error || 'sem detalhe'}`);
     error.status = response.status;
     error.data = data;
     throw error;
@@ -132,7 +147,9 @@ async function refreshDropboxAccessToken(){
 
 async function dropboxAccessToken(){
   const refreshed = await refreshDropboxAccessToken();
-  return refreshed || process.env.DROPBOX_ACCESS_TOKEN || '';
+  if(refreshed) return {token:refreshed,source:'refresh'};
+  const accessToken = text(process.env.DROPBOX_ACCESS_TOKEN);
+  return {token:accessToken,source:accessToken ? 'access' : ''};
 }
 
 async function uploadDropboxFile(token,path,buffer){
@@ -487,7 +504,7 @@ export default async function handler(request,response){
     return;
   }
 
-  const token = await dropboxAccessToken();
+  const {token,source:tokenSource} = await dropboxAccessToken();
   if(!token){
     json(response,500,{ok:false,error:'Configure DROPBOX_ACCESS_TOKEN no Vercel ou, para produção, DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET.'});
     return;
@@ -529,6 +546,12 @@ export default async function handler(request,response){
     });
   } catch (error) {
     console.error('Falha ao criar pasta no Dropbox:', error);
+    if(error.status === 401 && tokenSource === 'access'){
+      error.message = 'Dropbox recusou o DROPBOX_ACCESS_TOKEN atual. Isso confirma que o CRM está usando o token temporário, não o refresh token. No Vercel, confira se DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY e DROPBOX_APP_SECRET existem em Production e se houve Redeploy depois.';
+    }
+    if(error.status === 401 && tokenSource === 'refresh'){
+      error.message = 'Dropbox recusou o token renovado via refresh. Revise as permissões do app Dropbox e gere novamente o DROPBOX_REFRESH_TOKEN.';
+    }
     json(response,error.status || 500,{
       ok:false,
       error:friendlyDropboxError(error)
