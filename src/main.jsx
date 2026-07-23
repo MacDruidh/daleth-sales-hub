@@ -916,6 +916,42 @@ async function saveContractToSupabase(contract, companies, deals){
   return mapContractFromDb(data, companies, deals);
 }
 
+function contractFromWonDeal(deal, companies=[]){
+  const company = companyForDeal(deal, companies);
+  const startDate = deal.closeDate || today();
+  const months = dealMonths(deal);
+  return {
+    dealId: deal.id,
+    companyId: deal.companyId || company?.id || '',
+    product: dealProductLabel(deal),
+    startDate,
+    endDate: addMonths(startDate, months),
+    mrr: dealMrr(deal),
+    setup: dealSetup(deal),
+    contractMonths: months,
+    owner: deal.owner || 'Sergio Paulo',
+    status: 'Ativo',
+    notes: `Contrato gerado automaticamente a partir da oportunidade ganha: ${deal.title}`
+  };
+}
+
+async function ensureContractForWonDeal({deal,contracts=[],setContracts,companies=[],deals=[],showAlert=false}){
+  if(!setContracts || deal?.stage !== 'Ganho') return 'skipped';
+  if(safeArray(contracts).some(contract=>sameId(contract.dealId,deal.id))) return 'exists';
+
+  const nextContract = contractFromWonDeal(deal, companies);
+  try {
+    const saved = await saveContractToSupabase(nextContract, companies, deals);
+    setContracts([saved,...safeArray(contracts)]);
+    return 'created';
+  } catch (error) {
+    console.warn('Falha ao criar contrato automático no Supabase:', error);
+    setContracts([{...nextContract,id:Date.now()},...safeArray(contracts)]);
+    if(showAlert) window.alert('Oportunidade marcada como ganha. O contrato foi criado localmente, mas o Supabase não aceitou a gravação agora.');
+    return 'local';
+  }
+}
+
 async function deleteContractFromSupabase(contract){
   const dbId = contract?.supabaseId;
   if(!dbId) return;
@@ -3048,7 +3084,7 @@ function MiniMetric({icon:Icon,label,value,onClick,active=false}){
 function Panel({title,children}){ return <section className="panel"><h2>{title}</h2>{children}</section>; }
 function DashboardTable({headers,children}){ return <div className="tableWrap dashboardTable"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
 
-function Pipeline({stages,setStages,deals,setDeals,companies,contacts,products,notes,setNotes,setSelectedDealId,canWrite,currentUser,stageHistory,setStageHistory}){
+function Pipeline({stages,setStages,deals,setDeals,companies,contacts,products,notes,setNotes,contracts,setContracts,setSelectedDealId,canWrite,currentUser,stageHistory,setStageHistory}){
   const [newStage,setNewStage] = useState('');
   const [selectedStage,setSelectedStage] = useState(null);
   const [editingStage,setEditingStage] = useState(null);
@@ -3164,11 +3200,17 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,products,n
     if(!canWrite) return;
     const nextDeal = {...deal,stage,probability:probabilityForStage(stage,deal.probability)};
     if(!validateRequiredDealFields(nextDeal,companies,contacts)) return;
-    if(deal.stage !== stage) setStageHistory(appendStageHistory(stageHistory,deal,deal.stage,stage,currentUser?.name));
-    setDeals(deals.map(d => sameId(d.id,deal.id) ? nextDeal : d));
+    const stageChanged = deal.stage !== stage;
+    if(stageChanged) setStageHistory(appendStageHistory(stageHistory,deal,deal.stage,stage,currentUser?.name));
+    const nextDeals = deals.map(d => sameId(d.id,deal.id) ? nextDeal : d);
+    setDeals(nextDeals);
     try {
       const saved = await saveDealToSupabase(nextDeal, companies, contacts);
-      setDeals(deals.map(d => sameId(d.id,deal.id) ? saved : d));
+      const savedDeals = deals.map(d => sameId(d.id,deal.id) ? saved : d);
+      setDeals(savedDeals);
+      if(stageChanged && deal.stage !== 'Ganho' && saved.stage === 'Ganho'){
+        await ensureContractForWonDeal({deal:saved,contracts,setContracts,companies,deals:savedDeals});
+      }
     } catch (error) {
       console.warn('Falha ao atualizar etapa no Supabase:', error);
       window.alert('Etapa alterada localmente. O Supabase não aceitou a atualização agora.');
@@ -3553,14 +3595,20 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,c
     };
     const nextDeal = normalizeDealProductsForSave(rawDeal);
     if(!validateRequiredDealFields(nextDeal,companies,contacts)) return;
-    if(deal.stage !== nextDeal.stage) setStageHistory?.(appendStageHistory(stageHistory,deal,deal.stage,nextDeal.stage,currentUser?.name));
+    const stageChanged = deal.stage !== nextDeal.stage;
+    if(stageChanged) setStageHistory?.(appendStageHistory(stageHistory,deal,deal.stage,nextDeal.stage,currentUser?.name));
     if(nextDeal.stage === 'Perdido') setLossReasons?.({...lossReasons,[deal.id]:nextDeal.lossReason || ''});
     try {
       const saved = await saveDealToSupabase(nextDeal, companies, contacts);
-      setDeals(deals.map(d=>sameId(d.id,deal.id) ? saved : d));
+      const nextDeals = deals.map(d=>sameId(d.id,deal.id) ? saved : d);
+      setDeals(nextDeals);
       setDraft({...saved,lossReason:nextDeal.lossReason || ''});
+      let contractStatus = 'skipped';
+      if(stageChanged && deal.stage !== 'Ganho' && saved.stage === 'Ganho'){
+        contractStatus = await ensureContractForWonDeal({deal:saved,contracts,setContracts,companies,deals:nextDeals,showAlert:true});
+      }
       if(closeAfterSave) onBack?.();
-      else window.alert('Alterações salvas.');
+      else window.alert(contractStatus === 'created' ? 'Alterações salvas. Contrato criado automaticamente.' : 'Alterações salvas.');
     } catch (error) {
       console.warn('Falha ao atualizar oportunidade no Supabase:', error);
       setDeals(deals.map(d=>sameId(d.id,deal.id) ? nextDeal : d));
