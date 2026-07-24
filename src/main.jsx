@@ -872,6 +872,7 @@ function mapContractFromDb(c, companies=[], deals=[]){
     contractMonths: Number(c.contract_months || 12),
     startDate: c.start_date || '',
     endDate: c.end_date || '',
+    documentUrl: c.document_url || '',
     status: c.status || 'Ativo',
     notes: c.notes || ''
   };
@@ -889,6 +890,7 @@ function contractToDb(contract, companies, deals){
     contract_months: Number(contract.contractMonths || 12),
     start_date: contract.startDate || null,
     end_date: contract.endDate || null,
+    document_url: contract.documentUrl || null,
     status: contract.status || 'Ativo',
     notes: contract.notes || null
   };
@@ -904,13 +906,29 @@ const CONTRACT_SELECT = `
   )
 `;
 
+function isMissingContractDocumentUrlFieldError(error){
+  const message = `${String(error?.message || '')} ${String(error?.details || '')} ${String(error?.hint || '')} ${String(error?.code || '')}`;
+  return message.includes('document_url');
+}
+
 async function saveContractToSupabase(contract, companies, deals){
   const payload = contractToDb(contract, companies, deals);
   const query = contract.supabaseId
     ? supabase.from('contracts').update(payload).eq('id', contract.supabaseId)
     : supabase.from('contracts').insert(payload);
 
-  const { data, error } = await query.select('*').single();
+  let { data, error } = await query.select('*').single();
+
+  if(error && isMissingContractDocumentUrlFieldError(error)){
+    const fallbackPayload = {...payload};
+    delete fallbackPayload.document_url;
+    const fallbackQuery = contract.supabaseId
+      ? supabase.from('contracts').update(fallbackPayload).eq('id', contract.supabaseId)
+      : supabase.from('contracts').insert(fallbackPayload);
+    const fallbackResult = await fallbackQuery.select('*').single();
+    data = fallbackResult.data;
+    error = fallbackResult.error;
+  }
 
   if(error) throw error;
   return mapContractFromDb(data, companies, deals);
@@ -930,6 +948,7 @@ function contractFromWonDeal(deal, companies=[]){
     setup: dealSetup(deal),
     contractMonths: months,
     owner: deal.owner || 'Sergio Paulo',
+    documentUrl: '',
     status: 'Ativo',
     notes: `Contrato gerado automaticamente a partir da oportunidade ganha: ${deal.title}`
   };
@@ -3373,6 +3392,8 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
   const empty = { title:'', companyId:companies[0]?.id||'', contactId:'', product:'SAC+', product2:'', product3:'', products:['SAC+'], value:0, setup:0, contractMonths:12, stage:stages[0], owner:'Sergio Paulo', probability:probabilityForStage(stages[0],30), closeDate:'', description:'', nextStep:'', priority:'Média' };
   const [form,setFormBase] = useState(empty);
   const [filters,setFilters] = useState({ companyId:'', product:'', stage:'', owner:'', closeBeforeMonth:'' });
+  const [showNewDeal,setShowNewDeal] = useState(false);
+  const [showFilters,setShowFilters] = useState(false);
   const [selectedDealIds,setSelectedDealIds] = useState([]);
   const setForm = (next) => {
     const resolved = typeof next === 'function' ? next(form) : next;
@@ -3498,16 +3519,25 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
     }
   };
   const clearFilters = () => setFilters({ companyId:'', product:'', stage:'', owner:'', closeBeforeMonth:'' });
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
   return <>
-    {canWrite && <Panel title="Nova oportunidade"><div className="formGrid"><Input label="Título" field="title" form={form} setForm={setForm}/><Select label="Empresa *" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Contato" field="contactId" form={form} setForm={setForm} options={[["", availableContacts.length ? "Selecione" : "Sem contatos desta empresa"],...availableContacts.map(c=>[c.id,c.name])]}/><DealProductFields form={form} setForm={setForm} products={products}/><CurrencyInput label="Receita mensal" field="value" form={form} setForm={setForm}/><CurrencyInput label="Implantação" field="setup" form={form} setForm={setForm}/><Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(form.stage,form.probability)} readOnly/></label><Select label="Etapa" field="stage" form={form} setForm={setForm} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável *" field="owner" form={form} setForm={setForm} options={USERS.map(u=>[u,u])}/><Input label="Fechamento previsto" field="closeDate" form={form} setForm={setForm} type="date"/><Input label="Próximo passo *" field="nextStep" form={form} setForm={setForm}/><label><span>Valor total do contrato</span><input value={money(dealTcv(form))} readOnly/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Criar oportunidade</button></div></Panel>}
-    <Panel title="Filtros de oportunidades"><div className="formGrid">
+    <div className="actionTiles">
+      {canWrite && <button type="button" className={`actionTile ${showNewDeal ? 'active' : ''}`} onClick={()=>setShowNewDeal(!showNewDeal)}>
+        <Plus size={22}/><b>Nova oportunidade</b><span>{showNewDeal ? 'Ocultar cadastro' : 'Cadastrar oportunidade'}</span>
+      </button>}
+      <button type="button" className={`actionTile ${showFilters ? 'active' : ''}`} onClick={()=>setShowFilters(!showFilters)}>
+        <Filter size={22}/><b>Filtros</b><span>{activeFilterCount ? `${activeFilterCount} filtro(s) ativo(s)` : 'Filtrar oportunidades'}</span>
+      </button>
+    </div>
+    {canWrite && showNewDeal && <Panel title="Nova oportunidade"><div className="formGrid"><Input label="Título" field="title" form={form} setForm={setForm}/><Select label="Empresa *" field="companyId" form={form} setForm={setForm} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Contato" field="contactId" form={form} setForm={setForm} options={[["", availableContacts.length ? "Selecione" : "Sem contatos desta empresa"],...availableContacts.map(c=>[c.id,c.name])]}/><DealProductFields form={form} setForm={setForm} products={products}/><CurrencyInput label="Receita mensal" field="value" form={form} setForm={setForm}/><CurrencyInput label="Implantação" field="setup" form={form} setForm={setForm}/><Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(form.stage,form.probability)} readOnly/></label><Select label="Etapa" field="stage" form={form} setForm={setForm} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável *" field="owner" form={form} setForm={setForm} options={USERS.map(u=>[u,u])}/><Input label="Fechamento previsto" field="closeDate" form={form} setForm={setForm} type="date"/><Input label="Próximo passo *" field="nextStep" form={form} setForm={setForm}/><label><span>Valor total do contrato</span><input value={money(dealTcv(form))} readOnly/></label><button className="saveBtn" onClick={add}><Plus size={16}/>Criar oportunidade</button></div></Panel>}
+    {showFilters && <Panel title="Filtros de oportunidades"><div className="formGrid">
       <Select label="Empresa" field="companyId" form={filters} setForm={setFilters} options={[["","Todas"],...safeArray(companies).map(c=>[c.id,c.name])]}/>
       <Select label="Produto" field="product" form={filters} setForm={setFilters} options={[["","Todos"],...safeArray(products).map(p=>[p,p])]}/>
       <Select label="Etapa" field="stage" form={filters} setForm={setFilters} options={[["","Todas"],...safeArray(stages).map(s=>[s,s])]}/>
       <Select label="Responsável" field="owner" form={filters} setForm={setFilters} options={[["","Todos"],...USERS.map(u=>[u,u])]}/>
       <Input label="Fechamento anterior a" field="closeBeforeMonth" form={filters} setForm={setFilters} type="month"/>
       <button className="saveBtn" onClick={clearFilters}><Filter size={16}/>Limpar filtros</button>
-    </div></Panel>
+    </div></Panel>}
     <section className="cards">
       <Kpi icon={CircleDollarSign} label="Receita mensal filtrada" value={moneyShort(listMrr)}/>
       <Kpi icon={TrendingUp} label="Previsão mensal ponderada" value={moneyShort(listWeightedMrr)}/>
@@ -4341,7 +4371,7 @@ function Contacts({contacts,setContacts,companies,query,setSelectedContactId,can
 }
 
 function Contracts({contracts,setContracts,deals,companies,products,query,canWrite,setSelectedContractId}){
-  const empty = { companyId:companies[0]?.id||'', dealId:'', product:'SAC+', startDate:today(), endDate:addMonths(today(),12), mrr:0, setup:0, contractMonths:12, owner:'Sergio Paulo', status:'Ativo', notes:'' };
+  const empty = { companyId:companies[0]?.id||'', dealId:'', product:'SAC+', startDate:today(), endDate:addMonths(today(),12), mrr:0, setup:0, contractMonths:12, owner:'Sergio Paulo', documentUrl:'', status:'Ativo', notes:'' };
   const [form,setForm] = useState(empty);
   const calculatedEndDate = addMonths(form.startDate, Number(form.contractMonths || 12));
   const list = contracts.filter(c => {
@@ -4397,6 +4427,7 @@ function Contracts({contracts,setContracts,deals,companies,products,query,canWri
         setup: dealSetup(d),
         contractMonths: dealMonths(d),
         owner: d.owner,
+        documentUrl: '',
         status: 'Ativo',
         notes: `Contrato gerado a partir da oportunidade: ${d.title}`
       }));
@@ -4431,6 +4462,7 @@ function Contracts({contracts,setContracts,deals,companies,products,query,canWri
       <Input label="Implantação" field="setup" form={form} setForm={setForm} type="number"/>
       <Input label="Prazo contratual (meses)" field="contractMonths" form={form} setForm={setForm} type="number"/>
       <Select label="Responsável" field="owner" form={form} setForm={setForm} options={USERS.map(u=>[u,u])}/>
+      <Input label="Link do contrato" field="documentUrl" form={form} setForm={setForm} type="url"/>
       <Select label="Status" field="status" form={form} setForm={setForm} options={['Ativo','Renovando','Encerrado','Suspenso'].map(s=>[s,s])}/>
       <button className="saveBtn" onClick={add}><Plus size={16}/>Criar contrato</button>
       <button className="saveBtn" onClick={importWonDeals}><CheckCircle2 size={16}/>Gerar contratos das oportunidades ganhas</button>
@@ -4456,10 +4488,10 @@ function Contracts({contracts,setContracts,deals,companies,products,query,canWri
       </Panel>
     </section>
 
-    <Panel title="Todos os contratos"><Table headers={['Cliente','Produto','Início','Término','Tempo restante','Receita mensal','Valor total do contrato','Status','Responsável','Ações']}>
+    <Panel title="Todos os contratos"><Table headers={['Cliente','Produto','Início','Término','Tempo restante','Receita mensal','Valor total do contrato','Status','Responsável','Documento','Ações']}>
       {list.map(c=>{
         const company = byId(companies,c.companyId);
-        return <tr key={c.id} onClick={()=>setSelectedContractId?.(c.id)} style={{cursor:'pointer'}}><td><b>{company?.name || 'Sem cliente'}</b><span>{c.notes}</span></td><td>{c.product}</td><td>{formatDate(c.startDate)}</td><td>{formatDate(c.endDate)}</td><td>{monthsRemaining(c.endDate)} meses</td><td>{moneyShort(contractMrr(c))}</td><td>{moneyShort(contractTcv(c))}</td><td><span className="pill">{contractStatus(c)}</span></td><td>{c.owner}</td><td>{canWrite ? <button className="mini" onClick={(e)=>{e.stopPropagation(); removeContract(c)}}><Trash2 size={15}/>Excluir</button> : '-'}</td></tr>
+        return <tr key={c.id} onClick={()=>setSelectedContractId?.(c.id)} style={{cursor:'pointer'}}><td><b>{company?.name || 'Sem cliente'}</b><span>{c.notes}</span></td><td>{c.product}</td><td>{formatDate(c.startDate)}</td><td>{formatDate(c.endDate)}</td><td>{monthsRemaining(c.endDate)} meses</td><td>{moneyShort(contractMrr(c))}</td><td>{moneyShort(contractTcv(c))}</td><td><span className="pill">{contractStatus(c)}</span></td><td>{c.owner}</td><td>{c.documentUrl ? <a className="mini" style={{textDecoration:'none'}} href={dropboxHref(c.documentUrl)} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}><ExternalLink size={15}/>Abrir</a> : '-'}</td><td>{canWrite ? <button className="mini" onClick={(e)=>{e.stopPropagation(); removeContract(c)}}><Trash2 size={15}/>Excluir</button> : '-'}</td></tr>
       })}
     </Table></Panel>
   </>;
@@ -4519,6 +4551,7 @@ function ContractModal({contract,onClose,contracts,setContracts,companies,deals,
         <button className="mini" onClick={openCompany} disabled={!company}><Building2 size={15}/>{company?.name || 'Sem cliente'}</button>
         <button className="mini" onClick={openDeal} disabled={!deal}><BriefcaseBusiness size={15}/>{deal?.title || 'Sem oportunidade'}</button>
         <button className="mini" onClick={openProduct} disabled={!draft.product}><Sparkles size={15}/>{draft.product || 'Sem produto'}</button>
+        {draft.documentUrl && <a className="mini" style={{textDecoration:'none'}} href={dropboxHref(draft.documentUrl)} target="_blank" rel="noreferrer"><ExternalLink size={15}/>Abrir contrato</a>}
       </div>
     </Panel>
     <Panel title="Dados do contrato">
@@ -4532,6 +4565,7 @@ function ContractModal({contract,onClose,contracts,setContracts,companies,deals,
         <Input label="Receita mensal" field="mrr" form={draft} setForm={setDraft} type="number"/>
         <Input label="Implantação" field="setup" form={draft} setForm={setDraft} type="number"/>
         <Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/>
+        <Input label="Link do contrato" field="documentUrl" form={draft} setForm={setDraft} type="url"/>
         <Select label="Status" field="status" form={draft} setForm={setDraft} options={['Ativo','Renovando','Encerrado','Suspenso'].map(s=>[s,s])}/>
         <label><span>Valor total do contrato</span><input value={money(contractTcv({...draft,endDate:calculatedEndDate}))} readOnly/></label>
         <Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/>

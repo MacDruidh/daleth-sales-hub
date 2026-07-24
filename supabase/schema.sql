@@ -249,6 +249,7 @@ create table if not exists contracts (
 
 alter table contracts add column if not exists legacy_id text;
 alter table contracts add column if not exists opportunity_id bigint references opportunities(id) on delete set null;
+alter table contracts add column if not exists document_url text;
 alter table contracts add column if not exists updated_at timestamptz not null default now();
 
 create index if not exists contracts_legacy_id_idx on contracts (legacy_id);
