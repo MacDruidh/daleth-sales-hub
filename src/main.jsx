@@ -1982,6 +1982,7 @@ function App(){
   const [lossReasons,setLossReasons] = useStore('dsh-v1-loss-reasons', {});
   const [lossReasonOptions,setLossReasonOptions] = useStore('dsh-v1-loss-reason-options', LOSS_REASONS);
   const [selectedDealId,setSelectedDealId] = useState(null);
+  const [selectedDealInitialTab,setSelectedDealInitialTab] = useState('historico');
   const [selectedCompanyId,setSelectedCompanyId] = useState(null);
   const [selectedContactId,setSelectedContactId] = useState(null);
   const [selectedContractId,setSelectedContractId] = useState(null);
@@ -2125,9 +2126,17 @@ function App(){
   const mentionCount = mentionsForUser({currentUser,deals,activities,notes,interactions}).length;
   const alertTotal = overdueCount + meetingsTodayCount + proposalsWithoutFollowup + mentionCount;
   const alertText = `${overdueCount} atividades vencidas · ${proposalsWithoutFollowup} propostas sem follow-up · ${meetingsTodayCount} reuniões hoje · ${mentionCount} menções`;
-  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,contracts,setContracts,products,setProducts,companySegments,setCompanySegments,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,stageHistory,setStageHistory,lossReasons,setLossReasons,lossReasonOptions,setLossReasonOptions,setSelectedDealId,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
-  const clearSelectedRecords = () => {
+  const openDealAtTab = (dealId, tab='historico') => {
+    setSelectedDealInitialTab(tab);
+    setSelectedDealId(dealId);
+  };
+  const closeSelectedDeal = () => {
     setSelectedDealId(null);
+    setSelectedDealInitialTab('historico');
+  };
+  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,contracts,setContracts,products,setProducts,companySegments,setCompanySegments,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,stageHistory,setStageHistory,lossReasons,setLossReasons,lossReasonOptions,setLossReasonOptions,setSelectedDealId,openDealAtTab,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
+  const clearSelectedRecords = () => {
+    closeSelectedDeal();
     setSelectedCompanyId(null);
     setSelectedContactId(null);
     setSelectedContractId(null);
@@ -2162,7 +2171,7 @@ function App(){
     </aside>
     <main className="main" ref={mainRef}>
       <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={handleSearchChange} placeholder="Buscar empresas, contatos e oportunidades..."/></div><button className="notification" style={{cursor:'pointer',textAlign:'left'}} onClick={()=>navigate('pending')} title="Abrir painel de pendências"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></button><div className="notification topUserCard"><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><a className="mini topUtilityBtn" href="/Manual_do_Usuario_Daleth_Sales_Hub.pdf" target="_blank" rel="noreferrer" style={{textDecoration:'none'}}><FileText size={15}/>Manual</a><button className="mini topUtilityBtn" onClick={logout}><X size={15}/>Sair</button></div></header>
-      {selectedDealAsPage ? <DealDetailPage key={selectedDeal.id} deal={selectedDeal} {...context} onBack={()=>setSelectedDealId(null)}/> : (query.trim() ? <GlobalSearch {...context} setQuery={setQuery}/> : <>
+      {selectedDealAsPage ? <DealDetailPage key={`${selectedDeal.id}-${selectedDealInitialTab}`} deal={selectedDeal} initialTab={selectedDealInitialTab} {...context} onBack={closeSelectedDeal}/> : (query.trim() ? <GlobalSearch {...context} setQuery={setQuery}/> : <>
         {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='insights' && <InsightsDaleth {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <CrmQuality {...context} selectedDeal={selectedDealInQuality ? selectedDeal : null}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='registrations' && <Registrations {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>}
       </>)}
     </main>
@@ -3104,7 +3113,7 @@ function MiniMetric({icon:Icon,label,value,onClick,active=false}){
 function Panel({title,children}){ return <section className="panel"><h2>{title}</h2>{children}</section>; }
 function DashboardTable({headers,children}){ return <div className="tableWrap dashboardTable"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
 
-function Pipeline({stages,setStages,deals,setDeals,companies,contacts,products,notes,setNotes,contracts,setContracts,setSelectedDealId,canWrite,currentUser,stageHistory,setStageHistory}){
+function Pipeline({stages,setStages,deals,setDeals,companies,contacts,products,notes,setNotes,contracts,setContracts,setSelectedDealId,openDealAtTab,canWrite,currentUser,stageHistory,setStageHistory}){
   const [newStage,setNewStage] = useState('');
   const [selectedStage,setSelectedStage] = useState(null);
   const [editingStage,setEditingStage] = useState(null);
@@ -3221,6 +3230,8 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,products,n
     const nextDeal = {...deal,stage,probability:probabilityForStage(stage,deal.probability)};
     if(!validateRequiredDealFields(nextDeal,companies,contacts)) return;
     const stageChanged = deal.stage !== stage;
+    const shouldAskProposalLink = stageChanged && !normalizedLookup(deal.stage).includes('proposta') && normalizedLookup(stage).includes('proposta');
+    const shouldOpenProposalLink = shouldAskProposalLink && window.confirm('Cadastrar proposta para essa oportunidade?');
     if(stageChanged) setStageHistory(appendStageHistory(stageHistory,deal,deal.stage,stage,currentUser?.name));
     const nextDeals = deals.map(d => sameId(d.id,deal.id) ? nextDeal : d);
     setDeals(nextDeals);
@@ -3231,8 +3242,14 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,products,n
       if(stageChanged && deal.stage !== 'Ganho' && saved.stage === 'Ganho'){
         await ensureContractForWonDeal({deal:saved,contracts,setContracts,companies,deals:savedDeals});
       }
+      if(shouldOpenProposalLink){
+        openDealAtTab ? openDealAtTab(saved.id,'arquivos') : setSelectedDealId(saved.id);
+      }
     } catch (error) {
       console.warn('Falha ao atualizar etapa no Supabase:', error);
+      if(shouldOpenProposalLink){
+        openDealAtTab ? openDealAtTab(nextDeal.id,'arquivos') : setSelectedDealId(nextDeal.id);
+      }
       window.alert('Etapa alterada localmente. O Supabase não aceitou a atualização agora.');
     }
   };
@@ -3556,10 +3573,10 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
   </>;
 }
 
-function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,opportunityFiles=[],setOpportunityFiles,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,stageHistory=[],setStageHistory,lossReasons={},setLossReasons,lossReasonOptions=LOSS_REASONS,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName}){
+function DealDetailPage({deal,onBack,closeAfterSave=false,initialTab='historico',currentUser,canWrite,companies=[],contacts=[],deals=[],setDeals,activities=[],setActivities,notes=[],setNotes,interactions=[],setInteractions,opportunityFiles=[],setOpportunityFiles,contracts=[],setContracts,products=INITIAL_PRODUCTS,stages=STAGES,stageHistory=[],setStageHistory,lossReasons={},setLossReasons,lossReasonOptions=LOSS_REASONS,setSelectedCompanyId,setSelectedContactId,setSelectedActivityId,setSelectedProductName}){
   const initialContact = byId(contacts, deal.contactId);
   const inferredCompany = companyForDeal(deal, companies, contacts);
-  const [tab,setTab] = useState('historico');
+  const [tab,setTab] = useState(initialTab);
   const [draft,setDraft] = useState({contractMonths:12,setup:0,...deal,companyId:inferredCompany?.id || deal.companyId,probability:probabilityForStage(deal.stage,deal.probability),lossReason:lossReasons?.[deal.id] || ''});
   const [note,setNote] = useState('');
   const [activity,setActivity] = useState({type:'Follow-up',title:'',dueDate:today(),dueTime:'',meetingLink:'',owner:deal.owner || currentUser?.name || 'Sergio Paulo',status:'Pendente',notes:''});
