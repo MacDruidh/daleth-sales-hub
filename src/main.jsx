@@ -3113,7 +3113,7 @@ function MiniMetric({icon:Icon,label,value,onClick,active=false}){
 function Panel({title,children}){ return <section className="panel"><h2>{title}</h2>{children}</section>; }
 function DashboardTable({headers,children}){ return <div className="tableWrap dashboardTable"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
 
-function Pipeline({stages,setStages,deals,setDeals,companies,contacts,products,notes,setNotes,contracts,setContracts,setSelectedDealId,openDealAtTab,canWrite,currentUser,stageHistory,setStageHistory}){
+function Pipeline({stages,setStages,deals,setDeals,companies,contacts,products,notes,setNotes,contracts,setContracts,setSelectedDealId,openDealAtTab,canWrite,currentUser,stageHistory,setStageHistory,lossReasons={},setLossReasons,lossReasonOptions=LOSS_REASONS,setLossReasonOptions}){
   const [newStage,setNewStage] = useState('');
   const [selectedStage,setSelectedStage] = useState(null);
   const [editingStage,setEditingStage] = useState(null);
@@ -3225,11 +3225,30 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,products,n
     setStages([...stages, name]);
     setNewStage('');
   };
+  const saveLossReason = (dealId, reason) => {
+    if(!reason) return;
+    setLossReasons?.({...lossReasons,[dealId]:reason});
+    if(!safeArray(lossReasonOptions).some(option=>normalizedLookup(option) === normalizedLookup(reason))){
+      setLossReasonOptions?.([...safeArray(lossReasonOptions), reason]);
+    }
+  };
   const move = async (deal, stage) => {
     if(!canWrite) return;
     const nextDeal = {...deal,stage,probability:probabilityForStage(stage,deal.probability)};
     if(!validateRequiredDealFields(nextDeal,companies,contacts)) return;
     const stageChanged = deal.stage !== stage;
+    const shouldAskLossReason = stageChanged && normalizedLookup(stage) === 'perdido';
+    let lossReason = lossReasons?.[deal.id] || '';
+    if(shouldAskLossReason){
+      const optionsText = safeArray(lossReasonOptions).length ? `\n\nSugestões: ${safeArray(lossReasonOptions).join(', ')}` : '';
+      const enteredReason = window.prompt(`Informe o motivo da perda desta oportunidade.${optionsText}`, lossReason);
+      if(enteredReason === null) return;
+      lossReason = String(enteredReason || '').trim();
+      if(!lossReason){
+        window.alert('Informe o motivo da perda para mover a oportunidade para Perdido.');
+        return;
+      }
+    }
     const shouldAskProposalLink = stageChanged && !normalizedLookup(deal.stage).includes('proposta') && normalizedLookup(stage).includes('proposta');
     const shouldOpenProposalLink = shouldAskProposalLink && window.confirm('Cadastrar proposta para essa oportunidade?');
     if(stageChanged) setStageHistory(appendStageHistory(stageHistory,deal,deal.stage,stage,currentUser?.name));
@@ -3242,11 +3261,13 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,products,n
       if(stageChanged && deal.stage !== 'Ganho' && saved.stage === 'Ganho'){
         await ensureContractForWonDeal({deal:saved,contracts,setContracts,companies,deals:savedDeals});
       }
+      if(shouldAskLossReason) saveLossReason(saved.id, lossReason);
       if(shouldOpenProposalLink){
         openDealAtTab ? openDealAtTab(saved.id,'arquivos') : setSelectedDealId(saved.id);
       }
     } catch (error) {
       console.warn('Falha ao atualizar etapa no Supabase:', error);
+      if(shouldAskLossReason) saveLossReason(nextDeal.id, lossReason);
       if(shouldOpenProposalLink){
         openDealAtTab ? openDealAtTab(nextDeal.id,'arquivos') : setSelectedDealId(nextDeal.id);
       }
