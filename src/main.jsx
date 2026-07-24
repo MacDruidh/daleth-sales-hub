@@ -931,7 +931,8 @@ async function saveContractToSupabase(contract, companies, deals){
   }
 
   if(error) throw error;
-  return mapContractFromDb(data, companies, deals);
+  const mapped = mapContractFromDb(data, companies, deals);
+  return {...mapped, documentUrl: mapped.documentUrl || contract.documentUrl || ''};
 }
 
 function contractFromWonDeal(deal, companies=[]){
@@ -3576,6 +3577,7 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,c
   const relationship = relationshipStatusForDeal(deal, interactions, activities);
   const priorityScore = opportunityPriorityScore({deal:draft,companies,contacts,activities,interactions});
   const dealFiles = safeArray(opportunityFiles).filter(file=>sameId(file.dealId,deal.id)).sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
+  const linkedContract = safeArray(contracts).find(contract=>sameId(contract.dealId,deal.id));
 
   const timeline = [
     ...dealInteractions.map(i => ({
@@ -3824,7 +3826,7 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,currentUser,canWrite,c
 <label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label>
 <label><span>Fechamento previsto</span><input value={formatDate(draft.closeDate)} readOnly/></label>
 <label><span>Responsável</span><input value={draft.owner || ''} readOnly/></label>
-</div></Panel>}
+</div>{linkedContract && <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginTop:'14px'}}><button className="mini" type="button" disabled><CheckCircle2 size={15}/>Contrato vinculado</button>{linkedContract.documentUrl ? <a className="mini" style={{textDecoration:'none'}} href={dropboxHref(linkedContract.documentUrl)} target="_blank" rel="noreferrer"><ExternalLink size={15}/>Abrir contrato</a> : <span className="muted" style={{alignSelf:'center'}}>Contrato sem link vinculado.</span>}</div>}</Panel>}
 
     {tab==='matriz' && <Panel title="Matriz de soluções"><SolutionSuggestions deal={draft} companies={companies} contacts={contacts}/></Panel>}
   </>;
@@ -4376,7 +4378,7 @@ function Contracts({contracts,setContracts,deals,companies,products,query,canWri
   const calculatedEndDate = addMonths(form.startDate, Number(form.contractMonths || 12));
   const list = contracts.filter(c => {
     const company = byId(companies,c.companyId);
-    return ((company?.name||'') + c.product + c.owner + c.status + c.notes).toLowerCase().includes(query.toLowerCase());
+    return ((company?.name||'') + c.product + c.owner + c.status + c.notes + c.documentUrl).toLowerCase().includes(query.toLowerCase());
   });
   const active = contracts.filter(c=>contractStatus(c)==='Ativo');
   const totalMrr = active.reduce((s,c)=>s+contractMrr(c),0);
@@ -4535,7 +4537,7 @@ function ContractModal({contract,onClose,contracts,setContracts,companies,deals,
 
     try {
       const saved = await saveContractToSupabase(nextDraft, companies, deals);
-      setContracts(contracts.map(c=>sameId(c.id, contract.id) ? saved : c));
+      setContracts(contracts.map(c=>sameId(c.id, contract.id) ? {...saved,documentUrl:saved.documentUrl || nextDraft.documentUrl || ''} : c));
       onClose();
     } catch (error) {
       console.warn('Falha ao atualizar contrato no Supabase:', error);
