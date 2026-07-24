@@ -3654,6 +3654,28 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,initialTab='historico'
   const latest = timeline[0];
   const latestNext = timeline.find(t=>t.nextAction);
 
+  const renameDeal = async () => {
+    if(!canWrite) return;
+    const nextTitle = window.prompt('Novo nome da oportunidade:', draft.title || deal.title || '');
+    if(nextTitle === null) return;
+    const cleanTitle = String(nextTitle || '').trim();
+    if(!cleanTitle){
+      window.alert('Informe o nome da oportunidade.');
+      return;
+    }
+    const nextDeal = normalizeDealProductsForSave({...draft,title:cleanTitle});
+    try {
+      const saved = await saveDealToSupabase(nextDeal, companies, contacts);
+      setDeals(deals.map(d=>sameId(d.id,deal.id) ? saved : d));
+      setDraft({...saved,lossReason:draft.lossReason || ''});
+    } catch (error) {
+      console.warn('Falha ao renomear oportunidade no Supabase:', error);
+      setDeals(deals.map(d=>sameId(d.id,deal.id) ? nextDeal : d));
+      setDraft(nextDeal);
+      window.alert('Nome alterado localmente. O Supabase não aceitou a atualização agora.');
+    }
+  };
+
   const save = async () => {
     if(!canWrite) return;
     const rawDeal = {
@@ -3796,7 +3818,10 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,initialTab='historico'
       <div style={{display:'flex',justifyContent:'space-between',gap:'16px',alignItems:'flex-start',flexWrap:'wrap'}}>
         <div>
           <button className="mini" onClick={onBack} style={{marginBottom:'14px'}}><X size={15}/>Voltar</button>
-          <h2 style={{fontSize:'28px',margin:'0 0 8px'}}>{deal.title}</h2>
+          <div style={{display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap',margin:'0 0 8px'}}>
+            <h2 style={{fontSize:'28px',margin:0}}>{draft.title || deal.title}</h2>
+            {canWrite && <button className="mini" onClick={renameDeal}><Edit3 size={15}/>Editar nome</button>}
+          </div>
           <p className="muted" style={{margin:0,display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center'}}>
             <button className="mini" onClick={()=>openLinkedEntity(setSelectedCompanyId, company?.id)} disabled={!company}>{company?.name || 'Sem empresa'}</button>
             {contact?.name && <button className="mini" onClick={()=>openLinkedEntity(setSelectedContactId, deal.contactId)}>{contact.name}</button>}
