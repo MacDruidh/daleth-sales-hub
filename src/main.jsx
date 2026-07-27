@@ -1633,11 +1633,13 @@ function LoginScreen({onLogin}){
       setMessage('Enviamos um link de redefinição para este e-mail.');
     } catch (err) {
       console.warn('Falha ao enviar redefinição de senha:', err);
-      const errorMessage = String(err?.message || '').toLowerCase();
+      const rawMessage = String(err?.message || err?.error_description || err?.name || 'sem detalhe retornado');
+      const errorMessage = rawMessage.toLowerCase();
+      const errorDetail = [rawMessage, err?.status ? `status ${err.status}` : '', err?.code ? `codigo ${err.code}` : ''].filter(Boolean).join(' · ');
       if(errorMessage.includes('redirect') || errorMessage.includes('not allowed') || errorMessage.includes('url')){
         setError('O Supabase recusou o link de redefinição. Confira se https://crm.daleth.com.br está liberado em Authentication > URL Configuration.');
       } else {
-        setError('Não foi possível enviar o link de redefinição agora.');
+        setError(`Não foi possível enviar o link de redefinição agora. Detalhe Supabase: ${errorDetail}.`);
       }
     } finally {
       setResetLoading(false);
