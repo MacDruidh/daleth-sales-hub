@@ -1444,6 +1444,29 @@ function withTimeout(promise, ms, message){
   ]);
 }
 
+function appPublicOrigin(){
+  const configured = String(import.meta.env.VITE_APP_URL || '').trim();
+  if(configured) return configured.replace(/\/$/,'');
+  if(typeof window === 'undefined') return 'https://crm.daleth.com.br';
+  if(['localhost','127.0.0.1'].includes(window.location.hostname)) return window.location.origin;
+  return window.location.origin || 'https://crm.daleth.com.br';
+}
+
+function passwordResetRedirectUrl(){
+  return `${appPublicOrigin()}/?auth=recovery`;
+}
+
+function isPasswordRecoveryUrl(){
+  if(typeof window === 'undefined') return false;
+  const url = new URL(window.location.href);
+  return url.searchParams.get('auth') === 'recovery' || window.location.href.includes('type=recovery');
+}
+
+function cleanAuthUrl(){
+  if(typeof window === 'undefined') return;
+  window.history.replaceState({},document.title,window.location.origin + window.location.pathname);
+}
+
 async function loadUserProfile(authUser){
   if(!authUser?.id) return null;
 
@@ -1600,7 +1623,7 @@ function LoginScreen({onLogin}){
     try {
       const { error: resetError } = await withTimeout(
         supabase.auth.resetPasswordForEmail(cleanEmail, {
-          redirectTo: window.location.origin
+          redirectTo: passwordResetRedirectUrl()
         }),
         10000,
         'Tempo excedido ao enviar redefinição.'
@@ -1746,6 +1769,89 @@ function LoginScreen({onLogin}){
       <p style={{display:'flex',alignItems:'center',gap:'14px',fontSize:'15px',color:'#64748b',margin:0}}>
         <Lock size={19} /> Acesso protegido pelo Supabase Auth.
       </p>
+    </section>
+  </div>;
+}
+
+function ResetPasswordScreen({session,onComplete}){
+  const [password,setPassword] = useState('');
+  const [confirmPassword,setConfirmPassword] = useState('');
+  const [loading,setLoading] = useState(false);
+  const [error,setError] = useState('');
+  const [message,setMessage] = useState('');
+
+  const saveNewPassword = async (event) => {
+    event?.preventDefault?.();
+    setError('');
+    setMessage('');
+
+    if(password.length < 6){
+      setError('A nova senha precisa ter pelo menos 6 caracteres.');
+      return;
+    }
+    if(password !== confirmPassword){
+      setError('A confirmação da senha não confere.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { data, error: updateError } = await withTimeout(
+        supabase.auth.updateUser({ password }),
+        10000,
+        'Tempo excedido ao atualizar senha.'
+      );
+      if(updateError) throw updateError;
+      setMessage('Senha redefinida com sucesso.');
+      cleanAuthUrl();
+      const authUser = data?.user || session?.user;
+      const profile = await loadUserProfile(authUser);
+      onComplete?.(profile);
+    } catch (err) {
+      console.warn('Falha ao redefinir senha:', err);
+      setError('Não foi possível redefinir a senha. Gere um novo link de recuperação e tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return <div className="app" style={{
+    minHeight:'100vh',
+    display:'grid',
+    placeItems:'center',
+    background:'linear-gradient(135deg,#f7fbff 0%,#edf6ff 52%,#f9fbff 100%)',
+    padding:'28px'
+  }}>
+    <section style={{
+      width:'min(720px,92vw)',
+      background:'#ffffff',
+      border:'1px solid #dbe7f3',
+      borderRadius:'26px',
+      boxShadow:'0 22px 70px rgba(3,32,64,.10)',
+      padding:'36px 42px'
+    }}>
+      <div style={{display:'flex',alignItems:'center',gap:'14px',marginBottom:'28px'}}>
+        <div style={{width:'42px',height:'42px',borderRadius:'11px',background:'#e6f8fd',display:'grid',placeItems:'center',flex:'0 0 auto',overflow:'hidden'}}>
+          <img src="/daleth-star.png" alt="Daleth AC" style={{width:'34px',height:'34px',objectFit:'contain'}} />
+        </div>
+        <strong style={{fontSize:'18px',color:'#00A0D1',letterSpacing:'-.02em'}}>Sales Hub</strong>
+      </div>
+      <h1 style={{margin:'0 0 10px',fontSize:'36px',lineHeight:1.05,letterSpacing:'-.04em',color:'#061b34',fontWeight:900}}>Redefinir senha</h1>
+      <p style={{margin:'0 0 24px',fontSize:'18px',color:'#65758a'}}>Informe uma nova senha para continuar acessando o CRM.</p>
+      <form onSubmit={saveNewPassword}>
+        <label style={{display:'block',marginBottom:'18px'}}>
+          <span style={{display:'block',fontWeight:900,fontSize:'15px',textTransform:'uppercase',letterSpacing:'.06em',color:'#061b34',marginBottom:'12px'}}>Nova senha</span>
+          <input value={password} onChange={e=>setPassword(e.target.value)} type="password" autoComplete="new-password" placeholder="Digite a nova senha" style={{width:'100%',height:'54px',border:'1px solid #cbd8e6',borderRadius:'12px',padding:'0 18px',fontSize:'18px',color:'#061b34',background:'#fff',outline:'none'}} />
+        </label>
+        <label style={{display:'block',marginBottom:'20px'}}>
+          <span style={{display:'block',fontWeight:900,fontSize:'15px',textTransform:'uppercase',letterSpacing:'.06em',color:'#061b34',marginBottom:'12px'}}>Confirmar senha</span>
+          <input value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} type="password" autoComplete="new-password" placeholder="Repita a nova senha" style={{width:'100%',height:'54px',border:'1px solid #cbd8e6',borderRadius:'12px',padding:'0 18px',fontSize:'18px',color:'#061b34',background:'#fff',outline:'none'}} />
+        </label>
+        {error && <p style={{margin:'0 0 18px',color:'#dc2626',fontWeight:800}}>{error}</p>}
+        {message && <p style={{margin:'0 0 18px',color:'#047857',fontWeight:800}}>{message}</p>}
+        <button className="saveBtn" type="submit" disabled={loading} style={{width:'100%',justifyContent:'center',minHeight:'58px',borderRadius:'14px',fontSize:'20px',fontWeight:900,background:'linear-gradient(135deg,#00A0D1 0%,#008bb8 100%)',boxShadow:'0 12px 24px rgba(0,160,209,.20)'}}>{loading ? 'Salvando...' : 'Salvar nova senha'}</button>
+      </form>
     </section>
   </div>;
 }
@@ -1990,6 +2096,7 @@ function App(){
   const [selectedProductName,setSelectedProductName] = useState(null);
   const [meetingReminder,setMeetingReminder] = useState(null);
   const [authReady,setAuthReady] = useState(false);
+  const [passwordRecoverySession,setPasswordRecoverySession] = useState(null);
   const mainRef = useRef(null);
 
   useEffect(() => {
@@ -2008,7 +2115,10 @@ function App(){
         const { data, error } = await supabase.auth.getSession();
         if(error) throw error;
         const authUser = data?.session?.user;
-        if(authUser){
+        if(authUser && isPasswordRecoveryUrl()){
+          setPasswordRecoverySession(data.session);
+          setCurrentUser(null);
+        } else if(authUser){
           const profile = await loadUserProfile(authUser);
           if(active) setCurrentUser(profile);
         } else if(active) {
@@ -2025,6 +2135,12 @@ function App(){
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if(!active) return;
+      if(event === 'PASSWORD_RECOVERY'){
+        setPasswordRecoverySession(session);
+        setCurrentUser(null);
+        setAuthReady(true);
+        return;
+      }
       if(session?.user){
         try {
           const profile = await loadUserProfile(session.user);
@@ -2095,6 +2211,7 @@ function App(){
   }, [authReady,currentUser,selectedDealId,page]);
 
   if(!authReady) return <div className="app" style={{minHeight:'100vh',display:'grid',placeItems:'center',background:'#f6f8fb',color:'#061b34',fontWeight:900}}>Carregando acesso...</div>;
+  if(passwordRecoverySession) return <ResetPasswordScreen session={passwordRecoverySession} onComplete={(profile)=>{ setPasswordRecoverySession(null); setCurrentUser(profile); }}/>;
   if(!currentUser) return <LoginScreen onLogin={setCurrentUser}/>;
   const selectedDeal = byId(deals, selectedDealId);
   const selectedCompany = byId(companies, selectedCompanyId);

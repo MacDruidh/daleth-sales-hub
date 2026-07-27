@@ -22,6 +22,7 @@ Crie um arquivo `.env.local` com:
 ```bash
 VITE_SUPABASE_URL=https://seu-projeto.supabase.co
 VITE_SUPABASE_ANON_KEY=sua-chave-anon-publica
+VITE_APP_URL=https://crm.daleth.com.br
 ```
 
 No Vercel, cadastre as mesmas variaveis em:
@@ -38,13 +39,22 @@ Antes de usar em producao:
 4. Ajuste os demais usuarios na tela `Perfis`.
 5. Importe os dados pela tela `Importacao`.
 
+### Redefinicao de senha
+
+Em `Authentication > URL Configuration`, configure:
+
+- Site URL: `https://crm.daleth.com.br`
+- Redirect URLs: `https://crm.daleth.com.br` e `https://crm.daleth.com.br/*`
+
+Para desenvolvimento local, tambem pode adicionar `http://localhost:5173/*`.
+
 ## Deploy
 
 Configuração esperada no Vercel:
 
 - Build Command: `npm run build`
 - Output Directory: `dist`
-- Variaveis: `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`
+- Variaveis: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` e `VITE_APP_URL`
 - Dominio: `crm.daleth.com.br`
 
 O arquivo `vercel.json` garante que recarregar qualquer rota do app continue abrindo o CRM.
