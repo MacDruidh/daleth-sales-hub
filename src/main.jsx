@@ -3374,6 +3374,7 @@ function WorkspacePanel({currentUser,canWrite,companies=[],deals=[],workspaceIte
   };
   const [form,setForm] = useState(emptyItem);
   const [editingId,setEditingId] = useState(null);
+  const [showForm,setShowForm] = useState(false);
   const [selectedView,setSelectedView] = useState('mine');
   const [selectedItemId,setSelectedItemId] = useState(null);
   const [comment,setComment] = useState('');
@@ -3412,6 +3413,12 @@ function WorkspacePanel({currentUser,canWrite,companies=[],deals=[],workspaceIte
   const resetForm = () => {
     setForm(emptyItem);
     setEditingId(null);
+    setShowForm(false);
+  };
+  const startNewItem = () => {
+    setForm(emptyItem);
+    setEditingId(null);
+    setShowForm(true);
   };
   const saveItem = () => {
     if(!canWrite) return;
@@ -3435,6 +3442,7 @@ function WorkspacePanel({currentUser,canWrite,companies=[],deals=[],workspaceIte
     setEditingId(item.id);
     setForm({...emptyItem,...item});
     setSelectedItemId(item.id);
+    setShowForm(true);
   };
   const updateItemStatus = (item,status) => {
     const nextItems = items.map(current=>sameId(current.id,item.id) ? {...current,status,updatedAt:new Date().toISOString()} : current);
@@ -3485,7 +3493,13 @@ function WorkspacePanel({currentUser,canWrite,companies=[],deals=[],workspaceIte
       <Kpi icon={AlertTriangle} label="Vencidas" value={overdueItems.length} active={selectedView==='overdue'} onClick={()=>setSelectedView('overdue')}/>
       <Kpi icon={CalendarDays} label="Hoje" value={todayItems.length} active={selectedView==='today'} onClick={()=>setSelectedView('today')}/>
     </div>
-    {canWrite && <Panel title={editingId ? 'Editar demanda' : 'Nova demanda interna'}>
+    {canWrite && !showForm && <Panel title="Nova demanda">
+      <div style={{display:'flex',justifyContent:'space-between',gap:'12px',alignItems:'center',flexWrap:'wrap'}}>
+        <p className="muted" style={{margin:0}}>Crie uma demanda quando houver tarefa, arquivo, reunião, link ou decisão para acompanhar no grupo.</p>
+        <button className="saveBtn" onClick={startNewItem}><Plus size={16}/>Nova demanda</button>
+      </div>
+    </Panel>}
+    {canWrite && showForm && <Panel title={editingId ? 'Editar demanda' : 'Nova demanda interna'}>
       <div className="formGrid modalGrid">
         <Input label="Título" field="title" form={form} setForm={setForm}/>
         <Select label="Categoria" field="category" form={form} setForm={setForm} options={WORKSPACE_CATEGORIES.map(item=>[item,item])}/>
@@ -3502,7 +3516,7 @@ function WorkspacePanel({currentUser,canWrite,companies=[],deals=[],workspaceIte
         <Textarea label="Descrição / contexto" field="description" form={form} setForm={setForm}/>
         <div style={{display:'flex',gap:'8px',alignItems:'end',flexWrap:'wrap'}}>
           <button className="saveBtn" onClick={saveItem}><Save size={16}/>{editingId ? 'Salvar demanda' : 'Criar demanda'}</button>
-          {editingId && <button className="mini" onClick={resetForm}><X size={15}/>Cancelar edição</button>}
+          <button className="mini" onClick={resetForm}><X size={15}/>{editingId ? 'Cancelar edição' : 'Cancelar'}</button>
         </div>
       </div>
     </Panel>}
