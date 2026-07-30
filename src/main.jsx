@@ -22,6 +22,9 @@ const INITIAL_COMPANY_SEGMENTS = ['Indústria','Varejo','Financeiro','Aviação'
 const INITIAL_PRODUCTS = ['SAC+','SAC 24h','Inside Sales','Help Desk','Back Office','Ouvidorias','Custom'];
 const LOSS_REASONS = ['Preço','Sem orçamento','Concorrência','Projeto adiado','Sem retorno','Escopo não aderente','Decisão interna','Outro'];
 const DOCUMENT_CATEGORIES = ['Proposta','Contrato','Briefing','Apresentação','Planilha','Escopo','Operacional','Financeiro','Outros'];
+const WORKSPACE_STATUSES = ['Pendente','Em andamento','Aguardando retorno','Concluída','Cancelada'];
+const WORKSPACE_PRIORITIES = ['Alta','Média','Baixa'];
+const WORKSPACE_CATEGORIES = ['Tarefa','Arquivo','Reunião','Mensagem','Comercial','Operacional','Financeiro','Outro'];
 const ACCESS_USERS = [
   { name: 'Sergio Paulo', role: 'CEO', canViewDashboard: true },
   { name: 'Katia', role: 'Comercial', canViewDashboard: false },
@@ -155,6 +158,44 @@ function useStore(key, initial){
   };
 
   return [value, save, updateLocalCache];
+}
+function useSharedStore(key, initial){
+  const [value, save, updateLocalCache] = useStore(key, initial);
+
+  useEffect(() => {
+    let cancelled = false;
+    let loading = false;
+
+    const refresh = async () => {
+      if(loading) return;
+      loading = true;
+      try {
+        const { data, error } = await supabase
+          .from('crm_state')
+          .select('data')
+          .eq('key', key)
+          .maybeSingle();
+
+        if(error) throw error;
+        const remoteValue = data?.data;
+        if(!cancelled && remoteValue !== undefined && remoteValue !== null){
+          updateLocalCache(remoteValue);
+        }
+      } catch (error) {
+        console.warn('Falha ao sincronizar estado compartilhado:', key, error);
+      } finally {
+        loading = false;
+      }
+    };
+
+    const interval = window.setInterval(refresh, CRM_AUTO_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [key]);
+
+  return [value, save];
 }
 function useProducts(){
   const [products, setProductsState] = useState(INITIAL_PRODUCTS);
@@ -2094,6 +2135,8 @@ function App(){
   const [stageHistory,setStageHistory] = useStore('dsh-v1-stage-history', []);
   const [lossReasons,setLossReasons] = useStore('dsh-v1-loss-reasons', {});
   const [lossReasonOptions,setLossReasonOptions] = useStore('dsh-v1-loss-reason-options', LOSS_REASONS);
+  const [workspaceItems,setWorkspaceItems] = useSharedStore('dsh-v1-workspace-items', []);
+  const [workspaceComments,setWorkspaceComments] = useSharedStore('dsh-v1-workspace-comments', []);
   const [selectedDealId,setSelectedDealId] = useState(null);
   const [selectedDealInitialTab,setSelectedDealInitialTab] = useState('historico');
   const [selectedCompanyId,setSelectedCompanyId] = useState(null);
@@ -2229,7 +2272,7 @@ function App(){
   const isCEO = currentUser?.role === 'CEO';
   const canWrite = ['CEO','Comercial'].includes(currentUser?.role);
   const allMenu = [
-    ['dashboard','Dashboard',LayoutDashboard], ['insights','Insights Daleth',Sparkles], ['funnel','Funil Comercial',TrendingUp], ['pending','Pendências',BellRing], ['quality','Qualidade do CRM',AlertTriangle], ['pipeline','Pipeline',KanbanSquare], ['registrations','Cadastros',Package], ['deals','Oportunidades',BriefcaseBusiness],
+    ['dashboard','Dashboard',LayoutDashboard], ['insights','Insights Daleth',Sparkles], ['funnel','Funil Comercial',TrendingUp], ['pending','Pendências',BellRing], ['workspace','Workspace',MessageSquare], ['quality','Qualidade do CRM',AlertTriangle], ['pipeline','Pipeline',KanbanSquare], ['registrations','Cadastros',Package], ['deals','Oportunidades',BriefcaseBusiness],
     ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['documents','Documentos',FolderOpen], ['imports','Importação',Filter], ['profiles','Perfis',Lock]
   ];
   const menu = allMenu.filter(([id]) => {
@@ -2258,7 +2301,7 @@ function App(){
     setSelectedDealId(null);
     setSelectedDealInitialTab('historico');
   };
-  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,contracts,setContracts,products,setProducts,companySegments,setCompanySegments,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,stageHistory,setStageHistory,lossReasons,setLossReasons,lossReasonOptions,setLossReasonOptions,setSelectedDealId,openDealAtTab,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
+  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,contracts,setContracts,products,setProducts,companySegments,setCompanySegments,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,stageHistory,setStageHistory,lossReasons,setLossReasons,lossReasonOptions,setLossReasonOptions,workspaceItems,setWorkspaceItems,workspaceComments,setWorkspaceComments,setSelectedDealId,openDealAtTab,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
   const clearSelectedRecords = () => {
     closeSelectedDeal();
     setSelectedCompanyId(null);
@@ -2296,7 +2339,7 @@ function App(){
     <main className="main" ref={mainRef}>
       <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={handleSearchChange} placeholder="Buscar empresas, contatos e oportunidades..."/></div><button className="notification" style={{cursor:'pointer',textAlign:'left'}} onClick={()=>navigate('pending')} title="Abrir painel de pendências"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></button><div className="notification topUserCard"><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><a className="mini topUtilityBtn" href="/Manual_do_Usuario_Daleth_Sales_Hub.pdf" target="_blank" rel="noreferrer" style={{textDecoration:'none'}}><FileText size={15}/>Manual</a><button className="mini topUtilityBtn" onClick={logout}><X size={15}/>Sair</button></div></header>
       {selectedDealAsPage ? <DealDetailPage key={`${selectedDeal.id}-${selectedDealInitialTab}`} deal={selectedDeal} initialTab={selectedDealInitialTab} {...context} onBack={closeSelectedDeal}/> : (query.trim() ? <GlobalSearch {...context} setQuery={setQuery}/> : <>
-        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='insights' && <InsightsDaleth {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='quality' && <CrmQuality {...context} selectedDeal={selectedDealInQuality ? selectedDeal : null}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='registrations' && <Registrations {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>}
+        {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='insights' && <InsightsDaleth {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='workspace' && <WorkspacePanel {...context}/>} {activePage==='quality' && <CrmQuality {...context} selectedDeal={selectedDealInQuality ? selectedDeal : null}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='registrations' && <Registrations {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>}
       </>)}
     </main>
     {selectedCompany && <CompanyModal company={selectedCompany} companies={companies} setCompanies={setCompanies} contacts={contacts} companySegments={companySegments} setCompanySegments={setCompanySegments} setSelectedContactId={setSelectedContactId} canWrite={canWrite} onClose={()=>setSelectedCompanyId(null)}/>}
@@ -3236,6 +3279,213 @@ function MiniMetric({icon:Icon,label,value,onClick,active=false}){
 }
 function Panel({title,children}){ return <section className="panel"><h2>{title}</h2>{children}</section>; }
 function DashboardTable({headers,children}){ return <div className="tableWrap dashboardTable"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
+
+function workspaceItemIsOpen(item){ return !['Concluída','Cancelada'].includes(String(item?.status || '')); }
+function workspaceLinksFor(item){
+  const links = [];
+  if(item?.meetingLink) links.push({label:'Reunião',url:item.meetingLink});
+  safeText(item?.links).split('\n').map(line=>line.trim()).filter(Boolean).forEach((line,index)=>{
+    const match = line.match(/(https?:\/\/[^\s]+|www\.[^\s]+)/i);
+    const url = match?.[1] || line;
+    const label = match ? line.replace(match[1],'').replace(/[:\-–—]+$/,'').trim() || `Link ${index + 1}` : `Link ${index + 1}`;
+    links.push({label,url});
+  });
+  return links;
+}
+function workspaceStatusTone(status){
+  if(status === 'Concluída') return 'good';
+  if(status === 'Cancelada') return 'none';
+  if(status === 'Aguardando retorno') return 'warn';
+  return 'danger';
+}
+function WorkspacePanel({currentUser,canWrite,companies=[],deals=[],workspaceItems=[],setWorkspaceItems,workspaceComments=[],setWorkspaceComments,setSelectedCompanyId,setSelectedDealId}){
+  const emptyItem = {
+    title:'',
+    description:'',
+    requestedBy:currentUser?.name || 'Daleth',
+    assignedTo:currentUser?.name || 'Sergio Paulo',
+    dueDate:today(),
+    dueTime:'',
+    category:'Tarefa',
+    priority:'Média',
+    status:'Pendente',
+    companyId:'',
+    dealId:'',
+    meetingLink:'',
+    links:''
+  };
+  const [form,setForm] = useState(emptyItem);
+  const [editingId,setEditingId] = useState(null);
+  const [selectedView,setSelectedView] = useState('mine');
+  const [selectedItemId,setSelectedItemId] = useState(null);
+  const [comment,setComment] = useState('');
+  const items = safeArray(workspaceItems);
+  const comments = safeArray(workspaceComments);
+  const currentName = currentUser?.name || '';
+  const selectedItem = byId(items,selectedItemId) || items[0] || null;
+  const itemComments = selectedItem ? comments.filter(entry=>sameId(entry.itemId,selectedItem.id)).sort((a,b)=>String(a.createdAt || '').localeCompare(String(b.createdAt || ''))) : [];
+  const openItems = items.filter(workspaceItemIsOpen);
+  const overdueItems = openItems.filter(item=>item.dueDate && item.dueDate < today());
+  const todayItems = openItems.filter(item=>dateOnlyFromCrmValue(item.dueDate) === today());
+  const mineItems = openItems.filter(item=>sameId(item.assignedTo,currentName));
+  const requestedItems = items.filter(item=>sameId(item.requestedBy,currentName));
+  const mentions = [
+    ...items.filter(item=>[item.title,item.description,item.links].some(value=>textMentionsUser(value,currentName))).map(item=>({item,date:item.updatedAt || item.createdAt || ''})),
+    ...comments.filter(entry=>textMentionsUser(entry.text,currentName)).map(entry=>({item:byId(items,entry.itemId),date:entry.createdAt || ''}))
+  ].filter(entry=>entry.item);
+  const viewItems = {
+    mine: mineItems,
+    requested: requestedItems,
+    overdue: overdueItems,
+    today: todayItems,
+    mentions: mentions.map(entry=>entry.item).filter((item,index,list)=>list.findIndex(candidate=>sameId(candidate.id,item.id)) === index),
+    all: items
+  }[selectedView] || mineItems;
+  const filteredItems = viewItems
+    .filter(item=>{
+      const haystack = `${item.title || ''} ${item.description || ''} ${item.category || ''} ${item.status || ''} ${item.priority || ''} ${item.requestedBy || ''} ${item.assignedTo || ''} ${item.links || ''} ${byId(companies,item.companyId)?.name || ''} ${byId(deals,item.dealId)?.title || ''}`.toLowerCase();
+      return haystack.includes('');
+    })
+    .sort((a,b)=>{
+      const openDelta = Number(workspaceItemIsOpen(b)) - Number(workspaceItemIsOpen(a));
+      if(openDelta) return openDelta;
+      return String(a.dueDate || '9999-12-31').localeCompare(String(b.dueDate || '9999-12-31')) || String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || ''));
+    });
+  const resetForm = () => {
+    setForm(emptyItem);
+    setEditingId(null);
+  };
+  const saveItem = () => {
+    if(!canWrite) return;
+    if(!form.title.trim()){
+      window.alert('Informe o título da demanda.');
+      return;
+    }
+    const timestamp = new Date().toISOString();
+    if(editingId){
+      const nextItems = items.map(item=>sameId(item.id,editingId) ? {...item,...form,updatedAt:timestamp} : item);
+      setWorkspaceItems(nextItems);
+      setSelectedItemId(editingId);
+    } else {
+      const nextItem = {...form,id:`workspace-${Date.now()}`,createdAt:timestamp,updatedAt:timestamp};
+      setWorkspaceItems([nextItem,...items]);
+      setSelectedItemId(nextItem.id);
+    }
+    resetForm();
+  };
+  const editItem = (item) => {
+    setEditingId(item.id);
+    setForm({...emptyItem,...item});
+    setSelectedItemId(item.id);
+  };
+  const updateItemStatus = (item,status) => {
+    const nextItems = items.map(current=>sameId(current.id,item.id) ? {...current,status,updatedAt:new Date().toISOString()} : current);
+    setWorkspaceItems(nextItems);
+    setSelectedItemId(item.id);
+  };
+  const removeItem = (item) => {
+    if(!canWrite || !window.confirm('Deseja excluir esta demanda do Workspace?')) return;
+    setWorkspaceItems(items.filter(current=>!sameId(current.id,item.id)));
+    setWorkspaceComments(comments.filter(entry=>!sameId(entry.itemId,item.id)));
+    if(sameId(selectedItemId,item.id)) setSelectedItemId(null);
+    if(sameId(editingId,item.id)) resetForm();
+  };
+  const addComment = () => {
+    const clean = comment.trim();
+    if(!clean || !selectedItem) return;
+    const nextComment = {id:`workspace-comment-${Date.now()}`,itemId:selectedItem.id,user:currentName || 'Daleth',text:clean,createdAt:new Date().toISOString()};
+    setWorkspaceComments([...comments,nextComment]);
+    setWorkspaceItems(items.map(item=>sameId(item.id,selectedItem.id) ? {...item,updatedAt:nextComment.createdAt} : item));
+    setComment('');
+  };
+  const filterOptions = [
+    ['mine','Para mim',mineItems.length],
+    ['requested','Demandadas por mim',requestedItems.length],
+    ['overdue','Vencidas',overdueItems.length],
+    ['today','Hoje',todayItems.length],
+    ['mentions','Menções',mentions.length],
+    ['all','Todas',items.length]
+  ];
+  const itemLinks = selectedItem ? workspaceLinksFor(selectedItem) : [];
+  return <div className="workspacePage">
+    <Panel title="Workspace Daleth">
+      <div className="cockpitHero">
+        <div>
+          <span className="uxEyebrow">Demandas internas + links + comentários</span>
+          <h2>Espaço comum de trabalho</h2>
+          <p className="muted">Centralize aqui o que hoje se perde no WhatsApp: tarefas, cobranças, arquivos, links, reuniões, recados e decisões do grupo.</p>
+        </div>
+        <div className={`cockpitStatus ${overdueItems.length ? 'attention' : 'clear'}`}>
+          <b>{overdueItems.length ? `${overdueItems.length} vencida(s)` : 'Sem vencidas'}</b>
+          <span>{mineItems.length} demanda(s) abertas para você</span>
+        </div>
+      </div>
+    </Panel>
+    <div className="cards">
+      <Kpi icon={UserRound} label="Para mim" value={mineItems.length} active={selectedView==='mine'} onClick={()=>setSelectedView('mine')}/>
+      <Kpi icon={MessageSquare} label="Demandadas por mim" value={requestedItems.length} active={selectedView==='requested'} onClick={()=>setSelectedView('requested')}/>
+      <Kpi icon={AlertTriangle} label="Vencidas" value={overdueItems.length} active={selectedView==='overdue'} onClick={()=>setSelectedView('overdue')}/>
+      <Kpi icon={CalendarDays} label="Hoje" value={todayItems.length} active={selectedView==='today'} onClick={()=>setSelectedView('today')}/>
+    </div>
+    {canWrite && <Panel title={editingId ? 'Editar demanda' : 'Nova demanda interna'}>
+      <div className="formGrid modalGrid">
+        <Input label="Título" field="title" form={form} setForm={setForm}/>
+        <Select label="Categoria" field="category" form={form} setForm={setForm} options={WORKSPACE_CATEGORIES.map(item=>[item,item])}/>
+        <Select label="Demandante" field="requestedBy" form={form} setForm={setForm} options={USERS.map(user=>[user,user])}/>
+        <Select label="Responsável" field="assignedTo" form={form} setForm={setForm} options={USERS.map(user=>[user,user])}/>
+        <Input label="Prazo" field="dueDate" form={form} setForm={setForm} type="date"/>
+        <Input label="Hora" field="dueTime" form={form} setForm={setForm} type="time"/>
+        <Select label="Prioridade" field="priority" form={form} setForm={setForm} options={WORKSPACE_PRIORITIES.map(item=>[item,item])}/>
+        <Select label="Status" field="status" form={form} setForm={setForm} options={WORKSPACE_STATUSES.map(item=>[item,item])}/>
+        <Select label="Empresa vinculada" field="companyId" form={form} setForm={setForm} options={[['','Sem empresa'],...safeArray(companies).map(company=>[company.id,company.name])]}/>
+        <Select label="Oportunidade vinculada" field="dealId" form={form} setForm={setForm} options={[['','Sem oportunidade'],...safeArray(deals).map(deal=>[deal.id,deal.title])]}/>
+        <Input label="Link da reunião" field="meetingLink" form={form} setForm={setForm} type="url"/>
+        <Textarea label="Links e arquivos" field="links" form={form} setForm={setForm} mentions={false}/>
+        <Textarea label="Descrição / contexto" field="description" form={form} setForm={setForm}/>
+        <div style={{display:'flex',gap:'8px',alignItems:'end',flexWrap:'wrap'}}>
+          <button className="saveBtn" onClick={saveItem}><Save size={16}/>{editingId ? 'Salvar demanda' : 'Criar demanda'}</button>
+          {editingId && <button className="mini" onClick={resetForm}><X size={15}/>Cancelar edição</button>}
+        </div>
+      </div>
+    </Panel>}
+    <Panel title={`Demandas (${viewItems.length})`}>
+      <div className="toolbar" style={{marginBottom:'12px'}}>
+        {filterOptions.map(([id,label,count])=><button key={id} className={selectedView===id ? 'saveBtn' : 'mini'} onClick={()=>setSelectedView(id)}>{label} ({count})</button>)}
+      </div>
+      <DashboardTable headers={['Demanda','Prazo','Status','Responsável','Vínculos','Links','Ações']}>
+        {filteredItems.length ? filteredItems.map(item=>{
+          const company = byId(companies,item.companyId);
+          const deal = byId(deals,item.dealId);
+          const links = workspaceLinksFor(item);
+          return <tr key={item.id} onClick={()=>setSelectedItemId(item.id)} style={{cursor:'pointer'}}><td><b>{item.title}</b><span>{item.category} · {item.priority} · por {item.requestedBy || '-'}</span></td><td>{item.dueDate ? `${formatDate(item.dueDate)}${item.dueTime ? ` ${item.dueTime}` : ''}` : '-'}</td><td><span className={`scorePill ${workspaceStatusTone(item.status)}`}>{item.status || 'Pendente'}</span></td><td>{item.assignedTo || '-'}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>{company ? <button className="mini" onClick={event=>{event.stopPropagation();setSelectedCompanyId?.(company.id)}}>{company.name}</button> : '-'}{deal && <button className="mini" onClick={event=>{event.stopPropagation();setSelectedDealId?.(deal.id)}}>{deal.title}</button>}</div></td><td>{links.length ? <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>{links.slice(0,2).map((link,index)=><a key={`${link.url}-${index}`} className="mini" style={{textDecoration:'none'}} href={dropboxHref(link.url)} target="_blank" rel="noreferrer" onClick={event=>event.stopPropagation()}><ExternalLink size={15}/>{link.label}</a>)}</div> : '-'}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={event=>{event.stopPropagation();setSelectedItemId(item.id)}}><MessageSquare size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={event=>{event.stopPropagation();editItem(item)}}><Edit3 size={15}/>Editar</button>}{canWrite && workspaceItemIsOpen(item) && <button className="mini" onClick={event=>{event.stopPropagation();updateItemStatus(item,'Concluída')}}><CheckCircle2 size={15}/>Concluir</button>}{canWrite && <button className="mini" onClick={event=>{event.stopPropagation();removeItem(item)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>;
+        }) : <tr><td>Nenhuma demanda nesta visão</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+      </DashboardTable>
+    </Panel>
+    {selectedItem && <Panel title={`Conversa: ${selectedItem.title}`}>
+      <div className="grid2">
+        <div>
+          <div className="timelineItem">
+            <b>{selectedItem.title}</b>
+            <span>{selectedItem.category} · {selectedItem.status} · {selectedItem.priority}</span>
+            {selectedItem.description && <p>{selectedItem.description}</p>}
+          </div>
+          {itemLinks.length ? <div className="toolbar" style={{margin:'12px 0'}}>
+            {itemLinks.map((link,index)=><a key={`${link.url}-${index}`} className="mini" style={{textDecoration:'none'}} href={dropboxHref(link.url)} target="_blank" rel="noreferrer"><ExternalLink size={15}/>{link.label}</a>)}
+          </div> : <p className="muted">Nenhum link anexado nesta demanda.</p>}
+        </div>
+        <div>
+          <div className="noteBox">
+            <MentionTextInput value={comment} onChange={setComment} multiline bare placeholder="Escreva uma mensagem ou mencione @Paulo, @Katia..."/>
+            <button onClick={addComment}><MessageSquare size={16}/>Enviar comentário</button>
+          </div>
+          <div className="timeline">
+            {itemComments.length ? itemComments.map(entry=><div className="timelineItem" key={entry.id}><b>{entry.user || 'Daleth'}</b><span>{formatDateTime(entry.createdAt)}</span><p>{entry.text}</p></div>) : <div className="timelineItem"><b>Sem comentários ainda</b><span>Use este espaço para substituir o fio solto do WhatsApp.</span></div>}
+          </div>
+        </div>
+      </div>
+    </Panel>}
+  </div>;
+}
 
 function Pipeline({stages,setStages,deals,setDeals,companies,contacts,products,notes,setNotes,contracts,setContracts,setSelectedDealId,openDealAtTab,canWrite,currentUser,stageHistory,setStageHistory,lossReasons={},setLossReasons,lossReasonOptions=LOSS_REASONS,setLossReasonOptions}){
   const [newStage,setNewStage] = useState('');
