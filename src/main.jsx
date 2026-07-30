@@ -1308,6 +1308,57 @@ function mentionsForUser({currentUser,deals=[],activities=[],notes=[],interactio
   });
   return items.sort((a,b)=>String(b.date || '').localeCompare(String(a.date || '')));
 }
+function workspaceItemIsOpen(item){ return !['Concluída','Cancelada'].includes(String(item?.status || '')); }
+function workspaceLinksFor(item){
+  const links = [];
+  if(item?.meetingLink) links.push({label:'Reunião',url:item.meetingLink});
+  safeText(item?.links).split('\n').map(line=>line.trim()).filter(Boolean).forEach((line,index)=>{
+    const match = line.match(/(https?:\/\/[^\s]+|www\.[^\s]+)/i);
+    const url = match?.[1] || line;
+    const label = match ? line.replace(match[1],'').replace(/[:\-–—]+$/,'').trim() || `Link ${index + 1}` : `Link ${index + 1}`;
+    links.push({label,url});
+  });
+  return links;
+}
+function workspaceStatusTone(status){
+  if(status === 'Concluída') return 'good';
+  if(status === 'Cancelada') return 'none';
+  if(status === 'Aguardando retorno') return 'warn';
+  return 'danger';
+}
+function workspaceMentionsForUser({currentUser,workspaceItems=[],workspaceComments=[]}){
+  const user = currentUser?.name;
+  if(!user) return [];
+  const items = [];
+  safeArray(workspaceItems).forEach(item=>{
+    if([item.title,item.description,item.links].some(value=>textMentionsUser(value,user))){
+      items.push({
+        id:`workspace-${item.id}`,
+        type:'Workspace',
+        title:item.title || 'Demanda interna',
+        item,
+        workspaceItemId:item.id,
+        date:item.updatedAt || item.createdAt || item.dueDate || '',
+        text:mentionTextPreview(item.description,item.links,item.title)
+      });
+    }
+  });
+  safeArray(workspaceComments).forEach(comment=>{
+    if(textMentionsUser(comment.text,user)){
+      const item = byId(workspaceItems,comment.itemId);
+      if(item) items.push({
+        id:`workspace-comment-${comment.id}`,
+        type:'Comentário Workspace',
+        title:item.title || 'Demanda interna',
+        item,
+        workspaceItemId:item.id,
+        date:comment.createdAt || item.updatedAt || '',
+        text:mentionTextPreview(comment.text)
+      });
+    }
+  });
+  return items.sort((a,b)=>String(b.date || '').localeCompare(String(a.date || '')));
+}
 function openLinkedEntity(setter, id){ if(setter && id) setter(id); }
 function sameId(a,b){ return String(a ?? '') === String(b ?? ''); }
 function byId(list,id){
@@ -2285,14 +2336,17 @@ function App(){
   const selectedDealAsPage = selectedDeal && !selectedDealInQuality;
   const pendingActivities = activities.filter(a => a.status !== 'Concluída');
   const overdueCount = pendingActivities.filter(a => a.dueDate && a.dueDate < today()).length;
+  const openWorkspaceItems = safeArray(workspaceItems).filter(workspaceItemIsOpen);
+  const overdueWorkspaceCount = openWorkspaceItems.filter(item => item.dueDate && item.dueDate < today()).length;
+  const workspaceTodayCount = openWorkspaceItems.filter(item => dateOnlyFromCrmValue(item.dueDate) === today()).length;
   const meetingsTodayCount = safeArray(activities).filter(a => dateOnlyFromCrmValue(a.dueDate) === today() && isMeetingActivity(a)).length;
   const proposalsWithoutFollowup = deals.filter(d =>
     d.stage === 'Proposta Enviada' &&
     !pendingActivities.some(a => sameId(a.dealId, d.id) && a.dueDate && a.dueDate >= today())
   ).length;
-  const mentionCount = mentionsForUser({currentUser,deals,activities,notes,interactions}).length;
-  const alertTotal = overdueCount + meetingsTodayCount + proposalsWithoutFollowup + mentionCount;
-  const alertText = `${overdueCount} atividades vencidas · ${proposalsWithoutFollowup} propostas sem follow-up · ${meetingsTodayCount} reuniões hoje · ${mentionCount} menções`;
+  const mentionCount = mentionsForUser({currentUser,deals,activities,notes,interactions}).length + workspaceMentionsForUser({currentUser,workspaceItems,workspaceComments}).length;
+  const alertTotal = overdueCount + overdueWorkspaceCount + meetingsTodayCount + workspaceTodayCount + proposalsWithoutFollowup + mentionCount;
+  const alertText = `${overdueCount + overdueWorkspaceCount} vencidas · ${proposalsWithoutFollowup} propostas sem follow-up · ${meetingsTodayCount} reuniões hoje · ${workspaceTodayCount} workspace hoje · ${mentionCount} menções`;
   const openDealAtTab = (dealId, tab='historico') => {
     setSelectedDealInitialTab(tab);
     setSelectedDealId(dealId);
@@ -2301,7 +2355,7 @@ function App(){
     setSelectedDealId(null);
     setSelectedDealInitialTab('historico');
   };
-  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,contracts,setContracts,products,setProducts,companySegments,setCompanySegments,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,stageHistory,setStageHistory,lossReasons,setLossReasons,lossReasonOptions,setLossReasonOptions,workspaceItems,setWorkspaceItems,workspaceComments,setWorkspaceComments,setSelectedDealId,openDealAtTab,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
+  const context = { currentUser, canWrite, companies,setCompanies,contacts,setContacts,deals,setDeals,activities,setActivities,notes,setNotes,interactions,setInteractions,opportunityFiles,setOpportunityFiles,contracts,setContracts,products,setProducts,companySegments,setCompanySegments,pipedriveImportMeta,setPipedriveImportMeta,stages,setStages,stageHistory,setStageHistory,lossReasons,setLossReasons,lossReasonOptions,setLossReasonOptions,workspaceItems,setWorkspaceItems,workspaceComments,setWorkspaceComments,setPage,setSelectedDealId,openDealAtTab,setSelectedCompanyId,setSelectedContactId,setSelectedContractId,setSelectedActivityId,setSelectedProductName,query };
   const clearSelectedRecords = () => {
     closeSelectedDeal();
     setSelectedCompanyId(null);
@@ -3072,25 +3126,33 @@ function FunnelAnalytics({stages=STAGES,deals=[],companies=[],contacts=[],stageH
   </>;
 }
 
-function PendingPanel({currentUser,companies=[],contacts=[],deals=[],activities=[],notes=[],interactions=[],contracts=[],setSelectedDealId,setSelectedActivityId,setSelectedContractId}){
+function PendingPanel({currentUser,companies=[],contacts=[],deals=[],activities=[],notes=[],interactions=[],contracts=[],workspaceItems=[],workspaceComments=[],setSelectedDealId,setSelectedActivityId,setSelectedContractId,setPage}){
   const [selectedCockpit,setSelectedCockpit] = useState('recommended');
   const currentDate = today();
   const pendingActivities = safeArray(activities).filter(activity=>activity.status !== 'Concluída');
   const overdueActivities = pendingActivities.filter(activity=>activity.dueDate && activity.dueDate < currentDate).sort((a,b)=>(String(a.dueDate || '') + String(a.dueTime || '')).localeCompare(String(b.dueDate || '') + String(b.dueTime || '')));
+  const openWorkspaceItems = safeArray(workspaceItems).filter(workspaceItemIsOpen);
+  const overdueWorkspaceItems = openWorkspaceItems.filter(item=>item.dueDate && item.dueDate < currentDate).sort((a,b)=>(String(a.dueDate || '') + String(a.dueTime || '')).localeCompare(String(b.dueDate || '') + String(b.dueTime || '')));
   const meetingsToday = safeArray(activities).filter(activity=>dateOnlyFromCrmValue(activity.dueDate) === currentDate && isMeetingActivity(activity)).sort((a,b)=>String(a.dueTime || '').localeCompare(String(b.dueTime || '')));
   const todayAgenda = pendingActivities
     .filter(activity=>dateOnlyFromCrmValue(activity.dueDate) === currentDate)
     .sort((a,b)=>String(a.dueTime || '').localeCompare(String(b.dueTime || '')));
+  const todayWorkspaceItems = openWorkspaceItems
+    .filter(item=>dateOnlyFromCrmValue(item.dueDate) === currentDate)
+    .sort((a,b)=>String(a.dueTime || '').localeCompare(String(b.dueTime || '')));
   const proposalsWithoutFollowup = safeArray(deals).filter(deal=>deal.stage === 'Proposta Enviada' && !pendingActivities.some(activity=>sameId(activity.dealId,deal.id) && activity.dueDate && activity.dueDate >= currentDate));
   const dealsWithoutNextStep = safeArray(deals).filter(deal=>!['Ganho','Perdido'].includes(deal.stage) && !String(deal.nextStep || '').trim());
   const expiringContracts = safeArray(contracts).map(contract=>({contract,days:daysUntil(contract.endDate)})).filter(({contract,days})=>contractStatus(contract) === 'Ativo' && days !== null && days >= 0 && days <= 90).sort((a,b)=>a.days-b.days);
-  const userMentions = mentionsForUser({currentUser,deals,activities,notes,interactions});
+  const userMentions = [
+    ...mentionsForUser({currentUser,deals,activities,notes,interactions}),
+    ...workspaceMentionsForUser({currentUser,workspaceItems,workspaceComments})
+  ].sort((a,b)=>String(b.date || '').localeCompare(String(a.date || '')));
   const scoreRows = safeArray(deals)
     .filter(deal=>!['Ganho','Perdido'].includes(deal.stage))
     .map(deal=>({deal,...opportunityPriorityScore({deal,companies,contacts,activities,interactions,currentDate})}))
     .sort((a,b)=>b.score-a.score || dealMrr(b.deal)-dealMrr(a.deal));
   const recommendedDeals = scoreRows.filter(item=>item.score >= 55).slice(0,10);
-  const totalPendingItems = overdueActivities.length + meetingsToday.length + proposalsWithoutFollowup.length + dealsWithoutNextStep.length + expiringContracts.length + userMentions.length + recommendedDeals.length;
+  const totalPendingItems = overdueActivities.length + overdueWorkspaceItems.length + meetingsToday.length + todayWorkspaceItems.length + proposalsWithoutFollowup.length + dealsWithoutNextStep.length + expiringContracts.length + userMentions.length + recommendedDeals.length;
   const dealForActivity = activity => byId(deals,activity.dealId);
   const addDaysKey = (dateString, days) => {
     const date = new Date(`${dateString}T12:00:00`);
@@ -3103,8 +3165,8 @@ function PendingPanel({currentUser,companies=[],contacts=[],deals=[],activities=
     .sort((a,b)=>String(a.closeDate || '').localeCompare(String(b.closeDate || '')) || dealMrr(b)-dealMrr(a));
   const cockpitOptions = [
     {id:'recommended',icon:TrendingUp,label:'Ações recomendadas',value:recommendedDeals.length},
-    {id:'agenda',icon:CalendarDays,label:'Agenda de hoje',value:todayAgenda.length},
-    {id:'overdue',icon:AlertTriangle,label:'Atividades vencidas',value:overdueActivities.length},
+    {id:'agenda',icon:CalendarDays,label:'Agenda de hoje',value:todayAgenda.length + todayWorkspaceItems.length},
+    {id:'overdue',icon:AlertTriangle,label:'Vencidas',value:overdueActivities.length + overdueWorkspaceItems.length},
     {id:'proposals',icon:BriefcaseBusiness,label:'Propostas sem follow-up',value:proposalsWithoutFollowup.length},
     {id:'mentions',icon:MessageSquare,label:'Menções para mim',value:userMentions.length},
     {id:'closing',icon:CheckCircle2,label:'Fechamentos em 7 dias',value:closeThisWeek.length}
@@ -3112,20 +3174,27 @@ function PendingPanel({currentUser,companies=[],contacts=[],deals=[],activities=
   const openDeal = (dealId) => setSelectedDealId?.(dealId);
   const openActivity = (activityId) => setSelectedActivityId?.(activityId);
   const openContract = (contractId) => setSelectedContractId?.(contractId);
+  const openWorkspace = () => setPage?.('workspace');
   const renderDealScoreRows = (items, emptyText='Nenhuma ação recomendada agora') => items.length ? items.map(item=><tr key={item.deal.id} onClick={()=>openDeal(item.deal.id)} style={{cursor:'pointer'}}><td><b>{item.deal.title}</b><span>{companyForDeal(item.deal,companies,contacts)?.name || '-'}</span></td><td><span className={`scorePill ${item.tone}`}>{item.score}/100 · {item.label}</span></td><td>{item.nextAction}<span>{item.reasons.slice(0,3).join(' · ')}</span></td><td>{moneyShort(dealMrr(item.deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();openDeal(item.deal.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>{emptyText}</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>;
   const selectedPanelTitle = cockpitOptions.find(option=>option.id === selectedCockpit)?.label || 'Ações recomendadas';
   const renderSelectedPanel = () => {
-    if(selectedCockpit === 'agenda') return <DashboardTable headers={['Atividade','Oportunidade','Horário','Link','Responsável','Ações']}>
-      {todayAgenda.length ? todayAgenda.map(activity=>{const deal=dealForActivity(activity);return <tr key={activity.id} onClick={()=>openActivity(activity.id)} style={{cursor:'pointer'}}><td><b>{activity.title}</b><span>{activity.type}</span></td><td>{deal?.title || '-'}</td><td>{formatActivityDateTime(activity)}</td><td>{activity.meetingLink ? <a href={dropboxHref(activity.meetingLink)} target="_blank" rel="noreferrer" onClick={event=>event.stopPropagation()}>Abrir chamada</a> : '-'}</td><td>{activity.owner || '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();openActivity(activity.id)}}><Edit3 size={15}/>Abrir</button></td></tr>}) : <tr><td>Nenhuma atividade pendente para hoje</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+    if(selectedCockpit === 'agenda') return <DashboardTable headers={['Item','Origem','Horário','Link','Responsável','Ações']}>
+      {todayAgenda.length || todayWorkspaceItems.length ? <>
+        {todayAgenda.map(activity=>{const deal=dealForActivity(activity);return <tr key={`activity-${activity.id}`} onClick={()=>openActivity(activity.id)} style={{cursor:'pointer'}}><td><b>{activity.title}</b><span>{activity.type}</span></td><td>{deal?.title || 'Atividade'}</td><td>{formatActivityDateTime(activity)}</td><td>{activity.meetingLink ? <a href={dropboxHref(activity.meetingLink)} target="_blank" rel="noreferrer" onClick={event=>event.stopPropagation()}>Abrir chamada</a> : '-'}</td><td>{activity.owner || '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();openActivity(activity.id)}}><Edit3 size={15}/>Abrir</button></td></tr>})}
+        {todayWorkspaceItems.map(item=><tr key={`workspace-${item.id}`} onClick={openWorkspace} style={{cursor:'pointer'}}><td><b>{item.title}</b><span>{item.category || 'Workspace'}</span></td><td>Workspace</td><td>{item.dueDate ? `${formatDate(item.dueDate)}${item.dueTime ? ` ${item.dueTime}` : ''}` : '-'}</td><td>{workspaceLinksFor(item).length ? workspaceLinksFor(item).slice(0,1).map((link,index)=><a key={`${link.url}-${index}`} href={dropboxHref(link.url)} target="_blank" rel="noreferrer" onClick={event=>event.stopPropagation()}>Abrir link</a>) : '-'}</td><td>{item.assignedTo || '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();openWorkspace();}}><MessageSquare size={15}/>Workspace</button></td></tr>)}
+      </> : <tr><td>Nenhuma atividade ou demanda pendente para hoje</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
     </DashboardTable>;
-    if(selectedCockpit === 'overdue') return <DashboardTable headers={['Atividade','Oportunidade','Vencimento','Responsável','Ações']}>
-      {overdueActivities.length ? overdueActivities.map(activity=>{const deal=dealForActivity(activity);return <tr key={activity.id} onClick={()=>openActivity(activity.id)} style={{cursor:'pointer'}}><td><b>{activity.title}</b><span>{activity.type}</span></td><td>{deal?.title || '-'}</td><td><b style={{color:'#dc2626'}}>{formatActivityDateTime(activity)}</b></td><td>{activity.owner || '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();openActivity(activity.id)}}><Edit3 size={15}/>Resolver</button></td></tr>}) : <tr><td>Nenhuma atividade vencida</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+    if(selectedCockpit === 'overdue') return <DashboardTable headers={['Item','Origem','Vencimento','Responsável','Ações']}>
+      {overdueActivities.length || overdueWorkspaceItems.length ? <>
+        {overdueActivities.map(activity=>{const deal=dealForActivity(activity);return <tr key={`activity-${activity.id}`} onClick={()=>openActivity(activity.id)} style={{cursor:'pointer'}}><td><b>{activity.title}</b><span>{activity.type}</span></td><td>{deal?.title || 'Atividade'}</td><td><b style={{color:'#dc2626'}}>{formatActivityDateTime(activity)}</b></td><td>{activity.owner || '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();openActivity(activity.id)}}><Edit3 size={15}/>Resolver</button></td></tr>})}
+        {overdueWorkspaceItems.map(item=><tr key={`workspace-${item.id}`} onClick={openWorkspace} style={{cursor:'pointer'}}><td><b>{item.title}</b><span>{item.category || 'Workspace'}</span></td><td>Workspace</td><td><b style={{color:'#dc2626'}}>{item.dueDate ? `${formatDate(item.dueDate)}${item.dueTime ? ` ${item.dueTime}` : ''}` : '-'}</b></td><td>{item.assignedTo || '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation();openWorkspace();}}><MessageSquare size={15}/>Workspace</button></td></tr>)}
+      </> : <tr><td>Nenhum item vencido</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
     </DashboardTable>;
     if(selectedCockpit === 'proposals') return <DashboardTable headers={['Oportunidade','Empresa','Responsável','Receita mensal','Ações']}>
       {proposalsWithoutFollowup.length ? proposalsWithoutFollowup.map(deal=><tr key={deal.id} onClick={()=>openDeal(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b><span>{deal.closeDate ? `Previsão: ${formatDate(deal.closeDate)}` : 'Sem previsão'}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{deal.owner || '-'}</td><td>{moneyShort(dealMrr(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();openDeal(deal.id)}}><Edit3 size={15}/>Criar follow-up</button></td></tr>) : <tr><td>Nenhuma proposta sem follow-up</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
     </DashboardTable>;
-    if(selectedCockpit === 'mentions') return <DashboardTable headers={['Origem','Oportunidade','Trecho','Data','Ações']}>
-      {userMentions.length ? userMentions.slice(0,12).map(item=><tr key={item.id} onClick={()=>item.activityId ? openActivity(item.activityId) : openDeal(item.dealId)} style={{cursor:'pointer'}}><td><b>{item.title}</b><span>{item.type}</span></td><td>{item.deal?.title || '-'}</td><td>{item.text}</td><td>{item.date ? formatDateTime(item.date) : '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation(); item.activityId ? openActivity(item.activityId) : openDeal(item.dealId)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma menção encontrada</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+    if(selectedCockpit === 'mentions') return <DashboardTable headers={['Origem','Referência','Trecho','Data','Ações']}>
+      {userMentions.length ? userMentions.slice(0,12).map(item=><tr key={item.id} onClick={()=>item.workspaceItemId ? openWorkspace() : item.activityId ? openActivity(item.activityId) : openDeal(item.dealId)} style={{cursor:'pointer'}}><td><b>{item.title}</b><span>{item.type}</span></td><td>{item.deal?.title || (item.workspaceItemId ? 'Workspace' : '-')}</td><td>{item.text}</td><td>{item.date ? formatDateTime(item.date) : '-'}</td><td><button className="mini" onClick={event=>{event.stopPropagation(); item.workspaceItemId ? openWorkspace() : item.activityId ? openActivity(item.activityId) : openDeal(item.dealId)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma menção encontrada</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
     </DashboardTable>;
     if(selectedCockpit === 'closing') return <DashboardTable headers={['Oportunidade','Empresa','Previsão','Receita mensal','Ações']}>
       {closeThisWeek.length ? closeThisWeek.map(deal=><tr key={deal.id} onClick={()=>openDeal(deal.id)} style={{cursor:'pointer'}}><td><b>{deal.title}</b><span>{deal.stage || '-'}</span></td><td>{companyForDeal(deal,companies,contacts)?.name || '-'}</td><td>{formatDate(deal.closeDate)}</td><td>{moneyShort(dealMrr(deal))}</td><td><button className="mini" onClick={event=>{event.stopPropagation();openDeal(deal.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhum fechamento previsto em 7 dias</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
@@ -3153,13 +3222,20 @@ function PendingPanel({currentUser,companies=[],contacts=[],deals=[],activities=
       {renderSelectedPanel()}
     </Panel>
     <section className="grid2 compact">
-      <Panel title={`Agenda de hoje (${todayAgenda.length})`}>
+      <Panel title={`Agenda de hoje (${todayAgenda.length + todayWorkspaceItems.length})`}>
         <div className="cockpitAgenda">
-          {todayAgenda.length ? todayAgenda.map(activity=>{const deal=dealForActivity(activity);return <div className="cockpitAgendaItem" role="button" tabIndex={0} key={activity.id} onClick={()=>openActivity(activity.id)} onKeyDown={event=>{if(event.key === 'Enter' || event.key === ' ') openActivity(activity.id)}}>
+          {todayAgenda.length || todayWorkspaceItems.length ? <>
+          {todayAgenda.map(activity=>{const deal=dealForActivity(activity);return <div className="cockpitAgendaItem" role="button" tabIndex={0} key={`activity-${activity.id}`} onClick={()=>openActivity(activity.id)} onKeyDown={event=>{if(event.key === 'Enter' || event.key === ' ') openActivity(activity.id)}}>
             <strong>{activity.dueTime ? String(activity.dueTime).slice(0,5) : 'Dia'}</strong>
             <span><b>{activity.title}</b>{deal?.title || 'Sem oportunidade'}</span>
-            {activity.meetingLink && <a href={activity.meetingLink} target="_blank" rel="noreferrer" onClick={event=>event.stopPropagation()}>Abrir chamada</a>}
-          </div>}) : <p className="muted" style={{margin:0}}>Nenhuma atividade pendente para hoje.</p>}
+            {activity.meetingLink && <a href={dropboxHref(activity.meetingLink)} target="_blank" rel="noreferrer" onClick={event=>event.stopPropagation()}>Abrir chamada</a>}
+          </div>})}
+          {todayWorkspaceItems.map(item=><div className="cockpitAgendaItem" role="button" tabIndex={0} key={`workspace-${item.id}`} onClick={openWorkspace} onKeyDown={event=>{if(event.key === 'Enter' || event.key === ' ') openWorkspace();}}>
+            <strong>{item.dueTime ? String(item.dueTime).slice(0,5) : 'Dia'}</strong>
+            <span><b>{item.title}</b>Workspace · {item.assignedTo || 'Sem responsável'}</span>
+            {workspaceLinksFor(item)[0] && <a href={dropboxHref(workspaceLinksFor(item)[0].url)} target="_blank" rel="noreferrer" onClick={event=>event.stopPropagation()}>Abrir link</a>}
+          </div>)}
+          </> : <p className="muted" style={{margin:0}}>Nenhuma atividade ou demanda pendente para hoje.</p>}
         </div>
       </Panel>
       <Panel title={`Score automático: maiores prioridades (${scoreRows.length})`}>
@@ -3280,24 +3356,6 @@ function MiniMetric({icon:Icon,label,value,onClick,active=false}){
 function Panel({title,children}){ return <section className="panel"><h2>{title}</h2>{children}</section>; }
 function DashboardTable({headers,children}){ return <div className="tableWrap dashboardTable"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
 
-function workspaceItemIsOpen(item){ return !['Concluída','Cancelada'].includes(String(item?.status || '')); }
-function workspaceLinksFor(item){
-  const links = [];
-  if(item?.meetingLink) links.push({label:'Reunião',url:item.meetingLink});
-  safeText(item?.links).split('\n').map(line=>line.trim()).filter(Boolean).forEach((line,index)=>{
-    const match = line.match(/(https?:\/\/[^\s]+|www\.[^\s]+)/i);
-    const url = match?.[1] || line;
-    const label = match ? line.replace(match[1],'').replace(/[:\-–—]+$/,'').trim() || `Link ${index + 1}` : `Link ${index + 1}`;
-    links.push({label,url});
-  });
-  return links;
-}
-function workspaceStatusTone(status){
-  if(status === 'Concluída') return 'good';
-  if(status === 'Cancelada') return 'none';
-  if(status === 'Aguardando retorno') return 'warn';
-  return 'danger';
-}
 function WorkspacePanel({currentUser,canWrite,companies=[],deals=[],workspaceItems=[],setWorkspaceItems,workspaceComments=[],setWorkspaceComments,setSelectedCompanyId,setSelectedDealId}){
   const emptyItem = {
     title:'',
