@@ -3375,7 +3375,7 @@ function WorkspacePanel({currentUser,canWrite,companies=[],deals=[],workspaceIte
   const [form,setForm] = useState(emptyItem);
   const [editingId,setEditingId] = useState(null);
   const [showForm,setShowForm] = useState(false);
-  const [selectedView,setSelectedView] = useState('mine');
+  const [selectedView,setSelectedView] = useState('all');
   const [selectedItemId,setSelectedItemId] = useState(null);
   const [comment,setComment] = useState('');
   const items = safeArray(workspaceItems);
@@ -3435,6 +3435,7 @@ function WorkspacePanel({currentUser,canWrite,companies=[],deals=[],workspaceIte
       const nextItem = {...form,id:`workspace-${Date.now()}`,createdAt:timestamp,updatedAt:timestamp};
       setWorkspaceItems([nextItem,...items]);
       setSelectedItemId(nextItem.id);
+      setSelectedView('all');
     }
     resetForm();
   };
