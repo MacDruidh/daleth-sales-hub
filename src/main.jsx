@@ -506,6 +506,7 @@ function mapDealFromDb(d){
   return {
     id: d.legacy_id || d.id,
     supabaseId: d.id,
+    createdAt: d.created_at || '',
     companyId: d.companies?.legacy_id || d.company_id,
     contactId: d.contacts?.legacy_id || d.contact_id || '',
     title: d.title || '',
@@ -548,6 +549,7 @@ function dealToDb(deal, companies, contacts){
 
 const DEAL_SELECT = `
   id,
+  created_at,
   company_id,
   contact_id,
   title,
@@ -1166,6 +1168,12 @@ function latestRelationshipTouchForDeal(deal, interactions=[], activities=[]){
 }
 function relationshipSortDateForDeal(deal, interactions=[], activities=[]){
   return latestRelationshipTouchForDeal(deal, interactions, activities)?.date || '';
+}
+function dealCreationSortValue(deal){
+  if(deal?.createdAt || deal?.created_at) return String(deal.createdAt || deal.created_at);
+  const numericId = Number(deal?.id);
+  if(Number.isFinite(numericId)) return String(numericId).padStart(20,'0');
+  return String(deal?.id || '');
 }
 function interactionAgeText(days){
   if(days === 0) return 'hoje';
@@ -3651,7 +3659,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,products,n
       cancelCreateDeal();
     } catch (error) {
       console.warn('Falha ao salvar oportunidade no Supabase:', error);
-      const localDeal = {...nextDeal,id:Date.now()};
+      const localDeal = {...nextDeal,id:Date.now(),createdAt:new Date().toISOString()};
       setDeals([localDeal,...deals]);
       setStageHistory(appendStageHistory(stageHistory,localDeal,'',localDeal.stage,currentUser?.name));
       if(setNotes) setNotes([{...creationNoteFor(localDeal),id:Date.now()+1},...safeArray(notes)]);
@@ -3900,8 +3908,8 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
     const matchesCloseBefore = !filters.closeBeforeMonth || (d.closeDate && d.closeDate < `${filters.closeBeforeMonth}-01`);
     return matchesQuery && matchesCompany && matchesProduct && matchesStage && matchesOwner && matchesCloseBefore;
   }).sort((a,b)=>{
-    const dateA = relationshipSortDateForDeal(a, interactions, activities);
-    const dateB = relationshipSortDateForDeal(b, interactions, activities);
+    const dateA = dealCreationSortValue(a);
+    const dateB = dealCreationSortValue(b);
     if(dateA || dateB) return String(dateB || '').localeCompare(String(dateA || ''));
     return String(a.title || '').localeCompare(String(b.title || ''),'pt-BR',{sensitivity:'base'});
   });
@@ -3956,7 +3964,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
       setFormBase(empty);
     } catch (error) {
       console.warn('Falha ao salvar oportunidade no Supabase:', error);
-      const localDeal = {...nextDeal,id:Date.now()};
+      const localDeal = {...nextDeal,id:Date.now(),createdAt:new Date().toISOString()};
       setDeals([localDeal,...deals]);
       setStageHistory(appendStageHistory(stageHistory,localDeal,'',localDeal.stage,currentUser?.name));
       setNotes([{...creationNoteFor(localDeal),id:Date.now()+1},...safeArray(notes)]);
