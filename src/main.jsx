@@ -2527,15 +2527,23 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
   const weightedMrr = open.reduce((s,d)=>s + dealWeightedMrr(d),0);
   const wonMrr = won.reduce((s,d)=>s + dealMrr(d),0);
   const wonTcv = won.reduce((s,d)=>s + dealTcv(d),0);
-  const thisMonth = today().slice(0,7);
+  const forecastStart = new Date(`${today()}T00:00:00`);
+  const next30 = new Date(forecastStart);
+  next30.setDate(next30.getDate()+30);
   const next90 = new Date();
+  next90.setHours(0,0,0,0);
   next90.setDate(next90.getDate()+90);
-  const forecast30 = open.reduce((s,d)=>s + (d.closeDate?.startsWith(thisMonth) ? dealWeightedMrr(d) : 0),0);
-  const forecast90 = open.reduce((s,d)=>{
-    if(!d.closeDate) return s;
-    const date = new Date(d.closeDate + 'T00:00:00');
-    return date <= next90 ? s + dealWeightedMrr(d) : s;
-  },0);
+  const forecastDealsUntil = (endDate) => open
+    .filter(d=>{
+      if(!d.closeDate) return false;
+      const date = new Date(`${String(d.closeDate).slice(0,10)}T00:00:00`);
+      return !Number.isNaN(date.getTime()) && date >= forecastStart && date <= endDate;
+    })
+    .sort((a,b)=>String(a.closeDate).localeCompare(String(b.closeDate)));
+  const forecast30Deals = forecastDealsUntil(next30);
+  const forecast90Deals = forecastDealsUntil(next90);
+  const forecast30 = forecast30Deals.reduce((s,d)=>s+dealWeightedMrr(d),0);
+  const forecast90 = forecast90Deals.reduce((s,d)=>s+dealWeightedMrr(d),0);
 
   const stageRows = safeArray(stages).map(stage => {
     const stageDeals = open.filter(d=>d.stage===stage);
@@ -2646,8 +2654,8 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
       }}>
         <h2 style={{margin:'0 0 16px',fontSize:'20px',color:'#061b34'}}>Resumo operacional</h2>
         <div className="dashboardSummaryGrid" style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'12px'}}>
-          <MiniMetric icon={Clock3} label="Previsão 30 dias" value={moneyShort(forecast30)} />
-          <MiniMetric icon={CalendarDays} label="Previsão 90 dias" value={moneyShort(forecast90)} />
+          <MiniMetric icon={Clock3} label="Previsão 30 dias" value={moneyShort(forecast30)} onClick={()=>setSelectedSummary(selectedSummary === "forecast30" ? null : "forecast30")} active={selectedSummary === "forecast30"} />
+          <MiniMetric icon={CalendarDays} label="Previsão 90 dias" value={moneyShort(forecast90)} onClick={()=>setSelectedSummary(selectedSummary === "forecast90" ? null : "forecast90")} active={selectedSummary === "forecast90"} />
           <MiniMetric icon={AlertTriangle} label="Receita em risco" value={moneyShort(revenueAtRisk90)} />
           <MiniMetric icon={BriefcaseBusiness} label="Atividades pendentes" value={pending.length} onClick={()=>setSelectedSummary(selectedSummary === "pending" ? null : "pending")} active={selectedSummary === "pending"} />
           <MiniMetric icon={CheckCircle2} label="Contratos ativos" value={activeContracts.length} onClick={()=>setSelectedSummary(selectedSummary === "activeContracts" ? null : "activeContracts")} active={selectedSummary === "activeContracts"} />
@@ -2656,7 +2664,10 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
       </div>
     </section>
 
-    {selectedSummary && <Panel title={selectedSummary === 'pending' ? 'Atividades pendentes' : selectedSummary === 'activeContracts' ? 'Contratos ativos' : 'Contratos vencendo em 90 dias'}>
+    {selectedSummary && <Panel title={selectedSummary === 'forecast30' ? 'Oportunidades previstas para os próximos 30 dias' : selectedSummary === 'forecast90' ? 'Oportunidades previstas para os próximos 90 dias' : selectedSummary === 'pending' ? 'Atividades pendentes' : selectedSummary === 'activeContracts' ? 'Contratos ativos' : 'Contratos vencendo em 90 dias'}>
+      {(selectedSummary === 'forecast30' || selectedSummary === 'forecast90') && <DashboardTable headers={['Oportunidade','Empresa','Etapa','Fechamento','Probabilidade','Receita mensal','Previsão ponderada','Ações']}>
+        {(selectedSummary === 'forecast30' ? forecast30Deals : forecast90Deals).length ? (selectedSummary === 'forecast30' ? forecast30Deals : forecast90Deals).map(d=><tr key={d.id} onClick={()=>setSelectedDealId?.(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep || '-'}</span></td><td>{companyForDeal(d,companies,contacts)?.name || '-'}</td><td>{d.stage || '-'}</td><td>{formatDate(d.closeDate)}</td><td>{Number(d.probability || 0)}%</td><td>{moneyShort(dealMrr(d))}</td><td><b>{moneyShort(dealWeightedMrr(d))}</b></td><td><button className="mini" onClick={(e)=>{e.stopPropagation();setSelectedDealId?.(d.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade prevista neste período</td><td>-</td><td>-</td><td>-</td><td>-</td><td>{moneyShort(0)}</td><td>{moneyShort(0)}</td><td>-</td></tr>}
+      </DashboardTable>}
       {selectedSummary === 'pending' && <DashboardTable headers={['Atividade','Oportunidade','Data e hora','Link','Responsável','Ações']}>
         {pending.length ? pending.slice().sort((a,b)=>(String(a.dueDate || '') + String(a.dueTime || '')).localeCompare(String(b.dueDate || '') + String(b.dueTime || ''))).slice(0,12).map(a=>{
           const deal = byId(deals,a.dealId);
@@ -3343,7 +3354,7 @@ function CrmQuality({companies=[],contacts=[],deals=[],selectedDeal,setSelectedD
 
 function Kpi({icon:Icon,label,value,onClick,active=false}){ return <div className={`kpi ${onClick ? 'clickable' : ''} ${active ? 'active' : ''}`} onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined} onKeyDown={event=>{if(onClick && (event.key === 'Enter' || event.key === ' ')) onClick();}}><Icon size={24}/><span>{label}</span><strong>{value}</strong></div>; }
 function MiniMetric({icon:Icon,label,value,onClick,active=false}){
-  return <div onClick={onClick} title={onClick ? 'Clique para abrir' : undefined} style={{
+  return <div onClick={onClick} title={onClick ? 'Clique para abrir' : undefined} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined} onKeyDown={event=>{if(onClick && (event.key === 'Enter' || event.key === ' ')){event.preventDefault();onClick();}}} style={{
     border: active ? '1px solid #00A0D1' : '1px solid #edf2f7',
     background: active ? 'linear-gradient(180deg,#eef7ff 0%,#ffffff 100%)' : 'linear-gradient(180deg,#ffffff 0%,#f8fbff 100%)',
     borderRadius:'18px',
