@@ -2047,6 +2047,13 @@ function UXStyle(){
     .dealHealthDot.warn{background:#d99714!important;box-shadow:0 0 0 3px rgba(217,151,20,.18)!important;}
     .dealHealthDot.danger{background:#c94141!important;box-shadow:0 0 0 3px rgba(201,65,65,.16)!important;}
     .dealHealthDot.none{background:#94a3b8!important;}
+    .nextActivityList{display:grid!important;gap:6px!important;min-width:180px!important;}
+    .nextActivityItem{display:grid!important;gap:2px!important;width:100%!important;border:0!important;background:transparent!important;padding:0!important;text-align:left!important;color:var(--ux-text)!important;cursor:pointer!important;}
+    .nextActivityItem:hover b{color:var(--ux-blue)!important;}
+    .nextActivityItem b{font-size:12px!important;line-height:1.25!important;}
+    .nextActivityItem span{font-size:11px!important;line-height:1.25!important;color:var(--ux-muted)!important;}
+    .nextActivityItem span.overdue{color:#c94141!important;font-weight:900!important;}
+    .nextActivityMore{font-size:11px!important;color:var(--ux-blue)!important;font-weight:900!important;}
     .relationshipPill{display:inline-flex!important;align-items:center!important;gap:8px!important;border-radius:999px!important;background:#f1f5f9!important;color:#475569!important;font-weight:800!important;padding:6px 10px!important;font-size:12px!important;}
     .relationshipPill.good{background:#e8f7f1!important;color:#147856!important;}
     .relationshipPill.warn{background:#fff5dc!important;color:#956000!important;}
@@ -3374,6 +3381,29 @@ function MiniMetric({icon:Icon,label,value,onClick,active=false}){
 }
 function Panel({title,children}){ return <section className="panel"><h2>{title}</h2>{children}</section>; }
 function DashboardTable({headers,children}){ return <div className="tableWrap dashboardTable"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
+function NextActivitiesCell({deal,activities=[],onOpen}){
+  const pending = safeArray(activities)
+    .filter(activity=>sameId(activity.dealId,deal?.id) && normalizedLookup(activity.status) !== 'concluida')
+    .sort((a,b)=>{
+      const keyA = `${a.dueDate || '9999-12-31'} ${String(a.dueTime || '23:59').slice(0,5)}`;
+      const keyB = `${b.dueDate || '9999-12-31'} ${String(b.dueTime || '23:59').slice(0,5)}`;
+      return keyA.localeCompare(keyB) || String(a.title || '').localeCompare(String(b.title || ''),'pt-BR');
+    });
+  if(!pending.length) return '-';
+  const visible = pending.slice(0,2);
+  const remaining = pending.length-visible.length;
+  return <div className="nextActivityList">
+    {visible.map(activity=>{
+      const overdue = Boolean(activity.dueDate && dateOnlyFromCrmValue(activity.dueDate) < today());
+      const dateText = activity.dueDate ? formatActivityDateTime(activity) : 'Sem data definida';
+      return <button type="button" className="nextActivityItem" key={activity.id} onClick={event=>{event.stopPropagation();onOpen?.(activity.id);}} title="Abrir atividade">
+        <b>{activity.type ? `${activity.type}: ` : ''}{activity.title || 'Atividade'}</b>
+        <span className={overdue ? 'overdue' : ''}>{overdue ? 'Vencida · ' : ''}{dateText}{activity.owner ? ` · ${activity.owner}` : ''}</span>
+      </button>;
+    })}
+    {remaining > 0 && <span className="nextActivityMore">+{remaining} {remaining === 1 ? 'outra atividade' : 'outras atividades'}</span>}
+  </div>;
+}
 
 function WorkspacePanel({currentUser,canWrite,companies=[],deals=[],workspaceItems=[],setWorkspaceItems,workspaceComments=[],setWorkspaceComments,setSelectedCompanyId,setSelectedDealId}){
   const emptyItem = {
@@ -3893,7 +3923,7 @@ function Pipeline({stages,setStages,deals,setDeals,companies,contacts,products,n
   </>;
 }
 
-function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,notes,setNotes,interactions=[],activities=[],setSelectedDealId,setSelectedProductName,query,canWrite,stageHistory,setStageHistory}){
+function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,notes,setNotes,interactions=[],activities=[],setSelectedDealId,setSelectedActivityId,setSelectedProductName,query,canWrite,stageHistory,setStageHistory}){
   const empty = { title:'', companyId:companies[0]?.id||'', contactId:'', product:'SAC+', product2:'', product3:'', products:['SAC+'], value:0, setup:0, contractMonths:12, stage:stages[0], owner:'Sergio Paulo', probability:probabilityForStage(stages[0],30), closeDate:'', description:'', nextStep:'', priority:'Média' };
   const [form,setFormBase] = useState(empty);
   const [filters,setFilters] = useState({ companyId:'', product:'', stage:'', owner:'', closeBeforeMonth:'' });
@@ -4055,7 +4085,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
         <span>{selectedDeals.length} selecionada(s)</span>
         <button className="mini" onClick={removeSelectedDeals} disabled={!selectedDeals.length}><Trash2 size={15}/>Excluir selecionadas</button>
       </div>}
-      <Table headers={['Sel.','Oportunidade','Score','Empresa','Produto','Receita mensal','Prazo','Contrato total','Etapa','Responsável','Ações']}>{list.map(d=>{ const linkedCompany = companyForDeal(d,companies,contacts); const relationship = relationshipStatusForDeal(d, interactions, activities); const score = opportunityPriorityScore({deal:d,companies,contacts,activities,interactions}); return <tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><input className="rowSelect" type="checkbox" checked={selectedDealIds.some(id=>sameId(id,d.id))} onChange={(e)=>{e.stopPropagation(); toggleDealSelection(d.id);}} onClick={e=>e.stopPropagation()} disabled={!canWrite}/></td><td><div className="dealHealthLine"><i className={`dealHealthDot ${relationship.tone}`} title={relationship.label}></i><b>{d.title}</b></div><span>{relationship.label}</span><span>{d.nextStep}</span></td><td><span className={`scorePill ${score.tone}`} title={score.reasons.join(' · ')}>{score.score}/100</span><span>{score.label}</span></td><td>{linkedCompany?.name || '-'}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>{dealProductValues(d).map(product=><button className="mini" key={product} onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(product)}}>{product}</button>)}</div></td><td><b>{money(dealMrr(d))}</b></td><td>{dealMonths(d)} meses</td><td>{money(dealTcv(d))}</td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>})}</Table>
+      <Table headers={['Sel.','Oportunidade','Score','Empresa','Produto','Receita mensal','Prazo','Próximas atividades','Etapa','Responsável','Ações']}>{list.map(d=>{ const linkedCompany = companyForDeal(d,companies,contacts); const relationship = relationshipStatusForDeal(d, interactions, activities); const score = opportunityPriorityScore({deal:d,companies,contacts,activities,interactions}); return <tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><input className="rowSelect" type="checkbox" checked={selectedDealIds.some(id=>sameId(id,d.id))} onChange={(e)=>{e.stopPropagation(); toggleDealSelection(d.id);}} onClick={e=>e.stopPropagation()} disabled={!canWrite}/></td><td><div className="dealHealthLine"><i className={`dealHealthDot ${relationship.tone}`} title={relationship.label}></i><b>{d.title}</b></div><span>{relationship.label}</span><span>{d.nextStep}</span></td><td><span className={`scorePill ${score.tone}`} title={score.reasons.join(' · ')}>{score.score}/100</span><span>{score.label}</span></td><td>{linkedCompany?.name || '-'}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>{dealProductValues(d).map(product=><button className="mini" key={product} onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(product)}}>{product}</button>)}</div></td><td><b>{money(dealMrr(d))}</b></td><td>{dealMonths(d)} meses</td><td><NextActivitiesCell deal={d} activities={activities} onOpen={setSelectedActivityId}/></td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>})}</Table>
     </Panel>
   </>;
 }
