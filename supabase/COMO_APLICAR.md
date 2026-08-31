@@ -56,3 +56,9 @@ Com o usuario CEO ou Comercial, use a tela:
 Importacao
 
 Ela envia empresas, contatos, oportunidades, atividades e notas para o Supabase usando `legacy_id`, evitando duplicidade em novas importacoes.
+
+## Auditoria exclusiva do Sergio
+
+Para ativar a trilha de alteracoes, execute separadamente `supabase/audit.sql`.
+Instrucoes, cobertura e limites em `supabase/AUDITORIA.md`. Nao reexecute o schema
+completo apenas para ativar essa funcionalidade.

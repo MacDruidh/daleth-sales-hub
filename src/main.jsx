@@ -4,6 +4,7 @@ import { LayoutDashboard, KanbanSquare, Building2, Users, BriefcaseBusiness, Cal
 import './style.css';
 import './calendar.css';
 import { supabase } from './lib/supabase';
+import AuditPanel, { useAuditAccess } from './components/AuditPanel';
 
 const STAGES = ['Lead Captado','Primeiro Contato','Levantamento','Reunião Agendada','Proposta Enviada','Negociação','Contrato','Ganho','Perdido'];
 const STAGE_PROBABILITIES = {
@@ -2186,6 +2187,7 @@ function App(){
   const [page,setPage] = useState('dashboard');
   const [query,setQuery] = useState('');
   const [currentUser,setCurrentUser] = useState(null);
+  const auditAccess = useAuditAccess(currentUser?.id);
   const [companies,setCompanies] = useCompanies();
   const [contacts,setContacts] = useContacts();
   const [deals,setDeals] = useDeals();
@@ -2339,14 +2341,15 @@ function App(){
   const canWrite = ['CEO','Comercial'].includes(currentUser?.role);
   const allMenu = [
     ['dashboard','Dashboard',LayoutDashboard], ['insights','Insights Daleth',Sparkles], ['funnel','Funil Comercial',TrendingUp], ['pending','Pendências',BellRing], ['workspace','Workspace',MessageSquare], ['quality','Qualidade do CRM',AlertTriangle], ['pipeline','Pipeline',KanbanSquare], ['registrations','Cadastros',Package], ['deals','Oportunidades',BriefcaseBusiness],
-    ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['documents','Documentos',FolderOpen], ['imports','Importação',Filter], ['profiles','Perfis',Lock]
+    ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['documents','Documentos',FolderOpen], ['imports','Importação',Filter], ['profiles','Perfis',Lock], ['audit','Auditoria',List]
   ];
   const menu = allMenu.filter(([id]) => {
     if(id === 'dashboard') return canViewDashboard;
+    if(id === 'audit') return auditAccess?.allowed === true;
     if(['imports','profiles'].includes(id)) return isCEO;
     return true;
   });
-  const activePage = (!canViewDashboard && page === 'dashboard') ? 'deals' : page;
+  const activePage = ((!canViewDashboard && page === 'dashboard') || (page === 'audit' && !auditAccess?.allowed)) ? 'deals' : page;
   const selectedDealInQuality = selectedDeal && activePage === 'quality';
   const selectedDealAsPage = selectedDeal && !selectedDealInQuality;
   const pendingActivities = activities.filter(a => a.status !== 'Concluída');
@@ -2408,6 +2411,7 @@ function App(){
     <main className="main" ref={mainRef}>
       <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={handleSearchChange} placeholder="Buscar empresas, contatos e oportunidades..."/></div><button className="notification" style={{cursor:'pointer',textAlign:'left'}} onClick={()=>navigate('pending')} title="Abrir painel de pendências"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></button><div className="notification topUserCard"><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><a className="mini topUtilityBtn" href="/Manual_do_Usuario_Daleth_Sales_Hub.pdf" target="_blank" rel="noreferrer" style={{textDecoration:'none'}}><FileText size={15}/>Manual</a><button className="mini topUtilityBtn" onClick={logout}><X size={15}/>Sair</button></div></header>
       {selectedDealAsPage ? <DealDetailPage key={`${selectedDeal.id}-${selectedDealInitialTab}`} deal={selectedDeal} initialTab={selectedDealInitialTab} {...context} onBack={closeSelectedDeal}/> : (query.trim() ? <GlobalSearch {...context} setQuery={setQuery}/> : <>
+        {activePage==='audit' && auditAccess?.allowed && <AuditPanel key={currentUser.id} access={auditAccess}/>}
         {activePage==='dashboard' && canViewDashboard && <Dashboard {...context}/>} {activePage==='insights' && <InsightsDaleth {...context}/>} {activePage==='funnel' && <FunnelAnalytics {...context}/>} {activePage==='pending' && <PendingPanel {...context}/>} {activePage==='workspace' && <WorkspacePanel {...context}/>} {activePage==='quality' && <CrmQuality {...context} selectedDeal={selectedDealInQuality ? selectedDeal : null}/>} {activePage==='pipeline' && <Pipeline {...context}/>} {activePage==='deals' && <Deals {...context}/>} {activePage==='contracts' && <Contracts {...context}/>} {activePage==='activities' && <Activities {...context}/>} {activePage==='documents' && <Documents {...context}/>} {activePage==='registrations' && <Registrations {...context}/>} {activePage==='imports' && isCEO && <PipedriveImport {...context}/>} {activePage==='profiles' && isCEO && <ProfilesAdmin {...context}/>}
       </>)}
     </main>
