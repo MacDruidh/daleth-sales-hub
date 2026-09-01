@@ -26,6 +26,12 @@ as ultimas acoes de todos os usuarios, inclusive Sergio. A lista possui 50 itens
 por pagina, sempre do mais recente para o mais antigo. **Atualizar** consulta
 novamente o servidor. Nao existe polling continuo desse historico.
 
+Cada linha guarda o nome do cliente identificado no momento da alteracao. O
+vinculo pode ser direto ou herdado da oportunidade/demanda. Modulos gerais, como
+perfis, produtos e configuracoes do pipeline, aparecem como **Sem cliente
+vinculado**. Ao reaplicar a migracao, registros antigos ainda sem esse dado sao
+enriquecidos quando o vinculo pode ser reconstruido com seguranca.
+
 **Ver alteracoes** mostra cada campo alterado, valor anterior e novo valor, o ID
 do usuario autenticado, o ID do registro e a transacao do banco. Em exclusoes, os
 valores anteriores permanecem disponiveis mesmo que o registro ja nao exista.

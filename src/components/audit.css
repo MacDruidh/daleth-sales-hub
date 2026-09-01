@@ -5,6 +5,7 @@
 .auditPage button:disabled { opacity: .5; cursor: not-allowed; }
 .auditError { color: #b42318; line-height: 1.5; }
 .auditLabel { min-width: 180px; max-width: 360px; overflow-wrap: anywhere; }
+.auditClient { min-width: 150px; max-width: 280px; overflow-wrap: anywhere; color: #061b34; }
 .auditAction { display: inline-block; border-radius: 20px; padding: 5px 10px; font-weight: 700; white-space: nowrap; }
 .auditAction-INSERT { background: #e7f7ed; color: #136c43; }
 .auditAction-UPDATE { background: #fff5d6; color: #805a00; }

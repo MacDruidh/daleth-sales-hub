@@ -90,7 +90,7 @@ export function auditError(error) {
 export function auditListQuery(client, filters, page = 0) {
   const { start, end } = auditDateBounds(filters.from, filters.to);
   let query = client.from('crm_audit_log').select(
-    'id,occurred_at,actor_id,actor_name,entity_type,entity_id,entity_label,action,source',
+    'id,occurred_at,actor_id,actor_name,entity_type,entity_id,entity_label,client_name,action,source',
     { count: 'exact' }
   ).order('occurred_at', { ascending: false }).order('id', { ascending: false });
   if (filters.actor === 'system') query = query.is('actor_id', null);

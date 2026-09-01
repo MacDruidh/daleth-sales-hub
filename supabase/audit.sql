@@ -33,11 +33,13 @@ create table if not exists public.crm_audit_log (
   entity_type text not null,
   entity_id text not null,
   entity_label text not null,
+  client_name text not null default 'Sem cliente vinculado',
   action text not null check (action in ('INSERT','UPDATE','DELETE')),
   changes jsonb not null,
   source text not null,
   transaction_id bigint not null default txid_current()
 );
+alter table public.crm_audit_log add column if not exists client_name text not null default 'Sem cliente vinculado';
 create index if not exists crm_audit_log_time_idx on public.crm_audit_log (occurred_at desc, id desc);
 create index if not exists crm_audit_log_actor_time_idx on public.crm_audit_log (actor_id, occurred_at desc, id desc);
 create index if not exists crm_audit_log_entity_time_idx on public.crm_audit_log (entity_type, occurred_at desc, id desc);
@@ -93,6 +95,83 @@ returns jsonb language sql immutable set search_path = '' as $$
   select coalesce(row_data, '{}'::jsonb) - array['updated_at','updatedAt','created_at','createdAt','supabaseId'];
 $$;
 
+create or replace function dsh_audit.resolve_client(kind text, record_id text, row_data jsonb)
+returns text language plpgsql stable security definer set search_path = '' as $$
+declare
+  v_company_ref text := coalesce(row_data->>'company_id', row_data->>'companyId');
+  v_opportunity_ref text := coalesce(row_data->>'opportunity_id', row_data->>'dealId');
+  v_company_is_legacy boolean := row_data ? 'companyId' and not (row_data ? 'company_id');
+  v_opportunity_is_legacy boolean := row_data ? 'dealId' and not (row_data ? 'opportunity_id');
+  v_item_id text := row_data->>'itemId';
+  v_name text;
+  v_item jsonb;
+begin
+  if kind = 'companies' then
+    v_name := nullif(row_data->>'name','');
+    if v_name is null then
+      select c.name into v_name from public.companies c
+      where c.id::text = record_id or c.legacy_id = record_id limit 1;
+    end if;
+    return coalesce(v_name, 'Sem cliente vinculado');
+  end if;
+
+  if v_company_ref is null and kind = any(array['contacts','opportunities','contracts']) then
+    if kind = 'contacts' then
+      select c.company_id::text into v_company_ref from public.contacts c
+      where c.id::text = record_id or c.legacy_id = record_id limit 1;
+      v_company_is_legacy := false;
+    elsif kind = 'opportunities' then
+      select o.company_id::text into v_company_ref from public.opportunities o
+      where o.id::text = record_id or o.legacy_id = record_id limit 1;
+      v_company_is_legacy := false;
+    else
+      select c.company_id::text into v_company_ref from public.contracts c
+      where c.id::text = record_id or c.legacy_id = record_id limit 1;
+      v_company_is_legacy := false;
+    end if;
+  end if;
+
+  if v_opportunity_ref is null and kind = any(array['activities','notes']) then
+    if kind = 'activities' then
+      select a.opportunity_id::text into v_opportunity_ref from public.activities a
+      where a.id::text = record_id or a.legacy_id = record_id limit 1;
+      v_opportunity_is_legacy := false;
+    else
+      select n.opportunity_id::text into v_opportunity_ref from public.notes n
+      where n.id::text = record_id or n.legacy_id = record_id limit 1;
+      v_opportunity_is_legacy := false;
+    end if;
+  end if;
+
+  if v_company_ref is null and v_opportunity_ref is not null then
+    select o.company_id::text into v_company_ref from public.opportunities o
+    where o.id::text = v_opportunity_ref or o.legacy_id = v_opportunity_ref
+    order by case when v_opportunity_is_legacy then o.legacy_id = v_opportunity_ref else o.id::text = v_opportunity_ref end desc
+    limit 1;
+    v_company_is_legacy := false;
+  end if;
+
+  if v_company_ref is null and kind = 'workspace_comments' and v_item_id is not null then
+    select item into v_item
+    from public.crm_state s cross join lateral jsonb_array_elements(
+      case when jsonb_typeof(s.data) = 'array' then s.data else '[]'::jsonb end
+    ) item
+    where s.key = 'dsh-v1-workspace-items' and item->>'id' = v_item_id limit 1;
+    if v_item is not null then
+      return dsh_audit.resolve_client('workspace_items', v_item_id, v_item);
+    end if;
+  end if;
+
+  if v_company_ref is not null then
+    select c.name into v_name from public.companies c
+    where c.id::text = v_company_ref or c.legacy_id = v_company_ref
+    order by case when v_company_is_legacy then c.legacy_id = v_company_ref else c.id::text = v_company_ref end desc
+    limit 1;
+  end if;
+  return coalesce(v_name, 'Sem cliente vinculado');
+end;
+$$;
+
 create or replace function dsh_audit.write_change(
   kind text, record_id text, old_data jsonb, new_data jsonb, origin text
 )
@@ -106,6 +185,7 @@ declare
   v_actor uuid := auth.uid();
   v_name text;
   v_label text;
+  v_client text;
 begin
   if old_data is not null and new_data is not null and v_old = v_new then return; end if;
   v_action := case when old_data is null then 'INSERT' when new_data is null then 'DELETE' else 'UPDATE' end;
@@ -120,11 +200,30 @@ begin
   v_label := left(coalesce(nullif(v_row->>'title',''),nullif(v_row->>'name',''),
     nullif(v_row->>'full_name',''),nullif(v_row->>'text',''),nullif(v_row->>'content',''),
     nullif(v_row->>'description',''),nullif(v_row->>'product',''),kind || ' #' || record_id), 200);
+  v_client := dsh_audit.resolve_client(kind, record_id, v_row);
+  if v_client = 'Sem cliente vinculado' and old_data is not null then
+    v_client := dsh_audit.resolve_client(kind, record_id, old_data);
+  end if;
 
-  insert into public.crm_audit_log (actor_id,actor_name,entity_type,entity_id,entity_label,action,changes,source)
-  values (v_actor,v_name,kind,record_id,v_label,v_action,v_changes,origin);
+  insert into public.crm_audit_log (actor_id,actor_name,entity_type,entity_id,entity_label,client_name,action,changes,source)
+  values (v_actor,v_name,kind,record_id,v_label,v_client,v_action,v_changes,origin);
 end;
 $$;
+
+-- Enriquece tambem o historico ja coletado, quando o vinculo ainda pode ser
+-- reconstruido pelo registro atual ou pelos valores antes/depois gravados.
+with reconstructed as (
+  select l.id, coalesce(
+    jsonb_object_agg(e.key,coalesce(e.value->'after',e.value->'before')) filter (where e.key is not null),
+    '{}'::jsonb
+  ) as row_data
+  from public.crm_audit_log l left join lateral jsonb_each(l.changes) e on true
+  group by l.id
+)
+update public.crm_audit_log l
+set client_name = dsh_audit.resolve_client(l.entity_type,l.entity_id,r.row_data)
+from reconstructed r
+where r.id = l.id and l.client_name = 'Sem cliente vinculado';
 
 create or replace function dsh_audit.capture_row()
 returns trigger language plpgsql security definer set search_path = '' as $$

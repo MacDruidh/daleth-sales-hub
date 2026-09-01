@@ -40,7 +40,8 @@ function AuditDetails({ entry, client }) {
   }, [entry.id, client]);
   return <div className="auditDetails">
     <h3>Detalhes: {entry.entity_label}</h3>
-    <p className="muted">Usuário autenticado: {entry.actor_name} · ID: {entry.actor_id || 'Operação sem sessão de usuário'}<br/>
+    <p className="muted">Cliente: <b>{entry.client_name || 'Sem cliente vinculado'}</b><br/>
+      Usuário autenticado: {entry.actor_name} · ID: {entry.actor_id || 'Operação sem sessão de usuário'}<br/>
       Registro: {entry.entity_id} · Origem: {entry.source === 'table' ? 'Tabela do CRM' : 'Dados compartilhados do CRM'}
       {detail?.transaction_id ? ` · Operação no banco: ${detail.transaction_id}` : ''}
     </p>
@@ -140,12 +141,12 @@ export default function AuditPanel({ access, client = supabase }) {
       <h2>Últimas alterações{!loading && !error ? ` (${count})` : ''}</h2>
       {error ? <p role="alert" className="auditError">{error}</p> : loading ? <p role="status">Consultando auditoria...</p> : !rows.length ?
         <p>Nenhuma ação registrada para os filtros escolhidos. As ações anteriores à ativação não estão disponíveis.</p> : <>
-          <div className="tableWrap"><table><thead><tr><th>Data e hora</th><th>Usuário</th><th>Ação</th><th>Módulo</th><th>Registro</th><th>Detalhes</th></tr></thead>
+          <div className="tableWrap"><table><thead><tr><th>Data e hora</th><th>Usuário</th><th>Cliente</th><th>Ação</th><th>Módulo</th><th>Registro</th><th>Detalhes</th></tr></thead>
             <tbody>{rows.map(entry => <React.Fragment key={entry.id}>
-              <tr><td>{auditDateTime(entry.occurred_at)}</td><td><b>{entry.actor_name}</b></td><td><span className={`auditAction auditAction-${entry.action}`}>{AUDIT_ACTIONS[entry.action] || entry.action}</span></td>
+              <tr><td>{auditDateTime(entry.occurred_at)}</td><td><b>{entry.actor_name}</b></td><td><b className="auditClient">{entry.client_name || 'Sem cliente vinculado'}</b></td><td><span className={`auditAction auditAction-${entry.action}`}>{AUDIT_ACTIONS[entry.action] || entry.action}</span></td>
                 <td>{AUDIT_MODULES[entry.entity_type] || entry.entity_type}</td><td><b className="auditLabel">{entry.entity_label}</b></td>
                 <td><button type="button" className="mini" aria-expanded={expanded === entry.id} onClick={() => setExpanded(expanded === entry.id ? null : entry.id)}>{expanded === entry.id ? 'Fechar' : 'Ver alterações'}</button></td></tr>
-              {expanded === entry.id && <tr><td colSpan={6}><AuditDetails entry={entry} client={client}/></td></tr>}
+              {expanded === entry.id && <tr><td colSpan={7}><AuditDetails entry={entry} client={client}/></td></tr>}
             </React.Fragment>)}</tbody>
           </table></div>
           <div className="auditPagination"><span>Página {page + 1} de {pages} · Mais recentes primeiro</span><div>

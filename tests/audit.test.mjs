@@ -48,9 +48,11 @@ test('Auditoria no PostgreSQL: integridade, cobertura e isolamento por identidad
   });
 
   await t.test('inclusao, alteracao e exclusao registram ator real e antes/depois', async () => {
-    await asUser(paulo, "insert into opportunities(id,title,owner) values (200,'Proposta de teste','Sergio Paulo')");
+    await asUser(paulo, "insert into companies(id,name) values(199,'Cliente da proposta')");
+    await asUser(paulo, "insert into opportunities(id,title,owner,company_id) values (200,'Proposta de teste','Sergio Paulo',199)");
     let log = await last();
     assert.equal(log.action, 'INSERT'); assert.equal(log.actor_id, paulo); assert.equal(log.actor_name, 'Paulo');
+    assert.equal(log.client_name, 'Cliente da proposta');
     assert.deepEqual(log.changes.title, { before: null, after: 'Proposta de teste' });
     await asUser(owner, "update opportunities set title = 'Proposta revisada',value = 6200 where id=200");
     log = await last();
@@ -60,6 +62,7 @@ test('Auditoria no PostgreSQL: integridade, cobertura e isolamento por identidad
     await asUser(paulo, 'delete from opportunities where id=200');
     log = await last();
     assert.equal(log.entity_label, 'Proposta revisada'); assert.equal(log.action, 'DELETE');
+    assert.equal(log.client_name, 'Cliente da proposta');
     assert.equal(log.changes.value.before, 6200); assert.equal(log.changes.value.after, null);
   });
 
@@ -115,6 +118,7 @@ test('Auditoria no PostgreSQL: integridade, cobertura e isolamento por identidad
     ]) {
       await asUser(owner, sql);
       assert.equal((await last()).entity_type, table);
+      if (!['products','profiles'].includes(table)) assert.equal((await last()).client_name, 'Acme');
     }
   });
 
@@ -138,13 +142,17 @@ test('Auditoria no PostgreSQL: integridade, cobertura e isolamento por identidad
       ['dsh-v1-workspace-items','workspace_items'], ['dsh-v1-workspace-comments','workspace_comments'],
       ['dsh-v1-opportunity-files','documents'], ['dsh-v1-interactions','interactions'], ['dsh-v1-stage-history','stage_history'],
     ]) {
-      await saveState(paulo, key, [{id:'a',title:'Original',user:'Sergio'}]);
+      await saveState(paulo, key, [{id:'a',title:'Original',user:'Sergio',companyId:201,dealId:302}]);
       assert.equal((await last()).entity_type, type); assert.equal((await last()).actor_id, paulo);
-      await saveState(owner, key, [{id:'a',title:'Revisado',user:'Sergio'}]);
+      assert.equal((await last()).client_name, 'Acme');
+      await saveState(owner, key, [{id:'a',title:'Revisado',user:'Sergio',companyId:201,dealId:302}]);
       assert.deepEqual((await last()).changes.title, {before:'Original',after:'Revisado'});
       await saveState(paulo, key, []);
       assert.equal((await last()).action, 'DELETE'); assert.equal((await last()).entity_label, 'Revisado');
     }
+    await saveState(paulo, 'dsh-v1-workspace-items', [{id:'demanda-cliente',title:'Demanda',companyId:201}]);
+    await saveState(owner, 'dsh-v1-workspace-comments', [{id:'comentario-cliente',itemId:'demanda-cliente',text:'Mensagem'}]);
+    assert.equal((await last()).client_name, 'Acme');
   });
 
   await t.test('reordenacao e refresh de colecoes JSON nao geram eventos falsos', async () => {
@@ -230,6 +238,7 @@ test('Datas, valores e consultas da auditoria', () => {
   assert.ok(calls.some(call => call[0] === 'eq' && call[1] === 'actor_id' && call[2] === paulo));
   assert.deepEqual(calls.at(-1), ['range',50,99]);
   assert.ok(!calls.find(call => call[0] === 'select')[1].includes('changes'));
+  assert.ok(calls.find(call => call[0] === 'select')[1].includes('client_name'));
   assert.deepEqual(calls.filter(call => call[0] === 'order').map(call => call[1]), ['occurred_at','id']);
   assert.ok(calls.some(call => call[0] === 'ilike' && call[2] === '%50\\%\\_test%'));
   calls.length = 0;
