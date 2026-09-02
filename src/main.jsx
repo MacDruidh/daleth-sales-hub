@@ -2524,7 +2524,6 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
   const [selectedSegment,setSelectedSegment] = useState(null);
   const [selectedSummary,setSelectedSummary] = useState(null);
   const open = deals.filter(d => !['Ganho','Perdido'].includes(d.stage));
-  const won = deals.filter(d => d.stage==='Ganho');
   const pending = activities.filter(a => a.status !== 'Concluída');
   const activeContracts = contracts.filter(c => contractStatus(c)==='Ativo');
   const activeContractMrr = activeContracts.reduce((s,c)=>s+contractMrr(c),0);
@@ -2536,8 +2535,6 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
   const openTcv = open.reduce((s,d)=>s + dealTcv(d),0);
   const openArr = open.reduce((s,d)=>s + dealArr(d),0);
   const weightedMrr = open.reduce((s,d)=>s + dealWeightedMrr(d),0);
-  const wonMrr = won.reduce((s,d)=>s + dealMrr(d),0);
-  const wonTcv = won.reduce((s,d)=>s + dealTcv(d),0);
   const forecastStart = new Date(`${today()}T00:00:00`);
   const next30 = new Date(forecastStart);
   next30.setDate(next30.getDate()+30);
@@ -2643,7 +2640,7 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
         <div className="dashboardHeroMetrics" style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'14px',marginTop:'22px'}}>
           <div style={{background:'#fff',border:'1px solid #e4edf7',borderRadius:'18px',padding:'16px'}}>
             <span style={{display:'block',fontSize:'12px',fontWeight:800,color:'#64748b',textTransform:'uppercase',letterSpacing:'.05em'}}>Receita mensal contratada</span>
-            <strong style={{display:'block',fontSize:'25px',marginTop:'8px',color:'#061b34'}}>{moneyShort(activeContractMrr || wonMrr)}</strong>
+            <strong style={{display:'block',fontSize:'25px',marginTop:'8px',color:'#061b34'}}>{moneyShort(activeContractMrr)}</strong>
           </div>
           <div style={{background:'#fff',border:'1px solid #e4edf7',borderRadius:'18px',padding:'16px'}}>
             <span style={{display:'block',fontSize:'12px',fontWeight:800,color:'#64748b',textTransform:'uppercase',letterSpacing:'.05em'}}>Pipeline mensal</span>
@@ -4968,10 +4965,11 @@ function Contracts({contracts,setContracts,deals,companies,products,query,canWri
   };
   const removeContract = async (contract) => {
     if(!canWrite) return;
-    if(!window.confirm('Deseja realmente excluir este contrato?')) return;
+    if(!window.confirm('Excluir este contrato definitivamente? Ele será retirado de todas as telas e seus valores deixarão de compor as receitas contratadas.')) return;
     try {
       await deleteContractFromSupabase(contract);
       setContracts(contracts.filter(c => !sameId(c.id, contract.id)));
+      setSelectedContractId?.(null);
     } catch (error) {
       console.warn('Falha ao excluir contrato no Supabase:', error);
       window.alert('Não foi possível excluir este contrato no Supabase agora.');
@@ -5110,6 +5108,19 @@ function ContractModal({contract,onClose,contracts,setContracts,companies,deals,
     }
   };
 
+  const remove = async () => {
+    if(!canWrite) return;
+    if(!window.confirm('Excluir este contrato definitivamente? Ele será retirado de todas as telas e seus valores deixarão de compor as receitas contratadas.')) return;
+    try {
+      await deleteContractFromSupabase(contract);
+      setContracts(contracts.filter(item=>!sameId(item.id,contract.id)));
+      onClose();
+    } catch (error) {
+      console.warn('Falha ao excluir contrato no Supabase:', error);
+      window.alert('Não foi possível excluir este contrato no Supabase agora. Nenhum valor foi alterado.');
+    }
+  };
+
   return <div className="modalBackdrop"><div className="modal"><div className="modalHead"><div><h2>{company?.name || 'Contrato'}</h2><span>{draft.product || 'Produto não informado'} · {contractStatus(draft)}</span></div><button className="iconBtn" onClick={onClose}><X/></button></div>
     <Panel title="Vínculos do contrato">
       <div style={{display:'flex',gap:'10px',flexWrap:'wrap'}}>
@@ -5135,6 +5146,7 @@ function ContractModal({contract,onClose,contracts,setContracts,companies,deals,
         <label><span>Valor total do contrato</span><input value={money(contractTcv({...draft,endDate:calculatedEndDate}))} readOnly/></label>
         <Textarea label="Observações" field="notes" form={draft} setForm={setDraft}/>
         {canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}
+        {canWrite && <button className="mini" onClick={remove} style={{borderColor:'#fecaca',color:'#dc2626'}}><Trash2 size={15}/>Excluir contrato</button>}
       </div>
     </Panel>
   </div></div>;
