@@ -8,6 +8,8 @@ import AuditPanel, { useAuditAccess } from './components/AuditPanel';
 import {CrmSyncProvider, CrmSyncNotice, useCrmSync} from './components/CrmSyncContext';
 import {crmDateParts, dateOnlyFromCrmValue, formatDate, formatDateTime, dealHistory} from './lib/crmHistory';
 import {createSyncGuard} from './lib/crmSync';
+import {subscribeCrmAuth} from './lib/crmAuth';
+import {loadContractRows} from './lib/crmContracts';
 
 const STAGES = ['Lead Captado','Primeiro Contato','Levantamento','Reunião Agendada','Proposta Enviada','Negociação','Contrato','Ganho','Perdido'];
 const STAGE_PROBABILITIES = {
@@ -962,16 +964,6 @@ function contractToDb(contract, companies, deals){
   };
 }
 
-const CONTRACT_SELECT = `
-  *,
-  companies!contracts_company_id_fkey (
-    legacy_id
-  ),
-  opportunities!contracts_opportunity_id_fkey (
-    legacy_id
-  )
-`;
-
 function isMissingContractDocumentUrlFieldError(error){
   const message = `${String(error?.message || '')} ${String(error?.details || '')} ${String(error?.hint || '')} ${String(error?.code || '')}`;
   return message.includes('document_url');
@@ -1065,13 +1057,8 @@ function useContracts(){
 }
 
 async function loadContractsFromSupabase(){
-  const { data, error } = await supabase
-    .from('contracts')
-    .select(CONTRACT_SELECT)
-    .order('created_at', { ascending: false });
-
-  if(error) throw error;
-  return (data || []).map(mapContractFromDb);
+  const rows = await loadContractRows(supabase);
+  return rows.map(row => mapContractFromDb(row));
 }
 function money(v){ return Number(v||0).toLocaleString('pt-BR',{ style:'currency', currency:'BRL' }); }
 function parseCurrencyInput(value){
@@ -2194,55 +2181,15 @@ function App(){
   }, [stages, dataReady]);
 
   useEffect(() => {
-    let active = true;
-
-    async function restoreSession(){
-      try {
-        const { data, error } = await supabase.auth.getSession();
-        if(error) throw error;
-        const authUser = data?.session?.user;
-        if(authUser && isPasswordRecoveryUrl()){
-          setPasswordRecoverySession(data.session);
-          setCurrentUser(null);
-        } else if(authUser){
-          const profile = await loadUserProfile(authUser);
-          if(active) setCurrentUser(profile);
-        } else if(active) {
-          setCurrentUser(null);
-        }
-      } catch (error) {
-        console.warn('Falha ao restaurar sessão Supabase:', error);
-      } finally {
-        if(active) setAuthReady(true);
-      }
-    }
-
-    restoreSession();
-
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if(!active) return;
-      if(event === 'PASSWORD_RECOVERY'){
-        setPasswordRecoverySession(session);
-        setCurrentUser(null);
-        setAuthReady(true);
-        return;
-      }
-      if(session?.user){
-        try {
-          const profile = await loadUserProfile(session.user);
-          if(active) setCurrentUser(profile);
-        } catch (error) {
-          console.warn('Falha ao carregar perfil Supabase:', error);
-        }
-      } else if(event === 'SIGNED_OUT') {
-        setCurrentUser(null);
-      }
+    return subscribeCrmAuth({
+      auth: supabase.auth,
+      loadProfile: loadUserProfile,
+      isRecovery: isPasswordRecoveryUrl,
+      onUser: setCurrentUser,
+      onRecovery: setPasswordRecoverySession,
+      onReady: () => setAuthReady(true),
+      onError: error => console.warn('Falha ao carregar acesso Supabase:', error)
     });
-
-    return () => {
-      active = false;
-      listener?.subscription?.unsubscribe?.();
-    };
   }, []);
 
   useEffect(() => {
