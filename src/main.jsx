@@ -5,6 +5,9 @@ import './style.css';
 import './calendar.css';
 import { supabase } from './lib/supabase';
 import AuditPanel, { useAuditAccess } from './components/AuditPanel';
+import {CrmSyncProvider, CrmSyncNotice, useCrmSync} from './components/CrmSyncContext';
+import {crmDateParts, dateOnlyFromCrmValue, formatDate, formatDateTime, dealHistory} from './lib/crmHistory';
+import {createSyncGuard} from './lib/crmSync';
 
 const STAGES = ['Lead Captado','Primeiro Contato','Levantamento','Reunião Agendada','Proposta Enviada','Negociação','Contrato','Ganho','Perdido'];
 const STAGE_PROBABILITIES = {
@@ -92,15 +95,26 @@ function shouldPersistCrmState(value){
   return value !== null && value !== undefined && value !== '';
 }
 
-function useStore(key, initial){
+function useStore(key, initial, {remote=true, shared=false}={}){
+  const {userId, retry, report} = useCrmSync();
+  const guard = useRef(createSyncGuard()).current;
   const [value, setValue] = useState(() => {
     return readStoredCrmValue(key) ?? initial;
   });
 
   useEffect(() => {
+    if(!userId || !remote) return;
     let cancelled = false;
+    let loading = false;
+    let retryTimer;
+    let initialized = false;
 
     async function loadFromSupabase(){
+      if(loading || cancelled || guard.isWriting()) return;
+      window.clearTimeout(retryTimer);
+      loading = true;
+      const revision = guard.snapshot();
+      if(!initialized) report(key, 'loading');
       try {
         const { data, error } = await supabase
           .from('crm_state')
@@ -111,33 +125,40 @@ function useStore(key, initial){
         if(error) throw error;
 
         const remoteValue = isDemoCrmSeed(key, data?.data) ? null : data?.data;
-        const localValue = readStoredCrmValue(key);
+        const nextValue = remoteValue ?? initial;
 
-        const nextValue = remoteValue ?? localValue ?? initial;
-
-        if(!cancelled){
+        if(!cancelled && guard.isCurrent(revision)){
           setValue(nextValue);
           localStorage.setItem(key, JSON.stringify(nextValue));
         }
-
-        if(!remoteValue && shouldPersistCrmState(nextValue)){
-          await supabase.from('crm_state').upsert({
-            key,
-            data: nextValue,
-            updated_at: new Date().toISOString()
-          });
-        }
+        if(!cancelled){ initialized = true; report(key, 'ready'); }
       } catch (error) {
         console.warn('Supabase indisponível para', key, error);
+        if(!cancelled){
+          report(key, 'error');
+          retryTimer = window.setTimeout(loadFromSupabase, CRM_AUTO_REFRESH_MS);
+        }
+      } finally {
+        loading = false;
       }
     }
 
     loadFromSupabase();
+    const interval = shared ? window.setInterval(loadFromSupabase, CRM_AUTO_REFRESH_MS) : null;
+    window.addEventListener('focus', loadFromSupabase);
+    window.addEventListener('online', loadFromSupabase);
 
-    return () => { cancelled = true; };
-  }, [key]);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(retryTimer);
+      window.clearInterval(interval);
+      window.removeEventListener('focus', loadFromSupabase);
+      window.removeEventListener('online', loadFromSupabase);
+    };
+  }, [key, userId, retry, remote, shared]);
 
-  const updateLocalCache = (next) => {
+  const updateLocalCache = (next, revision) => {
+    if(revision !== undefined && !guard.isCurrent(revision)) return;
     setValue(next);
     try {
       localStorage.setItem(key, JSON.stringify(next));
@@ -145,8 +166,11 @@ function useStore(key, initial){
       console.warn('Não foi possível atualizar o cache local:', key, error);
     }
   };
+  updateLocalCache.snapshot = guard.snapshot;
+  updateLocalCache.isWriting = guard.isWriting;
 
   const save = (next) => {
+    guard.beginWrite();
     updateLocalCache(next);
 
     supabase.from('crm_state').upsert({
@@ -154,57 +178,33 @@ function useStore(key, initial){
       data: next,
       updated_at: new Date().toISOString()
     }).then(({error}) => {
-      if(error) console.warn('Falha ao salvar no Supabase:', key, error);
-    });
+      if(error){
+        console.warn('Falha ao salvar no Supabase:', key, error);
+        report(`save-${key}`, 'error');
+      } else report(`save-${key}`, 'ready');
+    }).catch(error => {
+      console.warn('Falha ao salvar no Supabase:', key, error);
+      report(`save-${key}`, 'error');
+    }).finally(guard.endWrite);
   };
 
   return [value, save, updateLocalCache];
 }
 function useSharedStore(key, initial){
-  const [value, save, updateLocalCache] = useStore(key, initial);
-
-  useEffect(() => {
-    let cancelled = false;
-    let loading = false;
-
-    const refresh = async () => {
-      if(loading) return;
-      loading = true;
-      try {
-        const { data, error } = await supabase
-          .from('crm_state')
-          .select('data')
-          .eq('key', key)
-          .maybeSingle();
-
-        if(error) throw error;
-        const remoteValue = data?.data;
-        if(!cancelled && remoteValue !== undefined && remoteValue !== null){
-          updateLocalCache(remoteValue);
-        }
-      } catch (error) {
-        console.warn('Falha ao sincronizar estado compartilhado:', key, error);
-      } finally {
-        loading = false;
-      }
-    };
-
-    const interval = window.setInterval(refresh, CRM_AUTO_REFRESH_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [key]);
-
+  const [value, save] = useStore(key, initial, {shared:true});
   return [value, save];
 }
 function useProducts(){
+  const {userId, retry, report} = useCrmSync();
   const [products, setProductsState] = useState(INITIAL_PRODUCTS);
 
   useEffect(() => {
+    if(!userId) return;
     let cancelled = false;
+    let retryTimer;
 
     async function loadProducts(){
+      report('products', 'loading');
       try {
         const { data, error } = await supabase
           .from('products')
@@ -217,16 +217,21 @@ function useProducts(){
 
         if(!cancelled){
           setProductsState(names.length ? names : INITIAL_PRODUCTS);
+          report('products', 'ready');
         }
       } catch (error) {
         console.warn('Falha ao carregar produtos relacionais:', error);
+        if(!cancelled){
+          report('products', 'error');
+          retryTimer = window.setTimeout(loadProducts, CRM_AUTO_REFRESH_MS);
+        }
       }
     }
 
     loadProducts();
 
-    return () => { cancelled = true; };
-  }, []);
+    return () => { cancelled = true; window.clearTimeout(retryTimer); };
+  }, [userId, retry]);
 
   const setProducts = async (next) => {
     const resolved = typeof next === 'function' ? next(products) : next;
@@ -264,24 +269,38 @@ function useProducts(){
 }
 
 function useSupabaseCollectionSync({name,tables,load,updateLocalCache,logLabel}){
+  const {userId, retry, report} = useCrmSync();
+  const cacheRef = useRef(updateLocalCache);
+  cacheRef.current = updateLocalCache;
   useEffect(() => {
+    if(!userId) return;
     let cancelled = false;
     let loading = false;
+    let initialized = false;
 
     const refresh = async () => {
-      if(loading) return;
+      if(loading || cacheRef.current.isWriting()) return;
       loading = true;
+      const revision = cacheRef.current.snapshot();
+      if(!initialized) report(name, 'loading');
       try {
         const next = await load();
-        if(!cancelled && Array.isArray(next)) updateLocalCache(next);
+        if(!cancelled && Array.isArray(next)){
+          cacheRef.current(next, revision);
+          initialized = true;
+          report(name, 'ready');
+        }
       } catch (error) {
         console.warn(logLabel || `Falha ao sincronizar ${name}:`, error);
+        if(!cancelled) report(name, 'error');
       } finally {
         loading = false;
       }
     };
 
     refresh();
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
     const interval = window.setInterval(refresh,CRM_AUTO_REFRESH_MS);
     const channel = supabase.channel(`dsh-${name}-realtime`);
     safeArray(tables).forEach(table => {
@@ -294,9 +313,11 @@ function useSupabaseCollectionSync({name,tables,load,updateLocalCache,logLabel})
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [userId, retry]);
 }
 
 function mapCompanyFromDb(c){
@@ -354,7 +375,7 @@ async function deleteCompanyFromSupabase(company){
 }
 
 function useCompanies(){
-  const [companies, saveCompaniesToCrmState, updateCompaniesCache] = useStore('dsh-v1-companies', []);
+  const [companies, saveCompaniesToCrmState, updateCompaniesCache] = useStore('dsh-v1-companies', [], {remote:false});
 
   useSupabaseCollectionSync({
     name:'companies',
@@ -457,7 +478,7 @@ async function deleteContactFromSupabase(contact){
 }
 
 function useContacts(){
-  const [contacts, saveContactsToCrmState, updateContactsCache] = useStore('dsh-v1-contacts', []);
+  const [contacts, saveContactsToCrmState, updateContactsCache] = useStore('dsh-v1-contacts', [], {remote:false});
 
   useSupabaseCollectionSync({
     name:'contacts',
@@ -600,7 +621,7 @@ async function deleteDealFromSupabase(deal){
 }
 
 function useDeals(){
-  const [deals, saveDealsToCrmState, updateDealsCache] = useStore('dsh-v1-deals', []);
+  const [deals, saveDealsToCrmState, updateDealsCache] = useStore('dsh-v1-deals', [], {remote:false});
 
   useSupabaseCollectionSync({
     name:'opportunities',
@@ -663,7 +684,7 @@ function mapActivityFromDb(a){
     dealId: a.opportunities?.legacy_id || a.opportunity_id,
     type: a.activity_type || a.type || 'Ligação',
     title: a.title || '',
-    dueDate: a.due_date || '',
+    dueDate: String(a.due_date || '').slice(0,10),
     dueTime: a.due_time ? String(a.due_time).slice(0,5) : '',
     meetingLink: a.meeting_link || '',
     status: a.status || 'Pendente',
@@ -794,9 +815,10 @@ function mapNoteFromDb(n){
   return {
     id: n.legacy_id || n.id,
     supabaseId: n.id,
+    legacyId: n.legacy_id || '',
     dealId: n.opportunities?.legacy_id || n.opportunity_id,
     user: n.user_name || '',
-    date: n.note_date || '',
+    date: String(n.note_date || '').slice(0,10),
     text: n.content || ''
   };
 }
@@ -837,7 +859,7 @@ async function saveNoteToSupabase(note, deals){
 }
 
 function useActivities(){
-  const [activities, saveActivitiesToCrmState, updateActivitiesCache] = useStore('dsh-v1-activities', []);
+  const [activities, saveActivitiesToCrmState, updateActivitiesCache] = useStore('dsh-v1-activities', [], {remote:false});
 
   useSupabaseCollectionSync({
     name:'activities',
@@ -868,7 +890,7 @@ async function loadActivitiesFromSupabase(){
   return (data || []).map(mapActivityFromDb);
 }
 function useNotes(){
-  const [notes, saveNotesToCrmState, updateNotesCache] = useStore('dsh-v1-notes', []);
+  const [notes, saveNotesToCrmState, updateNotesCache] = useStore('dsh-v1-notes', [], {remote:false});
 
   useSupabaseCollectionSync({
     name:'notes',
@@ -1029,7 +1051,7 @@ async function deleteContractFromSupabase(contract){
 }
 
 function useContracts(){
-  const [contracts, saveContractsToCrmState, updateContractsCache] = useStore('dsh-v1-contracts', initialContracts);
+  const [contracts, saveContractsToCrmState, updateContractsCache] = useStore('dsh-v1-contracts', initialContracts, {remote:false});
 
   useSupabaseCollectionSync({
     name:'contracts',
@@ -1071,13 +1093,6 @@ function moneyShort(v){
   if (abs >= 1000) return `R$ ${(n/1000).toLocaleString('pt-BR',{ minimumFractionDigits: 1, maximumFractionDigits: 1 })} mil`;
   return money(n);
 }
-const CRM_TIME_ZONE = 'America/Sao_Paulo';
-function crmDateParts(value=new Date()){
-  return Object.fromEntries(new Intl.DateTimeFormat('en-US',{
-    timeZone:CRM_TIME_ZONE,
-    year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'
-  }).formatToParts(value).filter(part=>part.type !== 'literal').map(part=>[part.type,part.value]));
-}
 function today(){
   const parts = crmDateParts();
   return `${parts.year}-${parts.month}-${parts.day}`;
@@ -1086,33 +1101,8 @@ function crmDateTimeInput(){
   const parts = crmDateParts();
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
 }
-function formatDate(value){
-  if(!value) return '-';
-  const raw = String(value).slice(0,10);
-  const parts = raw.split('-');
-  if(parts.length === 3 && parts[0].length === 4) return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  return String(value);
-}
-function formatDateTime(value){
-  if(!value) return '-';
-  const timestamp = String(value);
-  const localTimestamp = timestamp.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?$/);
-  if(localTimestamp) return `${formatDate(localTimestamp[1])} ${localTimestamp[2]}`;
-  if(timestamp.includes('T')){
-    const parsed = new Date(timestamp);
-    if(!Number.isNaN(parsed.getTime())){
-      return new Intl.DateTimeFormat('pt-BR',{
-        timeZone:CRM_TIME_ZONE,
-        day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'
-      }).format(parsed).replace(',', '');
-    }
-  }
-  const [date, time=''] = timestamp.replace('T',' ').split(' ');
-  const formattedDate = formatDate(date);
-  return time ? `${formattedDate} ${time.slice(0,5)}` : formattedDate;
-}
 function formatActivityDateTime(activity){
-  const date = formatDate(activity?.dueDate);
+  const date = formatDate(String(activity?.dueDate || '').slice(0,10));
   return activity?.dueTime ? `${date} ${String(activity.dueTime).slice(0,5)}` : date;
 }
 function crmNowMinutes(){
@@ -1133,16 +1123,6 @@ function isMeetingActivity(activity){
     text.includes('chamada')
   );
 }
-function dateOnlyFromCrmValue(value){
-  if(!value) return '';
-  const raw = String(value);
-  const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
-  if(match) return match[1];
-  const parsed = new Date(raw);
-  if(Number.isNaN(parsed.getTime())) return '';
-  const parts = crmDateParts(parsed);
-  return `${parts.year}-${parts.month}-${parts.day}`;
-}
 function daysSinceCrmDate(value){
   const dateOnly = dateOnlyFromCrmValue(value);
   if(!dateOnly) return null;
@@ -1150,25 +1130,11 @@ function daysSinceCrmDate(value){
   const end = new Date(`${today()}T00:00:00`);
   return Math.max(0, Math.floor((end - start) / (1000 * 60 * 60 * 24)));
 }
-function latestRelationshipTouchForDeal(deal, interactions=[], activities=[]){
-  const interactionTouches = safeArray(interactions)
-    .filter(interaction=>sameId(interaction.dealId,deal?.id))
-    .map(interaction=>({
-      source:'interaction',
-      date:interaction.dateTime || interaction.createdAt || interaction.date || ''
-    }));
-  const completedActivityTouches = safeArray(activities)
-    .filter(activity=>sameId(activity.dealId,deal?.id) && String(activity.status || '') === 'Concluída')
-    .map(activity=>({
-      source:'activity',
-      date:activity.dueDate || activity.date || activity.createdAt || ''
-    }));
-  return [...interactionTouches,...completedActivityTouches]
-    .filter(touch=>touch.date)
-    .sort((a,b)=>String(b.date || '').localeCompare(String(a.date || '')))[0] || null;
+function latestRelationshipTouchForDeal(deal, interactions=[], activities=[], notes=[]){
+  return dealHistory(deal, interactions, activities, notes).find(item=>item.date) || null;
 }
-function relationshipSortDateForDeal(deal, interactions=[], activities=[]){
-  return latestRelationshipTouchForDeal(deal, interactions, activities)?.date || '';
+function relationshipSortDateForDeal(deal, interactions=[], activities=[], notes=[]){
+  return latestRelationshipTouchForDeal(deal, interactions, activities, notes)?.date || '';
 }
 function dealCreationSortValue(deal){
   if(deal?.createdAt || deal?.created_at) return String(deal.createdAt || deal.created_at);
@@ -1181,23 +1147,23 @@ function interactionAgeText(days){
   if(days === 1) return 'há 1 dia';
   return `há ${days} dias`;
 }
-function relationshipStatusForDeal(deal, interactions=[], activities=[]){
-  const latestTouch = latestRelationshipTouchForDeal(deal, interactions, activities);
+function relationshipStatusForDeal(deal, interactions=[], activities=[], notes=[]){
+  const latestTouch = latestRelationshipTouchForDeal(deal, interactions, activities, notes);
   const lastDate = latestTouch?.date || '';
   const days = daysSinceCrmDate(lastDate);
-  if(days === null) return {tone:'none', label:'Sem interação ou atividade concluída', shortLabel:'Sem interação', days:null};
+  if(days === null) return {tone:'none', label:'Sem registro no histórico', shortLabel:'Sem histórico', days:null};
   const age = interactionAgeText(days);
-  const prefix = latestTouch?.source === 'activity' ? 'Última atividade concluída' : 'Última interação';
+  const prefix = latestTouch?.source === 'activity' ? 'Última atividade concluída' : latestTouch?.source === 'note' ? 'Última anotação' : 'Última interação';
   if(days <= 4) return {tone:'good', label:`${prefix} ${age}`, shortLabel:age, days};
-  return {tone:days <= 9 ? 'warn' : 'danger', label:`Sem interação ${age}`, shortLabel:age, days};
+  return {tone:days <= 9 ? 'warn' : 'danger', label:`${prefix} ${age}`, shortLabel:age, days};
 }
-function opportunityPriorityScore({deal,companies=[],contacts=[],activities=[],interactions=[],currentDate=today()}){
+function opportunityPriorityScore({deal,companies=[],contacts=[],activities=[],interactions=[],notes=[],currentDate=today()}){
   if(!deal || ['Ganho','Perdido'].includes(deal.stage)) return {score:0,tone:'none',label:'Fora do funil',reasons:['Oportunidade encerrada'],nextAction:'Acompanhar somente se houver reabertura'};
   const pendingActivities = safeArray(activities).filter(activity=>String(activity.status || '') !== 'Concluída' && sameId(activity.dealId,deal.id));
   const overdueActivity = pendingActivities.find(activity=>activity.dueDate && activity.dueDate < currentDate);
   const todayActivity = pendingActivities.find(activity=>dateOnlyFromCrmValue(activity.dueDate) === currentDate);
   const futureActivity = pendingActivities.find(activity=>activity.dueDate && activity.dueDate >= currentDate);
-  const relationship = relationshipStatusForDeal(deal,interactions,activities);
+  const relationship = relationshipStatusForDeal(deal,interactions,activities,notes);
   const segment = dealSegment(deal,companies,contacts);
   const stagePoints = {
     'Lead Captado':6,
@@ -1225,7 +1191,7 @@ function opportunityPriorityScore({deal,companies=[],contacts=[],activities=[],i
   const reasons = [
     `Etapa: ${deal.stage || 'sem etapa'}`,
     dealMrr(deal) ? `Receita mensal ${moneyShort(dealMrr(deal))}` : '',
-    relationship.days === null ? 'Sem interação registrada' : relationship.label,
+    relationship.days === null ? 'Sem registro no histórico' : relationship.label,
     overdueActivity ? 'Atividade vencida' : todayActivity ? 'Atividade para hoje' : !futureActivity ? 'Sem atividade futura' : '',
     closeDays !== null && closeDays < 0 ? 'Fechamento previsto vencido' : closeDays !== null && closeDays <= 7 ? 'Fechamento em até 7 dias' : '',
     ownerPoints ? 'Sem responsável' : '',
@@ -2184,6 +2150,7 @@ function UXStyle(){
 }
 
 function App(){
+  const {dataReady, hydrated} = useCrmSync();
   const [page,setPage] = useState('dashboard');
   const [query,setQuery] = useState('');
   const [currentUser,setCurrentUser] = useState(null);
@@ -2218,12 +2185,13 @@ function App(){
   const mainRef = useRef(null);
 
   useEffect(() => {
+    if(!dataReady) return;
     if(stages.includes('Contrato')) return;
     const gainIndex = stages.indexOf('Ganho');
     const nextStages = [...stages];
     nextStages.splice(gainIndex >= 0 ? gainIndex : nextStages.length,0,'Contrato');
     setStages(nextStages);
-  }, [stages]);
+  }, [stages, dataReady]);
 
   useEffect(() => {
     let active = true;
@@ -2331,6 +2299,7 @@ function App(){
   if(!authReady) return <div className="app" style={{minHeight:'100vh',display:'grid',placeItems:'center',background:'#f6f8fb',color:'#061b34',fontWeight:900}}>Carregando acesso...</div>;
   if(passwordRecoverySession) return <ResetPasswordScreen session={passwordRecoverySession} onComplete={(profile)=>{ setPasswordRecoverySession(null); setCurrentUser(profile); }}/>;
   if(!currentUser) return <LoginScreen onLogin={setCurrentUser}/>;
+  if(!hydrated) return <main style={{padding:'32px',maxWidth:'900px',margin:'0 auto'}}><h1>Daleth Sales Hub</h1><CrmSyncNotice/></main>;
   const selectedDeal = byId(deals, selectedDealId);
   const selectedCompany = byId(companies, selectedCompanyId);
   const selectedContact = byId(contacts, selectedContactId);
@@ -2338,7 +2307,7 @@ function App(){
   const selectedActivity = byId(activities, selectedActivityId);
   const canViewDashboard = currentUser?.canViewDashboard === true;
   const isCEO = currentUser?.role === 'CEO';
-  const canWrite = ['CEO','Comercial'].includes(currentUser?.role);
+  const canWrite = dataReady && ['CEO','Comercial'].includes(currentUser?.role);
   const allMenu = [
     ['dashboard','Dashboard',LayoutDashboard], ['insights','Insights Daleth',Sparkles], ['funnel','Funil Comercial',TrendingUp], ['pending','Pendências',BellRing], ['workspace','Workspace',MessageSquare], ['quality','Qualidade do CRM',AlertTriangle], ['pipeline','Pipeline',KanbanSquare], ['registrations','Cadastros',Package], ['deals','Oportunidades',BriefcaseBusiness],
     ['contracts','Contratos',CheckCircle2], ['activities','Atividades',CalendarDays], ['documents','Documentos',FolderOpen], ['imports','Importação',Filter], ['profiles','Perfis',Lock], ['audit','Auditoria',List]
@@ -2409,6 +2378,7 @@ function App(){
       <div className="sidebarBox"><b>Perfil ativo</b><span>{currentUser.name} · {currentUser.role}</span></div>
     </aside>
     <main className="main" ref={mainRef}>
+      <CrmSyncNotice/>
       <header className="topbar uxTopbar"><div className="uxHeaderTitle"><span className="uxEyebrow">{menu.find(m=>m[0]===activePage)?.[1] || 'Workspace'}</span><h1>Daleth Sales Hub</h1><p>Customer Acquisition Platform</p></div><div className="topActions"><div className="search"><Search size={17}/><input value={query} onChange={handleSearchChange} placeholder="Buscar empresas, contatos e oportunidades..."/></div><button className="notification" style={{cursor:'pointer',textAlign:'left'}} onClick={()=>navigate('pending')} title="Abrir painel de pendências"><BellRing size={18}/><span>{alertTotal}</span><div><b>Alertas comerciais</b><small>{alertText}</small></div></button><div className="notification topUserCard"><UserRound size={18}/><div><b>{currentUser.name}</b><small>{currentUser.role}</small></div></div><a className="mini topUtilityBtn" href="/Manual_do_Usuario_Daleth_Sales_Hub.pdf" target="_blank" rel="noreferrer" style={{textDecoration:'none'}}><FileText size={15}/>Manual</a><button className="mini topUtilityBtn" onClick={logout}><X size={15}/>Sair</button></div></header>
       {selectedDealAsPage ? <DealDetailPage key={`${selectedDeal.id}-${selectedDealInitialTab}`} deal={selectedDeal} initialTab={selectedDealInitialTab} {...context} onBack={closeSelectedDeal}/> : (query.trim() ? <GlobalSearch {...context} setQuery={setQuery}/> : <>
         {activePage==='audit' && auditAccess?.allowed && <AuditPanel key={currentUser.id} access={auditAccess}/>}
@@ -2519,7 +2489,7 @@ function GlobalSearch({query,setQuery,companies,contacts,deals,setDeals,activiti
   </>;
 }
 
-function Dashboard({deals,companies,contacts,activities,contracts,interactions,stages=STAGES,setSelectedDealId,setSelectedActivityId,setSelectedContractId,setSelectedCompanyId,setSelectedProductName}){
+function Dashboard({deals,companies,contacts,activities,contracts,interactions,notes=[], stages=STAGES,setSelectedDealId,setSelectedActivityId,setSelectedContractId,setSelectedCompanyId,setSelectedProductName}){
   const [selectedStage,setSelectedStage] = useState(null);
   const [selectedSegment,setSelectedSegment] = useState(null);
   const [selectedSummary,setSelectedSummary] = useState(null);
@@ -2576,19 +2546,13 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
     .sort((a,b)=>(String(a.dueDate) + String(a.dueTime || '')).localeCompare(String(b.dueDate) + String(b.dueTime || '')))
     .slice(0,5);
 
-  const lastTouchDate = (deal) => {
-    const dates = [
-      ...safeArray(interactions).filter(i=>sameId(i.dealId,deal.id)).map(i=>i.dateTime || i.createdAt || i.date),
-      ...safeArray(activities).filter(a=>sameId(a.dealId,deal.id) && a.status === 'Concluída').map(a=>a.dueDate || a.date),
-    ].filter(Boolean).sort((a,b)=>String(b).localeCompare(String(a)));
-    return dates[0] || deal.closeDate || deal.createdAt || '';
-  };
+  const lastTouchDate = (deal) => latestRelationshipTouchForDeal(deal,interactions,activities,notes)?.date || '';
 
   const noContactDeals = open
     .map(d => {
       const last = lastTouchDate(d);
-      const days = last ? Math.max(0, Math.floor((new Date(today() + 'T00:00:00') - new Date(String(last).slice(0,10) + 'T00:00:00')) / 86400000)) : 999;
-      return {...d, daysWithoutContact: days};
+      const days = last ? daysSinceCrmDate(last) : 999;
+      return {...d, daysWithoutContact: days, hasHistory:Boolean(last)};
     })
     .filter(d => d.daysWithoutContact >= 15)
     .sort((a,b)=>b.daysWithoutContact-a.daysWithoutContact)
@@ -2750,14 +2714,14 @@ function Dashboard({deals,companies,contacts,activities,contracts,interactions,s
 
     <Panel title="Oportunidades sem contato há mais de 15 dias">
       <DashboardTable headers={['Oportunidade','Empresa','Etapa','Dias sem contato','Receita mensal','Ações']}>
-        {noContactDeals.length ? noContactDeals.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{companyForDeal(d,companies,contacts)?.name || '-'}</td><td>{d.stage || '-'}</td><td><b style={{color:d.daysWithoutContact >= 30 ? '#dc2626' : '#b45309'}}>{d.daysWithoutContact} dias</b></td><td>{moneyShort(dealMrr(d))}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade sem contato crítico</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
+        {noContactDeals.length ? noContactDeals.map(d=><tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><b>{d.title}</b><span>{d.nextStep}</span></td><td>{companyForDeal(d,companies,contacts)?.name || '-'}</td><td>{d.stage || '-'}</td><td><b style={{color:d.daysWithoutContact >= 30 ? '#dc2626' : '#b45309'}}>{d.hasHistory ? `${d.daysWithoutContact} dias` : 'Sem histórico'}</b></td><td>{moneyShort(dealMrr(d))}</td><td><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button></td></tr>) : <tr><td>Nenhuma oportunidade sem contato crítico</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>}
       </DashboardTable>
     </Panel>
 
   </>;
 }
 
-function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contracts=[],interactions=[],stages=STAGES,stageHistory=[],lossReasons={},setSelectedDealId,setSelectedActivityId,setSelectedContractId}){
+function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contracts=[],interactions=[],notes=[], stages=STAGES,stageHistory=[],lossReasons={},setSelectedDealId,setSelectedActivityId,setSelectedContractId}){
   const [filters,setFilters] = useState({period:'all',owner:'',product:'',segment:''});
   const [selectedBreakdown,setSelectedBreakdown] = useState(null);
   const currentMonth = today().slice(0,7);
@@ -2813,7 +2777,7 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
   const pendingActivities = filteredActivities.filter(activity=>activity.status !== 'Concluída');
   const overdueActivities = pendingActivities.filter(activity=>activity.dueDate && activity.dueDate < today());
   const staleDeals = openDeals
-    .map(deal=>({...deal,relationship:relationshipStatusForDeal(deal,interactions,activities)}))
+    .map(deal=>({...deal,relationship:relationshipStatusForDeal(deal,interactions,activities,notes)}))
     .filter(deal=>deal.relationship.tone === 'danger' || deal.relationship.tone === 'none')
     .sort((a,b)=>(b.relationship.days ?? 9999)-(a.relationship.days ?? 9999));
   const addDaysKey = (dateString, days) => {
@@ -2827,7 +2791,7 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
   const hasFutureActivity = (deal) => pendingActivitiesForDeal(deal).some(activity=>activity.dueDate && activity.dueDate >= today());
   const hasOverdueActivity = (deal) => pendingActivitiesForDeal(deal).some(activity=>activity.dueDate && activity.dueDate < today());
   const growthPriorityDeals = openDeals.map(deal=>{
-    const relationship = relationshipStatusForDeal(deal,interactions,activities);
+    const relationship = relationshipStatusForDeal(deal,interactions,activities,notes);
     const closeSoon = deal.closeDate && deal.closeDate >= today() && deal.closeDate <= next30;
     const noFollowup = !hasFutureActivity(deal);
     const overdue = hasOverdueActivity(deal);
@@ -2850,7 +2814,7 @@ function InsightsDaleth({deals=[],companies=[],contacts=[],activities=[],contrac
   const stageBottlenecks = safeArray(stages).map(stage=>{
     const stageDeals = openDeals.filter(deal=>deal.stage === stage);
     const staleCount = stageDeals.filter(deal=>{
-      const status = relationshipStatusForDeal(deal,interactions,activities);
+      const status = relationshipStatusForDeal(deal,interactions,activities,notes);
       return status.tone === 'danger' || status.tone === 'none';
     }).length;
     const noFutureFollowup = stageDeals.filter(deal=>!hasFutureActivity(deal)).length;
@@ -3176,7 +3140,7 @@ function PendingPanel({currentUser,companies=[],contacts=[],deals=[],activities=
   ].sort((a,b)=>String(b.date || '').localeCompare(String(a.date || '')));
   const scoreRows = safeArray(deals)
     .filter(deal=>!['Ganho','Perdido'].includes(deal.stage))
-    .map(deal=>({deal,...opportunityPriorityScore({deal,companies,contacts,activities,interactions,currentDate})}))
+    .map(deal=>({deal,...opportunityPriorityScore({deal,companies,contacts,activities,interactions,notes,currentDate})}))
     .sort((a,b)=>b.score-a.score || dealMrr(b.deal)-dealMrr(a.deal));
   const recommendedDeals = scoreRows.filter(item=>item.score >= 55).slice(0,10);
   const totalPendingItems = overdueActivities.length + overdueWorkspaceItems.length + meetingsToday.length + todayWorkspaceItems.length + proposalsWithoutFollowup.length + dealsWithoutNextStep.length + expiringContracts.length + userMentions.length + recommendedDeals.length;
@@ -4086,7 +4050,7 @@ function Deals({currentUser,deals,setDeals,companies,contacts,products,stages,no
         <span>{selectedDeals.length} selecionada(s)</span>
         <button className="mini" onClick={removeSelectedDeals} disabled={!selectedDeals.length}><Trash2 size={15}/>Excluir selecionadas</button>
       </div>}
-      <Table headers={['Sel.','Oportunidade','Score','Empresa','Produto','Receita mensal','Prazo','Próximas atividades','Etapa','Responsável','Ações']}>{list.map(d=>{ const linkedCompany = companyForDeal(d,companies,contacts); const relationship = relationshipStatusForDeal(d, interactions, activities); const score = opportunityPriorityScore({deal:d,companies,contacts,activities,interactions}); return <tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><input className="rowSelect" type="checkbox" checked={selectedDealIds.some(id=>sameId(id,d.id))} onChange={(e)=>{e.stopPropagation(); toggleDealSelection(d.id);}} onClick={e=>e.stopPropagation()} disabled={!canWrite}/></td><td><div className="dealHealthLine"><i className={`dealHealthDot ${relationship.tone}`} title={relationship.label}></i><b>{d.title}</b></div><span>{relationship.label}</span><span>{d.nextStep}</span></td><td><span className={`scorePill ${score.tone}`} title={score.reasons.join(' · ')}>{score.score}/100</span><span>{score.label}</span></td><td>{linkedCompany?.name || '-'}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>{dealProductValues(d).map(product=><button className="mini" key={product} onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(product)}}>{product}</button>)}</div></td><td><b>{money(dealMrr(d))}</b></td><td>{dealMonths(d)} meses</td><td><NextActivitiesCell deal={d} activities={activities} onOpen={setSelectedActivityId}/></td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>})}</Table>
+      <Table headers={['Sel.','Oportunidade','Score','Empresa','Produto','Receita mensal','Prazo','Próximas atividades','Etapa','Responsável','Ações']}>{list.map(d=>{ const linkedCompany = companyForDeal(d,companies,contacts); const relationship = relationshipStatusForDeal(d, interactions, activities, notes); const score = opportunityPriorityScore({deal:d,companies,contacts,activities,interactions,notes}); return <tr key={d.id} onClick={()=>setSelectedDealId(d.id)} style={{cursor:'pointer'}}><td><input className="rowSelect" type="checkbox" checked={selectedDealIds.some(id=>sameId(id,d.id))} onChange={(e)=>{e.stopPropagation(); toggleDealSelection(d.id);}} onClick={e=>e.stopPropagation()} disabled={!canWrite}/></td><td><div className="dealHealthLine"><i className={`dealHealthDot ${relationship.tone}`} title={relationship.label}></i><b>{d.title}</b></div><span>{relationship.label}</span><span>{d.nextStep}</span></td><td><span className={`scorePill ${score.tone}`} title={score.reasons.join(' · ')}>{score.score}/100</span><span>{score.label}</span></td><td>{linkedCompany?.name || '-'}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>{dealProductValues(d).map(product=><button className="mini" key={product} onClick={(e)=>{e.stopPropagation(); setSelectedProductName?.(product)}}>{product}</button>)}</div></td><td><b>{money(dealMrr(d))}</b></td><td>{dealMonths(d)} meses</td><td><NextActivitiesCell deal={d} activities={activities} onOpen={setSelectedActivityId}/></td><td><span className="pill">{d.stage}</span></td><td>{d.owner}</td><td><div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}><button className="mini" onClick={(e)=>{e.stopPropagation(); setSelectedDealId(d.id)}}><Edit3 size={15}/>Abrir</button>{canWrite && <button className="mini" onClick={(e)=>{e.stopPropagation(); removeDeal(d)}}><Trash2 size={15}/>Excluir</button>}</div></td></tr>})}</Table>
     </Panel>
   </>;
 }
@@ -4105,48 +4069,14 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,initialTab='historico'
   const [fileDraft,setFileDraft] = useState(emptyFile);
   const company = byId(companies, draft.companyId) || inferredCompany;
   const contact = initialContact;
-  const dealNotes = safeArray(notes).filter(n=>sameId(n.dealId, deal.id));
   const dealActivities = safeArray(activities).filter(a=>sameId(a.dealId, deal.id));
   const openDealActivities = dealActivities.filter(a=>String(a.status || '') !== 'Concluída');
-  const dealInteractions = safeArray(interactions).filter(i=>sameId(i.dealId, deal.id));
-  const relationship = relationshipStatusForDeal(deal, interactions, activities);
-  const priorityScore = opportunityPriorityScore({deal:draft,companies,contacts,activities,interactions});
+  const relationship = relationshipStatusForDeal(deal, interactions, activities, notes);
+  const priorityScore = opportunityPriorityScore({deal:draft,companies,contacts,activities,interactions,notes});
   const dealFiles = safeArray(opportunityFiles).filter(file=>sameId(file.dealId,deal.id)).sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
   const linkedContract = safeArray(contracts).find(contract=>sameId(contract.dealId,deal.id));
 
-  const timeline = [
-    ...dealInteractions.map(i => ({
-      id:`interaction-${i.id}`,
-      source:'interaction',
-      type:i.type || 'Interação',
-      rawId:i.id,
-      owner:i.owner || i.user || 'Daleth',
-      date:i.dateTime || i.createdAt || i.date || '',
-      description:i.description || '',
-      nextAction:i.nextAction || '',
-      nextDueDate:i.nextDueDate || ''
-    })),
-    ...dealNotes.map(n => ({
-      id:`note-${n.id}`,
-      source:'note',
-      type:'Anotação',
-      owner:n.user || n.userName || n.user_name || 'Daleth',
-      date:n.date || n.noteDate || n.note_date || n.createdAt || n.created_at || '',
-      description:n.text || n.note || n.content || '',
-      nextAction:'',
-      nextDueDate:''
-    })),
-    ...dealActivities.filter(a=>String(a.status||'') === 'Concluída').map(a => ({
-      id:`activity-${a.id}`,
-      source:'activity',
-      type:a.type || 'Atividade',
-      owner:a.owner || 'Daleth',
-      date:a.dueDate || a.date || '',
-      description:`${a.title || ''}${a.notes ? ' — ' + a.notes : ''}`,
-      nextAction:'',
-      nextDueDate:''
-    }))
-  ].sort((a,b)=>String(b.date || '').localeCompare(String(a.date || '')));
+  const timeline = dealHistory(deal,interactions,activities,notes);
 
   const latest = timeline[0];
   const latestNext = timeline.find(t=>t.nextAction);
@@ -4337,8 +4267,8 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,initialTab='historico'
     <section className="cards">
       <Kpi icon={CircleDollarSign} label="Receita mensal" value={moneyShort(dealMrr(draft))}/>
       <Kpi icon={BriefcaseBusiness} label="Valor total do contrato" value={moneyShort(dealTcv(draft))}/>
-      <Kpi icon={CheckCircle2} label="Última interação" value={latest?.date ? formatDate(latest.date) : 'Sem histórico'}/>
-      <Kpi icon={MessageSquare} label="Interações" value={dealInteractions.length}/>
+      <Kpi icon={CheckCircle2} label="Último registro no histórico" value={latest?.date ? formatDate(latest.date) : 'Sem histórico'}/>
+      <Kpi icon={MessageSquare} label="Registros no histórico" value={timeline.length}/>
       <Kpi icon={Clock3} label="Próxima ação" value={latestNext?.nextAction || 'Não definida'}/>
       <Kpi icon={TrendingUp} label="Score comercial" value={`${priorityScore.score}/100`}/>
     </section>
@@ -4348,7 +4278,7 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,initialTab='historico'
       <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>{priorityScore.reasons.map(reason=><span className="pill" key={reason}>{reason}</span>)}</div>
     </Panel>
 
-    <div className="tabs" style={{marginBottom:'18px',overflowX:'auto'}}>{['historico','atividades','dados','arquivos','contrato','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t === 'dados' ? 'Dados' : t === 'historico' ? `Histórico (${dealInteractions.length})` : t === 'atividades' ? `Atividades (${openDealActivities.length})` : t === 'arquivos' ? `Arquivos (${dealFiles.length})` : t === 'contrato' ? 'Contrato' : 'Matriz'}</button>)}</div>
+    <div className="tabs" style={{marginBottom:'18px',overflowX:'auto'}}>{['historico','atividades','dados','arquivos','contrato','matriz'].map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t === 'dados' ? 'Dados' : t === 'historico' ? `Histórico (${timeline.length})` : t === 'atividades' ? `Atividades (${openDealActivities.length})` : t === 'arquivos' ? `Arquivos (${dealFiles.length})` : t === 'contrato' ? 'Contrato' : 'Matriz'}</button>)}</div>
 
     {tab==='dados' && <Panel title="Dados da oportunidade"><div className="formGrid modalGrid"><Input label="Título" field="title" form={draft} setForm={setDraft}/><Select label="Empresa" field="companyId" form={draft} setForm={setDraft} options={safeArray(companies).map(c=>[c.id,c.name])}/><Select label="Etapa" field="stage" form={draft} setForm={setDraft} options={safeArray(stages).map(s=>[s,s])}/><Select label="Responsável" field="owner" form={draft} setForm={setDraft} options={USERS.map(u=>[u,u])}/><DealProductFields form={draft} setForm={setDraft} products={products}/><CurrencyInput label="Receita mensal" field="value" form={draft} setForm={setDraft}/><CurrencyInput label="Implantação" field="setup" form={draft} setForm={setDraft}/><Input label="Prazo contratual (meses)" field="contractMonths" form={draft} setForm={setDraft} type="number"/><label><span>Probabilidade %</span><input value={probabilityForStage(draft.stage,draft.probability)} readOnly/></label><Input label="Fechamento previsto" field="closeDate" form={draft} setForm={setDraft} type="date"/><Input label="Próximo passo" field="nextStep" form={draft} setForm={setDraft}/>{draft.stage==='Perdido' && <Select label="Motivo da perda" field="lossReason" form={draft} setForm={setDraft} options={[["","Selecione"],...optionsIncludingCurrent(lossReasonOptions,draft.lossReason).map(reason=>[reason,reason])]}/>}<label><span>Valor total do contrato</span><input value={money(dealTcv(draft))} readOnly/></label><label><span>Receita anualizada</span><input value={money(dealArr(draft))} readOnly/></label><Textarea label="Descrição" field="description" form={draft} setForm={setDraft}/>{canWrite && <button className="saveBtn" onClick={save}><Save size={16}/>Salvar alterações</button>}</div></Panel>}
 
@@ -4364,7 +4294,7 @@ function DealDetailPage({deal,onBack,closeAfterSave=false,initialTab='historico'
         {editingInteractionId && <button className="mini" onClick={cancelInteractionEdit}><X size={15}/>Cancelar edição</button>}
       </div></Panel>}
       <Panel title="Linha do tempo da oportunidade">
-        <div className="timeline">{timeline.length ? timeline.map(item=><div className={`timelineItem ${item.source === 'note' ? 'timelineNote' : ''}`} data-full-note={item.source === 'note' ? item.description : undefined} title={item.source === 'note' ? 'Passe o cursor para ver a anotação completa' : undefined} key={item.id}><div style={{display:'flex',justifyContent:'space-between',gap:'12px',alignItems:'flex-start',flexWrap:'wrap'}}><b>{interactionIcon(item.type)} {item.type}</b>{canWrite && item.source === 'interaction' && <button className="mini" onClick={()=>editInteraction(item)}><Edit3 size={15}/>Editar</button>}</div><span>{formatDateTime(item.date)} · {item.owner}</span><p>{item.description}</p>{item.nextAction && <p><b>Próxima ação:</b> {item.nextAction}{item.nextDueDate ? ` · Prazo: ${formatDate(item.nextDueDate)}` : ''}</p>}</div>) : <p className="muted">Nenhuma tratativa registrada ainda.</p>}</div>
+        <div className="timeline">{timeline.length ? timeline.map(item=><div className="timelineItem" key={item.id}><div style={{display:'flex',justifyContent:'space-between',gap:'12px',alignItems:'flex-start',flexWrap:'wrap'}}><b>{interactionIcon(item.type)} {item.type}</b>{canWrite && item.source === 'interaction' && <button className="mini" onClick={()=>editInteraction(item)}><Edit3 size={15}/>Editar</button>}</div><span>{formatDateTime(item.date)} · {item.owner}</span>{item.source === 'note' ? <details><summary style={{cursor:'pointer'}}>Ver anotação completa disponível</summary><p style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',marginTop:'8px'}}>{item.description || 'Conteúdo indisponível no arquivo importado.'}</p>{item.possiblyIncomplete && <small style={{display:'block',marginTop:'8px',color:'#92400e'}}>O texto importado termina em reticências e pode estar incompleto na origem.</small>}</details> : <p style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{item.description}</p>}{item.nextAction && <p><b>Próxima ação:</b> {item.nextAction}{item.nextDueDate ? ` · Prazo: ${formatDate(item.nextDueDate)}` : ''}</p>}</div>) : <p className="muted">Nenhuma tratativa registrada ainda.</p>}</div>
       </Panel>
     </>}
 
@@ -5911,7 +5841,7 @@ function Select({label,field,form,setForm,options}){
 }
 function Table({headers,children}){ return <div className="tableWrap"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
 
-createRoot(document.getElementById('root')).render(<App/>);
+createRoot(document.getElementById('root')).render(<CrmSyncProvider><App/></CrmSyncProvider>);
 
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(error=>console.warn('Falha ao registrar aplicativo instalável:',error)));
