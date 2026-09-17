@@ -10,7 +10,7 @@ import * as historyHelpers from '../src/lib/crmHistory.js';
 import {formatDate, formatDateTime, dateOnlyFromCrmValue, dealHistory, cleanLegacyNote} from '../src/lib/crmHistory.js';
 import {createSyncGuard} from '../src/lib/crmSync.js';
 import {subscribeCrmAuth} from '../src/lib/crmAuth.js';
-import {loadContractRows} from '../src/lib/crmContracts.js';
+import {loadContractRows, mergeLegacyContracts} from '../src/lib/crmContracts.js';
 
 test('UTC instants use the same Sao Paulo date in every presentation', () => {
   for (const value of ['2026-09-17T00:00:00Z', '2026-09-17T00:00:00+00:00', '2026-09-17 00:00:00+00']) {
@@ -148,7 +148,7 @@ function renderedComponents() {
       if (name === './lib/crmHistory') return historyHelpers;
       if (name === './lib/crmSync') return {createSyncGuard};
       if (name === './lib/crmAuth') return {subscribeCrmAuth};
-      if (name === './lib/crmContracts') return {loadContractRows};
+      if (name === './lib/crmContracts') return {loadContractRows, mergeLegacyContracts};
       if (name === './lib/supabase') return {supabase:{}};
       if (name.startsWith('./components/')) return {};
       return require(name);

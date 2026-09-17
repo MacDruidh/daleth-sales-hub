@@ -9,7 +9,7 @@ import {CrmSyncProvider, CrmSyncNotice, useCrmSync} from './components/CrmSyncCo
 import {crmDateParts, dateOnlyFromCrmValue, formatDate, formatDateTime, dealHistory} from './lib/crmHistory';
 import {createSyncGuard} from './lib/crmSync';
 import {subscribeCrmAuth} from './lib/crmAuth';
-import {loadContractRows} from './lib/crmContracts';
+import {loadContractRows, mergeLegacyContracts} from './lib/crmContracts';
 
 const STAGES = ['Lead Captado','Primeiro Contato','Levantamento','Reunião Agendada','Proposta Enviada','Negociação','Contrato','Ganho','Perdido'];
 const STAGE_PROBABILITIES = {
@@ -1058,7 +1058,9 @@ function useContracts(){
 
 async function loadContractsFromSupabase(){
   const rows = await loadContractRows(supabase);
-  return rows.map(row => mapContractFromDb(row));
+  const {data, error} = await supabase.from('crm_state').select('data').eq('key','dsh-v1-contracts').maybeSingle();
+  if(error) throw error;
+  return mergeLegacyContracts(rows.map(row => mapContractFromDb(row)), data?.data);
 }
 function money(v){ return Number(v||0).toLocaleString('pt-BR',{ style:'currency', currency:'BRL' }); }
 function parseCurrencyInput(value){

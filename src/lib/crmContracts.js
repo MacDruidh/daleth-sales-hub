@@ -1,3 +1,12 @@
+export function mergeLegacyContracts(current, stored) {
+  const ids = new Set(current.flatMap(row => [row.id, row.supabaseId].filter(id => id != null).map(String)));
+  // JSON-only contracts are still real records. Relational snapshots must not revive deleted rows.
+  const legacy = (Array.isArray(stored) ? stored : []).filter(row =>
+    row && !row.supabaseId && row.id != null && !ids.has(String(row.id))
+  );
+  return [...current, ...legacy];
+}
+
 export async function loadContractRows(client) {
   const {data, error} = await client.from('contracts').select('*').order('created_at', {ascending:false});
   if (error) throw error;

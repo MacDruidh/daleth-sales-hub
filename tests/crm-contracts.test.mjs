@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {loadContractRows} from '../src/lib/crmContracts.js';
+import {loadContractRows, mergeLegacyContracts} from '../src/lib/crmContracts.js';
 
 function client(tables, failures = {}) {
   const calls = [];
@@ -27,6 +27,19 @@ function client(tables, failures = {}) {
     })
   };
 }
+
+test('JSON-only contracts remain visible without reviving deleted relational snapshots', () => {
+  const current = [{id:'old-id',supabaseId:10,mrr:1000}];
+  const stored = [
+    {id:'old-id',mrr:900},
+    {id:10,mrr:900},
+    {id:'deleted',supabaseId:11,mrr:500},
+    {id:'json-only',mrr:3000,documentUrl:'https://example.com/legacy'}
+  ];
+  assert.deepEqual(mergeLegacyContracts(current, stored), [current[0],stored[3]]);
+  assert.deepEqual(mergeLegacyContracts([], [stored[3]]), [stored[3]]);
+  assert.deepEqual(mergeLegacyContracts(current, null), current);
+});
 
 test('contracts load without foreign keys and preserve legacy company and opportunity identities', async () => {
   const c = client({
